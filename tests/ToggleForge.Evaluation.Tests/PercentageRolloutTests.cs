@@ -2,11 +2,9 @@ namespace ToggleForge.Evaluation.Tests;
 
 public sealed class PercentageRolloutTests
 {
+    private static RolloutSeed Seed => NewShopFlag.Seed;
 
-    private static RolloutSeed Seed { get; } = RolloutSeed.Parse("seed-1");
-
-    private static FlagIdentity NewShop { get; } = new(
-        ProjectKey.Parse("studio-game"), EnvironmentKey.Parse("prod"), FlagKey.Parse("new-shop"));
+    private static FlagIdentity NewShop => NewShopFlag.Identity;
 
     [Fact]
     public void Zero_percent_excludes_every_player()
@@ -45,15 +43,14 @@ public sealed class PercentageRolloutTests
         Assert.Equal(TargetingDecision.PlayerIdRequired, rollout.Decide(NewShop, EvaluationContext.Anonymous));
     }
 
-    // player-1 cai no bucket 7370 (vetor de referência em Vectors/rollout-v1.json).
     [Theory]
-    [InlineData(7_370, TargetingDecision.Excluded)]
-    [InlineData(7_371, TargetingDecision.Included)]
+    [InlineData(NewShopFlag.ReferencePlayerBucket, TargetingDecision.Excluded)]
+    [InlineData(NewShopFlag.ReferencePlayerBucket + 1, TargetingDecision.Included)]
     public void Player_is_included_only_when_bucket_is_below_the_percentage(int basisPoints, TargetingDecision expected)
     {
         var rollout = new PercentageRollout(RolloutPercentage.FromBasisPoints(basisPoints), Seed);
 
-        Assert.Equal(expected, rollout.Decide(NewShop, EvaluationContext.ForPlayer(PlayerId.Parse("player-1"))));
+        Assert.Equal(expected, rollout.Decide(NewShop, EvaluationContext.ForPlayer(PlayerId.Parse(NewShopFlag.ReferencePlayer))));
     }
 
     [Theory]

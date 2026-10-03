@@ -17,6 +17,15 @@ public sealed class RolloutBucketTests
     }
 
     [Fact]
+    public void Compute_places_the_reference_player_in_the_bucket_the_other_tests_rely_on()
+    {
+        var bucket = RolloutBucket.Compute(
+            NewShopFlag.Identity, NewShopFlag.Seed, PlayerId.Parse(NewShopFlag.ReferencePlayer));
+
+        Assert.Equal(NewShopFlag.ReferencePlayerBucket, bucket);
+    }
+
+    [Fact]
     public void Compute_keeps_field_boundaries_so_shifted_concatenations_do_not_collide()
     {
         var abThenC = Compute("ab", "c");

@@ -6,11 +6,16 @@ namespace ToggleForge.Evaluation.Tests;
 /// </summary>
 public sealed class NullArgumentTests
 {
-    private static ProjectKey Project { get; } = ProjectKey.Parse("studio-game");
-    private static EnvironmentKey Environment { get; } = EnvironmentKey.Parse("prod");
-    private static FlagKey Flag { get; } = FlagKey.Parse("new-shop");
-    private static RolloutSeed Seed { get; } = RolloutSeed.Parse("seed-1");
-    private static FlagIdentity Identity { get; } = new(Project, Environment, Flag);
+    private static ProjectKey Project => NewShopFlag.Project;
+
+    private static EnvironmentKey Environment => NewShopFlag.Environment;
+
+    private static FlagKey Flag => NewShopFlag.Key;
+
+    private static RolloutSeed Seed => NewShopFlag.Seed;
+
+    private static FlagIdentity Identity => NewShopFlag.Identity;
+
     private static PercentageRollout Rollout { get; } = new(RolloutPercentage.All, Seed);
 
     [Fact]
