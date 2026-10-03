@@ -26,4 +26,17 @@ public static class AuthoringFailures
 
     public static Failure NothingToPublish { get; } =
         new(FailureKind.Conflict, "nothing-to-publish", "The draft is identical to the current publication.");
+
+    /// <summary>O ambiente não tem a versão pedida como destino do rollback.</summary>
+    public static Failure RollbackTargetNotFound { get; } =
+        new(FailureKind.NotFound, "not-found", "The environment has no publication with this version.");
+
+    public static Failure CurrentVersionChanged { get; } =
+        new(FailureKind.Conflict, "current-version-changed", "Another publication happened after the version you saw. Reload the history and try again.");
+
+    public static Failure AlreadyCurrent { get; } =
+        new(FailureKind.Conflict, "already-current", "The current version already has the content of the target version.");
+
+    public static Failure DraftHasPendingChanges { get; } =
+        new(FailureKind.Conflict, "draft-has-pending-changes", "The draft has unpublished changes. Roll back with discardDraftChanges to replace them.");
 }

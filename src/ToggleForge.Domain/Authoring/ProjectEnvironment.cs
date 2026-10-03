@@ -135,6 +135,55 @@ public sealed class ProjectEnvironment
         return publication;
     }
 
+    /// <summary>
+    /// Publica de novo o conteúdo de <paramref name="target"/>, nula quando a versão pedida não existe, e troca
+    /// o rascunho por ele, para a próxima publicação não reaplicar a mudança revertida. Mudanças não publicadas
+    /// só são descartadas com <paramref name="discardDraftChanges"/>.
+    /// </summary>
+    public Result<Publication> RollBack(
+        Publication? target,
+        long expectedCurrentVersion,
+        bool discardDraftChanges,
+        Guid rolledBackBy,
+        DateTimeOffset rolledBackAt,
+        Publication? current)
+    {
+        if (target is null)
+        {
+            return AuthoringFailures.RollbackTargetNotFound;
+        }
+
+        EnsureBelongsHere(target);
+        var pendingChanges = PendingChanges(current);
+        if (current is null || current.Version != expectedCurrentVersion)
+        {
+            return AuthoringFailures.CurrentVersionChanged;
+        }
+
+        if (target.Flags.SequenceEqual(current.Flags))
+        {
+            return AuthoringFailures.AlreadyCurrent;
+        }
+
+        if (pendingChanges.Count > 0 && !discardDraftChanges)
+        {
+            return AuthoringFailures.DraftHasPendingChanges;
+        }
+
+        var rollback = new Publication(
+            Id,
+            current.Version + 1,
+            rolledBackAt,
+            rolledBackBy,
+            PublicationOrigin.Rollback,
+            target.Version,
+            summary: null,
+            target.Flags);
+        ReplaceDraft(target.Flags);
+        CurrentVersion = rollback.Version;
+        return rollback;
+    }
+
     private Result<DraftFlag> FindFlag(FlagKey key, long expectedRevision)
     {
         ArgumentNullException.ThrowIfNull(key);
@@ -147,6 +196,13 @@ public sealed class ProjectEnvironment
         return flag.ChangedAtRevision == expectedRevision ? flag : AuthoringFailures.FlagChanged;
     }
 
+    private void ReplaceDraft(IEnumerable<PublishedFlag> content)
+    {
+        DraftRevision++;
+        _flags.Clear();
+        _flags.AddRange(content.Select(flag => DraftFlag.Create(flag.Key, flag.Settings, flag.Seed, DraftRevision)));
+    }
+
     private List<PublishedFlag> DraftContent() =>
         _flags.OrderBy(flag => flag.Key.Value, StringComparer.Ordinal).Select(flag => flag.ToPublished()).ToList();
 
@@ -156,6 +212,14 @@ public sealed class ProjectEnvironment
         {
             throw new InvalidOperationException(
                 $"Expected the publication in force (version {CurrentVersion}) of environment {Id}.");
+        }
+    }
+
+    private void EnsureBelongsHere(Publication publication)
+    {
+        if (publication.EnvironmentId != Id)
+        {
+            throw new InvalidOperationException($"Publication {publication.Version} belongs to another environment, not {Id}.");
         }
     }
 }
