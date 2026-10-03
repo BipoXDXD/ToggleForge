@@ -19,38 +19,54 @@ RolloutPercentage[] stages =
     RolloutPercentage.FromPercent(50m),
 ];
 
-Console.WriteLine("ToggleForge: demonstração do rollout (Marco 1)");
-Console.WriteLine(string.Create(culture, $"Flag new-shop em studio-game/prod, {PlayerCount:N0} jogadores simulados"));
-Console.WriteLine();
-Console.WriteLine("Versão  Rollout  Incluídos  Taxa real  Perdidos desde a versão anterior");
-foreach (var stage in simulation.Run(players, stages))
+PrintStages(simulation.Run(players, stages));
+var sampleStage = stages[1];
+PrintSamplePlayers(simulation.Publish(version: 2, sampleStage), sampleStage, ["player-1", "player-3", "player-8"]);
+PrintCountsByReason();
+
+void PrintStages(IEnumerable<StageResult> results)
 {
-    var actualRate = (decimal)stage.IncludedCount / PlayerCount;
-    var lostPlayers = stage.Version == 1 ? "—" : stage.LostPlayers.ToString(culture);
+    Console.WriteLine("ToggleForge: demonstração do rollout (Marco 1)");
     Console.WriteLine(string.Create(
-        culture,
-        $"v{stage.Version,-6} {stage.Percentage,-8} {stage.IncludedCount,9:N0}  {actualRate,9:P2}  {lostPlayers}"));
+        culture, $"Flag {newShop.FlagKey} em {newShop.ProjectKey}/{newShop.EnvironmentKey}, {PlayerCount:N0} jogadores simulados"));
+    Console.WriteLine();
+    Console.WriteLine("Versão  Rollout  Incluídos  Taxa real  Perdidos desde a versão anterior");
+    foreach (var stage in results)
+    {
+        var actualRate = (decimal)stage.IncludedCount / PlayerCount;
+        var lostPlayers = stage.LostPlayers?.ToString(culture) ?? "—";
+        Console.WriteLine(string.Create(
+            culture,
+            $"v{stage.Version,-6} {stage.Percentage,-8} {stage.IncludedCount,9:N0}  {actualRate,9:P2}  {lostPlayers}"));
+    }
 }
 
-Console.WriteLine();
-Console.WriteLine("Jogadores de exemplo na v2 (20%):");
-var secondStage = simulation.Publish(version: 2, RolloutPercentage.FromPercent(20m));
-foreach (var sample in new[] { "player-1", "player-3", "player-8" })
+void PrintSamplePlayers(ConfigurationSnapshot snapshot, RolloutPercentage percentage, IEnumerable<string> samples)
 {
-    var playerId = PlayerId.Parse(sample);
-    var bucket = RolloutBucket.Compute(newShop, seed, playerId);
-    var result = tallying.EvaluateBoolean(
-        secondStage, "new-shop", EvaluationContext.ForPlayer(playerId), defaultValue: false);
-    Console.WriteLine(string.Create(
-        culture, $"  {sample,-9} bucket {bucket,5}  ->  {result.Value,-5} ({result.Reason})"));
+    Console.WriteLine();
+    Console.WriteLine($"Jogadores de exemplo na v{snapshot.Version} ({percentage}):");
+    foreach (var sample in samples)
+    {
+        var playerId = PlayerId.Parse(sample);
+        var bucket = RolloutBucket.Compute(newShop, seed, playerId);
+        var result = Evaluate(snapshot, EvaluationContext.ForPlayer(playerId));
+        Console.WriteLine(string.Create(
+            culture, $"  {sample,-9} bucket {bucket,5}  ->  {result.Value,-5} ({result.Reason})"));
+    }
+
+    var anonymous = Evaluate(snapshot, EvaluationContext.Anonymous);
+    Console.WriteLine($"  {"anônimo",-22}  ->  {anonymous.Value,-5} ({anonymous.Reason}, valor padrão)");
 }
 
-var anonymous = tallying.EvaluateBoolean(secondStage, "new-shop", EvaluationContext.Anonymous, defaultValue: false);
-Console.WriteLine($"  {"anônimo",-22}  ->  {anonymous.Value,-5} ({anonymous.Reason}, valor padrão)");
+EvaluationResult<bool> Evaluate(ConfigurationSnapshot snapshot, EvaluationContext context) =>
+    tallying.EvaluateBoolean(snapshot, newShop.FlagKey.Value, context, defaultValue: false);
 
-Console.WriteLine();
-Console.WriteLine("Avaliações por motivo (contadas pelo decorator):");
-foreach (var (reason, count) in tallying.CountsByReason.OrderBy(pair => pair.Key))
+void PrintCountsByReason()
 {
-    Console.WriteLine(string.Create(culture, $"  {reason,-16} {count,9:N0}"));
+    Console.WriteLine();
+    Console.WriteLine("Avaliações por motivo (contadas pelo decorator):");
+    foreach (var (reason, count) in tallying.CountsByReason.OrderBy(pair => pair.Key))
+    {
+        Console.WriteLine(string.Create(culture, $"  {reason,-16} {count,9:N0}"));
+    }
 }

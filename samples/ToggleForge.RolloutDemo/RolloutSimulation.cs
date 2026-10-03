@@ -7,12 +7,12 @@ internal sealed class RolloutSimulation(IFlagEvaluator evaluator, FlagIdentity f
     public IReadOnlyList<StageResult> Run(IReadOnlyList<PlayerId> players, IReadOnlyList<RolloutPercentage> stages)
     {
         var results = new List<StageResult>();
-        IReadOnlySet<PlayerId> previouslyIncluded = new HashSet<PlayerId>();
+        IReadOnlySet<PlayerId>? previouslyIncluded = null;
         for (var stage = 0; stage < stages.Count; stage++)
         {
             var snapshot = Publish(version: stage + 1, stages[stage]);
             var included = IncludedPlayers(snapshot, players);
-            var lostPlayers = previouslyIncluded.Count(player => !included.Contains(player));
+            var lostPlayers = previouslyIncluded?.Count(player => !included.Contains(player));
             results.Add(new StageResult(snapshot.Version, stages[stage], included.Count, lostPlayers));
             previouslyIncluded = included;
         }
@@ -22,9 +22,9 @@ internal sealed class RolloutSimulation(IFlagEvaluator evaluator, FlagIdentity f
 
     public ConfigurationSnapshot Publish(long version, RolloutPercentage percentage)
     {
-        var newShop = new BooleanFlag(
+        var rolloutFlag = new BooleanFlag(
             flag.FlagKey, isEnabled: true, onValue: true, offValue: false, new PercentageRollout(percentage, seed));
-        return new ConfigurationSnapshot(flag.ProjectKey, flag.EnvironmentKey, version, [newShop]);
+        return new ConfigurationSnapshot(flag.ProjectKey, flag.EnvironmentKey, version, [rolloutFlag]);
     }
 
     private HashSet<PlayerId> IncludedPlayers(ConfigurationSnapshot snapshot, IEnumerable<PlayerId> players) =>
@@ -35,4 +35,4 @@ internal sealed class RolloutSimulation(IFlagEvaluator evaluator, FlagIdentity f
             .ToHashSet();
 }
 
-internal sealed record StageResult(long Version, RolloutPercentage Percentage, int IncludedCount, int LostPlayers);
+internal sealed record StageResult(long Version, RolloutPercentage Percentage, int IncludedCount, int? LostPlayers);
