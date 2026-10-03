@@ -20,4 +20,6 @@ internal sealed record FlagModificationRequest(
 
 internal sealed record PublicationRequest(long? DraftRevision, string? Summary);
 
+internal sealed record RollbackRequest(long? TargetVersion, long? ExpectedCurrentVersion, bool? DiscardDraftChanges);
+
 internal sealed record CredentialCreationRequest(string? Name);
