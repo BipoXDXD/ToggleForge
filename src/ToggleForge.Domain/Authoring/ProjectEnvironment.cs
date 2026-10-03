@@ -65,6 +65,43 @@ public sealed class ProjectEnvironment
         return flag;
     }
 
+    /// <summary>
+    /// Muda os campos informados em <paramref name="change"/>, desde que a flag ainda esteja na revisão
+    /// <paramref name="expectedRevision"/>. Uma mudança que não altera nada não gera revisão nova.
+    /// </summary>
+    public Result<DraftFlag> ChangeFlag(FlagKey key, long expectedRevision, FlagChange change)
+    {
+        ArgumentNullException.ThrowIfNull(change);
+
+        if (!FindFlag(key, expectedRevision).TryGetValue(out var flag, out var failure))
+        {
+            return failure;
+        }
+
+        var settings = change.ApplyTo(flag.Settings);
+        if (settings == flag.Settings)
+        {
+            return flag;
+        }
+
+        DraftRevision++;
+        flag.Change(settings, DraftRevision);
+        return flag;
+    }
+
+    /// <summary>Tira a flag do rascunho; os jogos continuam com ela até a próxima publicação.</summary>
+    public Result<DraftFlag> RemoveFlag(FlagKey key, long expectedRevision)
+    {
+        if (!FindFlag(key, expectedRevision).TryGetValue(out var flag, out var failure))
+        {
+            return failure;
+        }
+
+        _flags.Remove(flag);
+        DraftRevision++;
+        return flag;
+    }
+
     /// <summary>Compara o rascunho com <paramref name="current"/>, que deve ser a publicação em vigor.</summary>
     public IReadOnlyList<DraftChange> PendingChanges(Publication? current)
     {
@@ -96,6 +133,18 @@ public sealed class ProjectEnvironment
             DraftContent());
         CurrentVersion = publication.Version;
         return publication;
+    }
+
+    private Result<DraftFlag> FindFlag(FlagKey key, long expectedRevision)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+
+        if (_flags.Find(flag => flag.Key == key) is not { } flag)
+        {
+            return AuthoringFailures.FlagNotFound;
+        }
+
+        return flag.ChangedAtRevision == expectedRevision ? flag : AuthoringFailures.FlagChanged;
     }
 
     private List<PublishedFlag> DraftContent() =>
