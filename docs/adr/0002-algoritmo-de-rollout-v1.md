@@ -39,6 +39,9 @@ de 10^-15 e pode ser ignorado.
 - O ambiente entra no hash: o mesmo jogador pode estar incluído em `staging` e excluído em `prod`.
   É o comportamento esperado (ambientes independentes).
 - Trocar a seed redistribui todos os jogadores da flag; o console deve tratar isso como ação explícita.
+- A regra de targeting devolve o bucket que decidiu (`TargetingOutcome`), e o `EvaluationResult` o
+  expõe; é nulo quando o resultado não depende do jogador (flag inativa, 0%, 100%, sem ID). O simulador
+  do console e o debug do SDK mostram o mesmo número, sem recalcular o hash por fora.
 - Uma mudança no algoritmo exige uma tag nova (`toggleforge.rollout.v2`), um campo de versão no
   snapshot e a coexistência das duas versões até todos os SDKs migrarem.
 

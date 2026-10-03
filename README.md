@@ -14,7 +14,7 @@ O plano de produto está em [`ToggleForge.md`](ToggleForge.md), e as decisões d
 | Marco | Entrega | Situação |
 |---|---|---|
 | 1 — Núcleo | Avaliação booleana, contexto, rollout percentual e fallback | ✅ Concluído |
-| 2 — API persistente | Rascunho, publicação, rollback, autenticação e isolamento | 🚧 Projetos, ambientes, rascunho, publicação, rollback, histórico e credenciais prontos |
+| 2 — API persistente | Rascunho, publicação, rollback, autenticação e isolamento | 🚧 Todas as operações do contrato prontas, inclusive a simulação; faltam rate limit e limpezas |
 | 3 — Console | Editor, simulador, publicação e histórico (Blazor + Tailwind) | Planejado |
 | 4 — SDK e configurações | Sincronização, cache, JSON e app demonstrativo | Planejado |
 | 5 — Unity e segmentação | Adaptador, jogo simples e regras por atributos | Planejado |
@@ -62,7 +62,8 @@ O contrato é [`docs/api/openapi.yaml`](docs/api/openapi.yaml) (OpenAPI 3.1), es
 tracer bullet cobre o caminho inteiro: criar conta, criar projeto, criar flag no rascunho, publicar com
 `Idempotency-Key`, emitir a credencial do ambiente e baixar o snapshot no jogo, com `ETag` e 304. Depois
 dele vieram a edição de flags com `If-Match`, o rollback, o histórico paginado de publicações e a
-revogação de credenciais. O console
+revogação de credenciais e a simulação, que avalia o rascunho ou uma publicação para um jogador com o
+mesmo código do SDK e mostra o bucket que decidiu cada flag. O console
 usa cookie de sessão com token antiforgery; o jogo, `Authorization: Bearer tfsdk_...`.
 
 ```bash
