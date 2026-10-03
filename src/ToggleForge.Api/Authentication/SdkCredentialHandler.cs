@@ -29,13 +29,13 @@ internal sealed class SdkCredentialHandler(
             return AuthenticateResult.NoResult();
         }
 
-        var environmentId = await snapshots.AuthenticateAsync(authorization[BearerPrefix.Length..], Context.RequestAborted);
-        if (environmentId is null)
+        var credential = await snapshots.AuthenticateAsync(authorization[BearerPrefix.Length..], Context.RequestAborted);
+        if (credential is null)
         {
             return AuthenticateResult.Fail("Invalid credential.");
         }
 
-        var identity = new ClaimsIdentity([new Claim(EnvironmentClaim, environmentId.Value.ToString())], SchemeName);
+        var identity = new ClaimsIdentity([new Claim(EnvironmentClaim, credential.EnvironmentId.ToString())], SchemeName);
         return AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName));
     }
 

@@ -7,15 +7,14 @@ namespace ToggleForge.Application.Delivery;
 public sealed class SnapshotService(ICredentialRepository credentials, IPublishedSnapshots snapshots)
 {
     /// <summary>Nulo para segredo malformado, desconhecido ou revogado: os três respondem igual.</summary>
-    public async Task<Guid?> AuthenticateAsync(string? presentedSecret, CancellationToken cancellationToken)
+    public async Task<Credential?> AuthenticateAsync(string? presentedSecret, CancellationToken cancellationToken)
     {
         if (!CredentialSecret.TryParse(presentedSecret, out var secret))
         {
             return null;
         }
 
-        var credential = await credentials.FindActiveByHashAsync(secret.ComputeHash(), cancellationToken);
-        return credential?.EnvironmentId;
+        return await credentials.FindActiveByHashAsync(secret.ComputeHash(), cancellationToken);
     }
 
     public async Task<Result<SnapshotView>> FindCurrentAsync(Guid environmentId, CancellationToken cancellationToken)
