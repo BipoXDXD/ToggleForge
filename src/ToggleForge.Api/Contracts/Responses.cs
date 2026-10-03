@@ -71,6 +71,29 @@ internal sealed record PublicationResponse(
             view.Flags.Select(flag => FlagResponse.Of(flag.Key, flag.Settings)).ToList());
 }
 
+internal sealed record PublicationSummaryResponse(
+    long Version,
+    DateTimeOffset PublishedAt,
+    MemberResponse PublishedBy,
+    string Origin,
+    long? RestoredVersion,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Summary)
+{
+    public static PublicationSummaryResponse Of(PublicationSummaryView view) =>
+        new(
+            view.Version,
+            view.PublishedAt,
+            new MemberResponse(view.PublishedBy.Id, view.PublishedBy.Email),
+            view.Origin.ToString().ToLowerInvariant(),
+            view.RestoredVersion,
+            view.Summary?.Value);
+}
+
+internal sealed record PublicationListResponse(IReadOnlyList<PublicationSummaryResponse> Data, PageMetadata Metadata);
+
+internal sealed record PageMetadata(
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? NextPageToken);
+
 internal sealed record CreatedCredentialResponse(
     Guid Id, string Name, string Prefix, DateTimeOffset CreatedAt, DateTimeOffset? LastUsedAt, DateTimeOffset? RevokedAt, string Secret)
 {

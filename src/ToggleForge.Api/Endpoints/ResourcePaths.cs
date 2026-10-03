@@ -11,7 +11,9 @@ internal static class ResourcePaths
 
     public static string Flag(EnvironmentLocator locator, FlagKey key) => $"{Environment(locator)}/draft/flags/{key.Value}";
 
-    public static string Publication(EnvironmentLocator locator, long version) => $"{Environment(locator)}/publications/{version}";
+    public static string Publications(EnvironmentLocator locator) => $"{Environment(locator)}/publications";
+
+    public static string Publication(EnvironmentLocator locator, long version) => $"{Publications(locator)}/{version}";
 
     private static string Environment(EnvironmentLocator locator) =>
         $"{Project(locator.OrganizationId, locator.ProjectKey)}/environments/{locator.EnvironmentKey.Value}";
