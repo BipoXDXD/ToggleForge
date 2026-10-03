@@ -27,10 +27,11 @@ HASH_PREFIX_SIZE = 8
 REPO_ROOT = Path(__file__).resolve().parents[2]
 VECTORS_PATH = REPO_ROOT / "tests" / "ToggleForge.Evaluation.Tests" / "Vectors" / "rollout-v1.json"
 
+KEY_MAX_LENGTH = 64
 PLAYER_ID_MAX_LENGTH = 256
 SEED_MAX_LENGTH = 64
 
-MAX_KEY = "k" * 64
+MAX_KEY = "k" * KEY_MAX_LENGTH
 MAX_PLAYER_ID = "p" * PLAYER_ID_MAX_LENGTH
 MAX_SEED = "s" * SEED_MAX_LENGTH
 
@@ -55,10 +56,11 @@ OPAQUE_TEXT_CANDIDATES: list[tuple[str, list[int]]] = [
     ("lone high surrogate", [ord("p"), 0xD800]),
     ("lone low surrogate", [0xDC00, ord("p")]),
     ("reversed surrogate pair", [ord("p"), 0xDE00, 0xD83C]),
-    ("64 code units", [ord("x")] * 64),
-    ("65 code units", [ord("x")] * 65),
-    ("256 code units", [ord("x")] * 256),
-    ("257 code units", [ord("x")] * 257),
+    *(
+        (f"{length} code units", [ord("x")] * length)
+        for limit in (SEED_MAX_LENGTH, PLAYER_ID_MAX_LENGTH)
+        for length in (limit, limit + 1)
+    ),
 ]
 
 
@@ -138,8 +140,8 @@ def vector_inputs() -> list[tuple[str, str, str, str, str]]:
     ]
 
 
-def build_document() -> dict:
-    for *_, seed, player_id in vector_inputs():
+def build_document(inputs: list[tuple[str, str, str, str, str]]) -> dict:
+    for *_, seed, player_id in inputs:
         assert is_valid_opaque_text(encode_utf16(seed), SEED_MAX_LENGTH), f"invalid seed in vectors: {seed!r}"
         assert is_valid_opaque_text(encode_utf16(player_id), PLAYER_ID_MAX_LENGTH), f"invalid player id: {player_id!r}"
 
@@ -152,7 +154,7 @@ def build_document() -> dict:
             "playerId": player_id,
             "bucket": bucket(project_key, environment_key, flag_key, seed, player_id),
         }
-        for project_key, environment_key, flag_key, seed, player_id in vector_inputs()
+        for project_key, environment_key, flag_key, seed, player_id in inputs
     ]
     return {
         "algorithm": ALGORITHM_TAG,
@@ -179,7 +181,8 @@ def main() -> int:
     parser.add_argument("--check", action="store_true", help="fail if the committed vectors are stale")
     args = parser.parse_args()
 
-    expected = render(build_document())
+    inputs = vector_inputs()
+    expected = render(build_document(inputs))
     if args.check:
         actual = VECTORS_PATH.read_text(encoding="utf-8") if VECTORS_PATH.exists() else ""
         if actual != expected:
@@ -189,7 +192,7 @@ def main() -> int:
         return 0
 
     VECTORS_PATH.write_text(expected, encoding="utf-8")
-    print(f"wrote {len(vector_inputs())} vectors to {VECTORS_PATH.relative_to(REPO_ROOT)}")
+    print(f"wrote {len(inputs)} vectors to {VECTORS_PATH.relative_to(REPO_ROOT)}")
     return 0
 
 
