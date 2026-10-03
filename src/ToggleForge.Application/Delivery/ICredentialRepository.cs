@@ -20,4 +20,10 @@ public interface ICredentialRepository
     Task<Credential?> FindAsync(Guid environmentId, Guid credentialId, CancellationToken cancellationToken);
 
     void Add(Credential credential);
+
+    /// <summary>
+    /// Grava o uso num UPDATE condicional, com a mesma regra de <see cref="Credential.IsUseWorthRecording"/>:
+    /// réplicas que disputam a mesma janela resultam numa só escrita.
+    /// </summary>
+    Task RecordUseAsync(Guid credentialId, DateTimeOffset now, CancellationToken cancellationToken);
 }
