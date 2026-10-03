@@ -67,6 +67,14 @@ Qualidade de código (base para código bem produzido e com poucos erros):
 - **The Pragmatic Programmer 2e**, caps. 2 (ETC, DRY, ortogonalidade), 4 (contratos, dead programs,
   asserções), 5 (desacoplamento, Tell Don't Ask), 6 (concorrência), 7 (coincidência, testes,
   property-based, nomes) e 9.
+- **Unit Testing: Principles, Practices, and Patterns** (Khorikov) é a referência de testes:
+  - teste comportamento observável, nunca detalhe de implementação; refactoring não quebra teste;
+  - regra de negócio no domínio, testada sem mock (estilo output/state);
+  - controllers e serviços de aplicação finos, cobertos por testes de integração do caminho feliz
+    mais longo e dos casos de borda que o unit test não alcança;
+  - o Postgres é dependência gerenciada: real nos testes (Testcontainers), nunca mock de
+    repositório; mock só para dependência não gerenciada (e-mail, API de terceiro), e o relógio entra
+    como `TimeProvider`.
 - Todo teste novo é visto falhando (ou sabotando o código) antes de contar; código crítico passa por
   mutation testing. O Stryker.NET ainda não suporta o Microsoft.Testing.Platform, então a varredura
   é feita com mutações manuais.
