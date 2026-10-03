@@ -53,3 +53,7 @@ dotnet_naming_style.async_suffix.capitalization = pascal_case
 # A CA1707 continua valendo para o código de produção, que é API pública.
 [tests/**.cs]
 dotnet_diagnostic.CA1707.severity = none
+
+# Migrations são geradas pelo dotnet-ef e não se editam à mão; analyzers e estilo não se aplicam.
+[src/ToggleForge.Infrastructure/*/Migrations/*.cs]
+generated_code = true

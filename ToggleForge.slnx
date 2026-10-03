@@ -6,6 +6,7 @@
     <Project Path="src/ToggleForge.Application/ToggleForge.Application.csproj" />
     <Project Path="src/ToggleForge.Domain/ToggleForge.Domain.csproj" />
     <Project Path="src/ToggleForge.Evaluation/ToggleForge.Evaluation.csproj" />
+    <Project Path="src/ToggleForge.Infrastructure/ToggleForge.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/ToggleForge.Domain.Tests/ToggleForge.Domain.Tests.csproj" />
