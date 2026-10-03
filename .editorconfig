@@ -25,6 +25,14 @@ dotnet_style_qualification_for_field = false:warning
 dotnet_style_qualification_for_property = false:warning
 dotnet_style_qualification_for_method = false:warning
 
+# Constantes seguem PascalCase (design guidelines do .NET), inclusive as privadas.
+dotnet_naming_rule.constants_pascal_case.symbols = constant_fields
+dotnet_naming_rule.constants_pascal_case.style = pascal_case
+dotnet_naming_rule.constants_pascal_case.severity = warning
+dotnet_naming_symbols.constant_fields.applicable_kinds = field
+dotnet_naming_symbols.constant_fields.required_modifiers = const
+dotnet_naming_style.pascal_case.capitalization = pascal_case
+
 dotnet_naming_rule.private_fields_underscore.symbols = private_fields
 dotnet_naming_rule.private_fields_underscore.style = underscore_camel_case
 dotnet_naming_rule.private_fields_underscore.severity = warning
@@ -40,3 +48,8 @@ dotnet_naming_symbols.async_methods.applicable_kinds = method
 dotnet_naming_symbols.async_methods.required_modifiers = async
 dotnet_naming_style.async_suffix.required_suffix = Async
 dotnet_naming_style.async_suffix.capitalization = pascal_case
+
+# Nomes de teste usam sublinhados para ler como frase (Comportamento_quando_resultado).
+# A CA1707 continua valendo para o código de produção, que é API pública.
+[tests/**.cs]
+dotnet_diagnostic.CA1707.severity = none
