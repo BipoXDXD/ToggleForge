@@ -1584,6 +1584,9 @@ components:
         createdAt:
           $ref: '#/components/schemas/Timestamp'
         lastUsedAt:
+          description: |
+            Last snapshot download with this credential, recorded at most once every 5 minutes, so it may
+            lag the real last use by up to 5 minutes. Null if the game never used it.
           oneOf:
             - $ref: '#/components/schemas/Timestamp'
             - type: 'null'
