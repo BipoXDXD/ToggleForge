@@ -14,7 +14,7 @@ O plano de produto está em [`ToggleForge.md`](ToggleForge.md), e as decisões d
 | Marco | Entrega | Situação |
 |---|---|---|
 | 1 — Núcleo | Avaliação booleana, contexto, rollout percentual e fallback | ✅ Concluído |
-| 2 — API persistente | Rascunho, publicação, rollback, autenticação e isolamento | 🚧 Todas as operações do contrato prontas, inclusive a simulação; faltam rate limit e limpezas |
+| 2 — API persistente | Rascunho, publicação, rollback, autenticação e isolamento | 🚧 Todas as operações do contrato e o rate limit prontos; faltam limpezas e o preparo do deploy |
 | 3 — Console | Editor, simulador, publicação e histórico (Blazor + Tailwind) | Planejado |
 | 4 — SDK e configurações | Sincronização, cache, JSON e app demonstrativo | Planejado |
 | 5 — Unity e segmentação | Adaptador, jogo simples e regras por atributos | Planejado |
@@ -64,7 +64,9 @@ tracer bullet cobre o caminho inteiro: criar conta, criar projeto, criar flag no
 dele vieram a edição de flags com `If-Match`, o rollback, o histórico paginado de publicações e a
 revogação de credenciais e a simulação, que avalia o rascunho ou uma publicação para um jogador com o
 mesmo código do SDK e mostra o bucket que decidiu cada flag. O console
-usa cookie de sessão com token antiforgery; o jogo, `Authorization: Bearer tfsdk_...`.
+usa cookie de sessão com token antiforgery; o jogo, `Authorization: Bearer tfsdk_...`. Um rate limit
+por minuto (membro pela conta, jogo pela credencial e IP, o resto pelo IP) responde 429 com
+`Retry-After`; os tetos ficam em `RateLimits:*` (ADR 0006).
 
 ```bash
 dotnet user-secrets set ConnectionStrings:ToggleForge "Host=localhost;Database=toggleforge;Username=..." \

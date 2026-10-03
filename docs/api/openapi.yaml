@@ -18,6 +18,8 @@ info:
     - Request bodies reject unknown fields with 400.
     - Errors use Problem Details (RFC 9457) and list every problem found in `errors`.
     - Rollout percentages travel as basis points: 0 to 10000, where 100 means 1%.
+    - Requests are rate limited per minute: members by account, game clients by credential and IP
+      address, everyone else by IP address. Over the limit the answer is 429 with `Retry-After`.
   contact:
     name: ToggleForge
     url: https://github.com/BipoXDXD/ToggleForge
