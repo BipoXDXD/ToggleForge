@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 using Testcontainers.PostgreSql;
@@ -53,5 +55,6 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     {
         builder.UseSetting("ConnectionStrings:ToggleForge", _postgres.GetConnectionString());
         builder.ConfigureLogging(logging => logging.ClearProviders().AddProvider(Logs));
+        builder.ConfigureTestServices(services => services.AddSingleton<TimeProvider>(new HundredNanosecondClock()));
     }
 }

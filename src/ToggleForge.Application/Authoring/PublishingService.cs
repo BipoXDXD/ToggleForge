@@ -73,7 +73,7 @@ public sealed class PublishingService(
         }
 
         var current = await publications.FindAsync(environment, cancellationToken);
-        var now = clock.GetUtcNow();
+        var now = clock.GetUtcNowInMicroseconds();
         if (!environment.Publish(command.ReviewedDraftRevision, command.Summary, attempt.MemberId, now, current)
                 .TryGetValue(out var publication, out var failure))
         {

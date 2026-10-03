@@ -36,7 +36,7 @@ public sealed class CredentialService(
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         await credentials.LockEnvironmentAsync(environmentId, cancellationToken);
         var active = await credentials.CountActiveAsync(environmentId, cancellationToken);
-        if (!Credential.Issue(environmentId, name, clock.GetUtcNow(), active).TryGetValue(out var issued, out failure))
+        if (!Credential.Issue(environmentId, name, clock.GetUtcNowInMicroseconds(), active).TryGetValue(out var issued, out failure))
         {
             return failure;
         }
