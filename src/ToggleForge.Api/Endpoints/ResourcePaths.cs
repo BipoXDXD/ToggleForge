@@ -15,6 +15,6 @@ internal static class ResourcePaths
 
     public static string Publication(EnvironmentLocator locator, long version) => $"{Publications(locator)}/{version}";
 
-    private static string Environment(EnvironmentLocator locator) =>
+    public static string Environment(EnvironmentLocator locator) =>
         $"{Project(locator.OrganizationId, locator.ProjectKey)}/environments/{locator.EnvironmentKey.Value}";
 }

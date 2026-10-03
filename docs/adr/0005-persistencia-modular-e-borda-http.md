@@ -62,6 +62,7 @@ módulo, toda relação é FK e as regras dos value objects se repetem em CHECK 
 | Invariante | Proteção |
 |---|---|
 | Até 20 projetos por organização, chave única | `pg_advisory_xact_lock` na organização + índice único `(organization_id, key)` |
+| Até 10 ambientes por projeto, chave única | `pg_advisory_xact_lock` no projeto + índice único `(project_id, key)` |
 | Até 5 credenciais ativas por ambiente; revogação idempotente | `pg_advisory_xact_lock` no ambiente, na emissão e na revogação |
 | Rascunho alterado por vários editores ao mesmo tempo | `select ... for no key update` na linha do ambiente antes de ler o rascunho; `xmin` como row version continua valendo |
 | Publicação revisada sobre um rascunho que mudou | revisão revisada comparada sob o mesmo lock → 409 `draft-changed` |
@@ -124,8 +125,8 @@ boot de instância.
 - `ArchitectureTests`: Access não depende de Authoring nem de Delivery; Authoring não depende de
   Delivery; Delivery só usa a API pública de Authoring; nenhum módulo da infraestrutura toca a
   persistência de outro.
-- `LimitTests`: corridas pela última vaga de projeto e de credencial, pela mesma chave de projeto e por
-  flags criadas ao mesmo tempo.
+- `LimitTests`: corridas pela última vaga de projeto, de ambiente e de credencial, pela mesma chave de
+  projeto e de ambiente e por flags criadas ao mesmo tempo.
 - `PublishingTests` e `RollbackTests`: repetição, reuso da chave com outro corpo ou noutra operação, a
   mesma chave por outro membro, retries simultâneos, revisão ou versão desatualizada, "nada a publicar" e
   "já em vigor".

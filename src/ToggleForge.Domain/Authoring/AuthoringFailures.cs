@@ -8,6 +8,12 @@ public static class AuthoringFailures
     public static Failure ProjectLimitReached { get; } =
         new(FailureKind.Conflict, "limit-reached", $"An organization can have at most {Project.MaxPerOrganization} projects.");
 
+    public static Failure EnvironmentKeyTaken { get; } =
+        new(FailureKind.Conflict, "key-taken", "The project already has an environment with this key.");
+
+    public static Failure EnvironmentLimitReached { get; } =
+        new(FailureKind.Conflict, "limit-reached", $"A project can have at most {Project.MaxEnvironments} environments.");
+
     public static Failure FlagKeyTaken { get; } =
         new(FailureKind.Conflict, "key-taken", "The draft already has a flag with this key.");
 

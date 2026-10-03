@@ -10,6 +10,7 @@ internal static class AdvisoryLocks
 {
     public const int ProjectsOfOrganization = 1;
     public const int CredentialsOfEnvironment = 2;
+    public const int EnvironmentsOfProject = 3;
 
     public static async Task AcquireAsync(DbContext context, int space, Guid owner, CancellationToken cancellationToken)
     {

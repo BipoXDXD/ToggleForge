@@ -32,6 +32,8 @@ internal sealed record ProjectResponse(string Key, string Name, IReadOnlyList<En
         new(view.Key.Value, view.Name.Value, view.Environments.Select(EnvironmentResponse.Of).ToList());
 }
 
+internal sealed record ProjectListResponse(IReadOnlyList<ProjectResponse> Data);
+
 internal sealed record FlagResponse(string Key, bool Enabled, bool OnValue, bool OffValue, int RolloutBasisPoints)
 {
     public static FlagResponse Of(FlagKey key, FlagSettings settings) =>

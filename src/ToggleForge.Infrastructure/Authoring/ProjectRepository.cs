@@ -14,6 +14,16 @@ internal sealed class ProjectRepository(AuthoringDbContext context) : IProjectRe
     public Task<int> CountAsync(Guid organizationId, CancellationToken cancellationToken) =>
         context.Projects.CountAsync(p => p.OrganizationId == organizationId, cancellationToken);
 
+    public Task LockEnvironmentsAsync(Guid projectId, CancellationToken cancellationToken) =>
+        AdvisoryLocks.AcquireAsync(context, AdvisoryLocks.EnvironmentsOfProject, projectId, cancellationToken);
+
+    public async Task<IReadOnlyList<Project>> ListAsync(Guid organizationId, CancellationToken cancellationToken) =>
+        await context.Projects
+            .AsNoTracking()
+            .Where(p => p.OrganizationId == organizationId)
+            .OrderBy(p => p.Key)
+            .ToListAsync(cancellationToken);
+
     public Task<Project?> FindAsync(Guid organizationId, ProjectKey key, CancellationToken cancellationToken) =>
         context.Projects.SingleOrDefaultAsync(p => p.OrganizationId == organizationId && p.Key == key, cancellationToken);
 

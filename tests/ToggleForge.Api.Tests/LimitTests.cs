@@ -11,6 +11,7 @@ public sealed class LimitTests(ApiFactory api)
 {
     private const int MaxProjects = 20;
     private const int MaxActiveCredentials = 5;
+    private const int MaxEnvironments = 10;
     private const int Racers = 4;
 
     [Fact]
@@ -49,6 +50,35 @@ public sealed class LimitTests(ApiFactory api)
         using var owner = await ConsoleClient.SignUpAsync(api);
 
         var responses = await Task.WhenAll(Enumerable.Range(1, Racers).Select(_ => owner.CreateProjectAsync("space-race")));
+
+        Assert.Single(responses, response => response.Status == HttpStatusCode.Created);
+        Assert.All(responses.Where(response => response.Status != HttpStatusCode.Created), response => Assert.Equal("/problems/key-taken", response.ProblemType));
+    }
+
+    [Fact]
+    public async Task Racing_for_the_last_environment_slot_creates_one_environment()
+    {
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        await owner.CreateProjectAsync("space-race");
+        for (var environment = 3; environment < MaxEnvironments; environment++)
+        {
+            Assert.Equal(HttpStatusCode.Created, (await owner.CreateEnvironmentAsync("space-race", $"env-{environment}")).Status);
+        }
+
+        var responses = await Task.WhenAll(Enumerable.Range(1, Racers).Select(racer => owner.CreateEnvironmentAsync("space-race", $"racer-{racer}")));
+
+        Assert.Single(responses, response => response.Status == HttpStatusCode.Created);
+        Assert.All(responses.Where(response => response.Status != HttpStatusCode.Created), response => Assert.Equal("/problems/limit-reached", response.ProblemType));
+        Assert.Equal(MaxEnvironments, (await owner.GetProjectAsync("space-race")).Json["environments"]!.AsArray().Count);
+    }
+
+    [Fact]
+    public async Task Racing_for_the_same_environment_key_creates_one_environment()
+    {
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        await owner.CreateProjectAsync("space-race");
+
+        var responses = await Task.WhenAll(Enumerable.Range(1, Racers).Select(_ => owner.CreateEnvironmentAsync("space-race", "staging")));
 
         Assert.Single(responses, response => response.Status == HttpStatusCode.Created);
         Assert.All(responses.Where(response => response.Status != HttpStatusCode.Created), response => Assert.Equal("/problems/key-taken", response.ProblemType));

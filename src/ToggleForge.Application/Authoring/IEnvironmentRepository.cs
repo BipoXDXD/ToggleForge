@@ -1,11 +1,14 @@
 using ToggleForge.Domain.Authoring;
+using ToggleForge.Evaluation;
 
 namespace ToggleForge.Application.Authoring;
 
 public interface IEnvironmentRepository
 {
-    /// <summary>Com as flags do rascunho, ordenados pela chave.</summary>
-    Task<IReadOnlyList<ProjectEnvironment>> ListAsync(Guid projectId, CancellationToken cancellationToken);
+    /// <summary>Os ambientes de todos os projetos dados numa consulta só, com as flags do rascunho.</summary>
+    Task<IReadOnlyList<ProjectEnvironment>> ListAsync(IReadOnlyCollection<Guid> projectIds, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<EnvironmentKey>> ListKeysAsync(Guid projectId, CancellationToken cancellationToken);
 
     /// <summary>Com as flags do rascunho.</summary>
     Task<ProjectEnvironment?> FindAsync(EnvironmentLocator locator, CancellationToken cancellationToken);

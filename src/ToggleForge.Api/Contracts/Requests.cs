@@ -10,6 +10,8 @@ internal sealed record CredentialsRequest(string? Email, string? Password);
 
 internal sealed record ProjectCreationRequest(string? Key, string? Name);
 
+internal sealed record EnvironmentCreationRequest(string? Key, string? Name);
+
 internal sealed record FlagCreationRequest(string? Key, bool? Enabled, bool? OnValue, bool? OffValue, int? RolloutBasisPoints);
 
 internal sealed record FlagModificationRequest(

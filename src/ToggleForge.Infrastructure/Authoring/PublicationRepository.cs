@@ -43,12 +43,12 @@ internal sealed class PublicationRepository(AuthoringDbContext context) : IPubli
     }
 
     public async Task<IReadOnlyDictionary<Guid, Publication>> FindCurrentByEnvironmentAsync(
-        Guid projectId, CancellationToken cancellationToken)
+        IReadOnlyCollection<Guid> projectIds, CancellationToken cancellationToken)
     {
         var rows = await context.Publications
             .AsNoTracking()
             .Join(
-                context.Environments.Where(e => e.ProjectId == projectId),
+                context.Environments.Where(e => projectIds.Contains(e.ProjectId)),
                 publication => new { publication.EnvironmentId, Version = (long?)publication.Version },
                 environment => new { EnvironmentId = environment.Id, Version = environment.CurrentVersion },
                 (publication, _) => publication)
