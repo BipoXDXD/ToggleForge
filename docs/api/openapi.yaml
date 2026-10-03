@@ -961,8 +961,8 @@ components:
       in: header
       required: true
       description: |
-        Client-generated key, scoped to the member. Kept for 24 hours. Same key and body → the original
-        response; same key and another body → 409 `idempotency-key-reused`.
+        Client-generated key, scoped to the member. Kept for at least 24 hours, then forgotten. Same key
+        and body → the original response; same key and another body → 409 `idempotency-key-reused`.
       schema:
         type: string
         pattern: '^[A-Za-z0-9_-]{16,64}$'

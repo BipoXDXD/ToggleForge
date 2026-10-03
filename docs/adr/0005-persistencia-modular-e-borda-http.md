@@ -101,7 +101,7 @@ posições e misturar coleções.
 
 **Migrations** com o `dotnet-ef` do manifesto local, uma pasta por módulo, aplicadas por
 `dotnet run --project src/ToggleForge.Api -- --migrate`: um passo explícito do deploy, nunca a cada
-boot de instância.
+boot de instância. A limpeza da idempotência segue o mesmo modelo (`MaintenanceCommands`).
 
 ## Consequências
 
@@ -110,8 +110,11 @@ boot de instância.
   tratar isso.
 - Quem escreve no rascunho entra em fila por ambiente. Com 200 flags no máximo e edição humana, a fila é
   curta; se a medição mostrar disputa, a revisão começa por aqui.
-- Os registros de idempotência crescem sem limpeza até existir o job de expiração de 24 horas que o
-  contrato promete.
+- Os registros de idempotência ficam pelo menos as 24 horas que o contrato promete. O comando
+  `--purge-idempotency-records`, num job agendado de hora em hora (CronJob no Kubernetes, job agendado no Container
+  Apps), apaga os mais velhos num `DELETE` só. Entre o vencimento e a passagem do job, uma chave vencida
+  ainda é lembrada; o contrato só garante o mínimo. A tabela não tem índice em `created_at`: com
+  publicações feitas à mão, ela é pequena, e o índice espera uma medição.
 - `lastUsedAt` da credencial ainda não é atualizado; atualizar a cada download do SDK seria uma escrita
   por requisição e pede um desenho próprio (amostragem ou buffer).
 - O Data Protection guarda as chaves no perfil do usuário e não as compartilha entre instâncias. Antes do
@@ -127,6 +130,8 @@ boot de instância.
   persistência de outro.
 - `LimitTests`: corridas pela última vaga de projeto, de ambiente e de credencial, pela mesma chave de
   projeto e de ambiente e por flags criadas ao mesmo tempo.
+- `IdempotencyRetentionTests`: o comando de limpeza mantém a chave com exatamente 24 horas e a esquece um
+  microssegundo depois.
 - `PublishingTests` e `RollbackTests`: repetição, reuso da chave com outro corpo ou noutra operação, a
   mesma chave por outro membro, retries simultâneos, revisão ou versão desatualizada, "nada a publicar" e
   "já em vigor".
