@@ -15,6 +15,7 @@ python3 tools/rollout-vectors/generate.py --check      # confere o JSON commitad
 dotnet run --project samples/ToggleForge.RolloutDemo
 npm ci --prefix tools/api-lint && npm run lint --prefix tools/api-lint   # Spectral + OWASP na spec
 dotnet run --project src/ToggleForge.Api -- --migrate  # aplica as migrations; precisa de ConnectionStrings:ToggleForge
+dotnet run --project src/ToggleForge.Api -- --purge-idempotency-records  # job agendado: esquece chaves com mais de 24 h
 dotnet run --project src/ToggleForge.Api               # sobe a API
 dotnet tool restore && dotnet ef migrations add <Nome> --context <Módulo>DbContext \
   --project src/ToggleForge.Infrastructure --startup-project src/ToggleForge.Api --output-dir <Módulo>/Migrations

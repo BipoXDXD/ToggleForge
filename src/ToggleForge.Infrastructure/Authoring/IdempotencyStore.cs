@@ -3,7 +3,6 @@ using ToggleForge.Application.Authoring;
 
 namespace ToggleForge.Infrastructure.Authoring;
 
-/// <summary>Os registros não expiram ainda; a limpeza dos antigos entra com o job de manutenção.</summary>
 internal sealed class IdempotencyStore(AuthoringDbContext context) : IIdempotencyStore
 {
     public Task<IdempotencyRecord?> FindAsync(Guid memberId, IdempotencyKey key, CancellationToken cancellationToken)
@@ -16,4 +15,7 @@ internal sealed class IdempotencyStore(AuthoringDbContext context) : IIdempotenc
     }
 
     public void Add(IdempotencyRecord record) => context.IdempotencyRecords.Add(record);
+
+    public Task<int> DeleteCreatedBeforeAsync(DateTimeOffset cutoff, CancellationToken cancellationToken) =>
+        context.IdempotencyRecords.Where(r => r.CreatedAt < cutoff).ExecuteDeleteAsync(cancellationToken);
 }
