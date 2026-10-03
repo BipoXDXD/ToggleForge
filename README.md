@@ -14,7 +14,7 @@ O plano de produto está em [`ToggleForge.md`](ToggleForge.md), e as decisões d
 | Marco | Entrega | Situação |
 |---|---|---|
 | 1 — Núcleo | Avaliação booleana, contexto, rollout percentual e fallback | ✅ Concluído |
-| 2 — API persistente | Rascunho, publicação, rollback, autenticação e isolamento | 🚧 Tracer bullet pronto |
+| 2 — API persistente | Rascunho, publicação, rollback, autenticação e isolamento | 🚧 Rascunho, publicação, rollback e histórico prontos |
 | 3 — Console | Editor, simulador, publicação e histórico (Blazor + Tailwind) | Planejado |
 | 4 — SDK e configurações | Sincronização, cache, JSON e app demonstrativo | Planejado |
 | 5 — Unity e segmentação | Adaptador, jogo simples e regras por atributos | Planejado |
@@ -59,8 +59,9 @@ v3      50%         50.250     50,25%  0
 
 O contrato é [`docs/api/openapi.yaml`](docs/api/openapi.yaml) (OpenAPI 3.1), escrito antes do código. O
 tracer bullet cobre o caminho inteiro: criar conta, criar projeto, criar flag no rascunho, publicar com
-`Idempotency-Key`, emitir a credencial do ambiente e baixar o snapshot no jogo, com `ETag` e 304. O
-console usa cookie de sessão com token antiforgery; o jogo, `Authorization: Bearer tfsdk_...`.
+`Idempotency-Key`, emitir a credencial do ambiente e baixar o snapshot no jogo, com `ETag` e 304. Depois
+dele vieram a edição de flags com `If-Match`, o rollback e o histórico paginado de publicações. O console
+usa cookie de sessão com token antiforgery; o jogo, `Authorization: Bearer tfsdk_...`.
 
 ```bash
 dotnet user-secrets set ConnectionStrings:ToggleForge "Host=localhost;Database=toggleforge;Username=..." \
