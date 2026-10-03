@@ -41,6 +41,23 @@ internal sealed class InputErrors
         return value is not null;
     }
 
+    /// <summary>Versão publicada obrigatória do corpo; nula quando falta ou é menor que 1.</summary>
+    public long? RequireVersion(long? value, string pointer)
+    {
+        if (!Require(value, pointer))
+        {
+            return null;
+        }
+
+        if (value.Value < 1)
+        {
+            InBody(pointer, "Versions start at 1.");
+            return null;
+        }
+
+        return value;
+    }
+
     /// <summary>Texto obrigatório do corpo convertido no tipo de domínio; nulo quando falta ou é inválido.</summary>
     public T? Parse<T>(string? value, string pointer, TryParser<T> parse, string detail)
         where T : class
