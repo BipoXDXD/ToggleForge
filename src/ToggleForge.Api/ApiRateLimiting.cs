@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Sockets;
 using System.Security.Claims;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
@@ -14,6 +16,7 @@ namespace ToggleForge.Api;
 internal static class ApiRateLimiting
 {
     private const string UnknownAddress = "unknown";
+    private const int Ipv6NetworkPrefixLength = 64;
     private static readonly TimeSpan _window = TimeSpan.FromMinutes(1);
 
     public static IServiceCollection AddToggleForgeRateLimiting(this IServiceCollection services)
@@ -31,7 +34,7 @@ internal static class ApiRateLimiting
 
     private static RateLimitPartition<string> PartitionOf(HttpContext context, RateLimits limits)
     {
-        var address = context.Connection.RemoteIpAddress?.ToString() ?? UnknownAddress;
+        var address = ClientNetwork(context.Connection.RemoteIpAddress);
         if (context.User.FindFirstValue(SdkCredentialHandler.CredentialClaim) is { } credentialId)
         {
             return PerMinute($"game:{credentialId}:{address}", limits.GameClientPerMinute);
@@ -43,6 +46,33 @@ internal static class ApiRateLimiting
         }
 
         return PerMinute($"anonymous:{address}", limits.AnonymousPerMinute);
+    }
+
+    /// <summary>
+    /// Um cliente IPv6 costuma ter um /64 inteiro e trocaria de endereço a cada requisição; o limite vale para
+    /// a rede. IPv4 mapeado em IPv6 conta como o próprio IPv4.
+    /// </summary>
+    private static string ClientNetwork(IPAddress? address)
+    {
+        if (address is null)
+        {
+            return UnknownAddress;
+        }
+
+        if (address.IsIPv4MappedToIPv6)
+        {
+            return address.MapToIPv4().ToString();
+        }
+
+        if (address.AddressFamily != AddressFamily.InterNetworkV6)
+        {
+            return address.ToString();
+        }
+
+        var bytes = address.GetAddressBytes();
+        var networkBytes = Ipv6NetworkPrefixLength / 8;
+        Array.Clear(bytes, networkBytes, bytes.Length - networkBytes);
+        return $"{new IPAddress(bytes)}/{Ipv6NetworkPrefixLength}";
     }
 
     private static RateLimitPartition<string> PerMinute(string key, int permits) =>
