@@ -44,12 +44,10 @@ namespace ToggleForge.Evaluation
                     throw new ArgumentException("The flag list must not contain null.", nameof(flags));
                 }
 
-                if (index.ContainsKey(flag.Key))
+                if (!index.TryAdd(flag.Key, flag))
                 {
                     throw new ArgumentException($"Flag key '{flag.Key}' appears more than once.", nameof(flags));
                 }
-
-                index.Add(flag.Key, flag);
             }
 
             return index;

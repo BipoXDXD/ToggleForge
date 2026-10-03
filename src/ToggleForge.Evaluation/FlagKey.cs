@@ -17,7 +17,7 @@ namespace ToggleForge.Evaluation
         }
 
         public static FlagKey Parse(string value) =>
-            TryParse(value, out var key) ? key : throw new ArgumentException(KeyFormat.Description, nameof(value));
+            TryParse(value, out var key) ? key : throw new ArgumentException(KeyFormat.InvalidKeyMessage, nameof(value));
 
         public override string ToString() => Value;
     }

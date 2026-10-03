@@ -11,8 +11,8 @@ namespace ToggleForge.Evaluation
     {
         internal const int MaxLength = 64;
 
-        internal const string Description =
-            "A key must have 1 to 64 characters from [a-z0-9._-] and start with a letter or digit.";
+        internal static readonly string InvalidKeyMessage =
+            $"A key must have 1 to {MaxLength} characters from [a-z0-9._-] and start with a letter or digit.";
 
         internal static bool IsValid([NotNullWhen(true)] string? value)
         {

@@ -24,6 +24,10 @@ namespace ToggleForge.Evaluation
 
         public int BasisPoints { get; }
 
+        public bool IncludesNobody => BasisPoints == 0;
+
+        public bool IncludesEveryone => BasisPoints == MaxBasisPoints;
+
         public static bool TryFromBasisPoints(int basisPoints, [NotNullWhen(true)] out RolloutPercentage? percentage)
         {
             percentage = basisPoints is >= 0 and <= MaxBasisPoints ? new RolloutPercentage(basisPoints) : null;
@@ -33,7 +37,8 @@ namespace ToggleForge.Evaluation
         public static RolloutPercentage FromBasisPoints(int basisPoints) =>
             TryFromBasisPoints(basisPoints, out var percentage)
                 ? percentage
-                : throw new ArgumentOutOfRangeException(nameof(basisPoints), basisPoints, "Expected 0 to 10000 basis points.");
+                : throw new ArgumentOutOfRangeException(
+                    nameof(basisPoints), basisPoints, $"Expected 0 to {MaxBasisPoints} basis points.");
 
         /// <summary>Converte um percentual com até duas casas decimais (por exemplo, 12,5).</summary>
         public static RolloutPercentage FromPercent(decimal percent)
@@ -53,10 +58,13 @@ namespace ToggleForge.Evaluation
             return new RolloutPercentage((int)basisPoints);
         }
 
+        /// <summary>Um bucket de 0 a 9999 está incluído quando fica abaixo do percentual.</summary>
+        public bool Includes(int bucket) => bucket < BasisPoints;
+
         public override string ToString() =>
             ((decimal)BasisPoints / BasisPointsPerPercent).ToString("0.##", CultureInfo.InvariantCulture) + "%";
 
         private static ArgumentOutOfRangeException InvalidPercent(decimal percent) =>
-            new(nameof(percent), percent, "Expected 0 to 100 with at most two decimal places.");
+            new(nameof(percent), percent, $"Expected 0 to {MaxPercent} with at most two decimal places.");
     }
 }

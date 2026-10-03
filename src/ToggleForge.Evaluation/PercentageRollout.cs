@@ -30,12 +30,12 @@ namespace ToggleForge.Evaluation
                 throw new ArgumentNullException(nameof(context));
             }
 
-            if (Percentage.BasisPoints == 0)
+            if (Percentage.IncludesNobody)
             {
                 return TargetingDecision.Excluded;
             }
 
-            if (Percentage.BasisPoints == RolloutPercentage.MaxBasisPoints)
+            if (Percentage.IncludesEveryone)
             {
                 return TargetingDecision.Included;
             }
@@ -46,7 +46,7 @@ namespace ToggleForge.Evaluation
             }
 
             var bucket = RolloutBucket.Compute(flag, Seed, context.PlayerId);
-            return bucket < Percentage.BasisPoints ? TargetingDecision.Included : TargetingDecision.Excluded;
+            return Percentage.Includes(bucket) ? TargetingDecision.Included : TargetingDecision.Excluded;
         }
     }
 }

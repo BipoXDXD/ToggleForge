@@ -38,18 +38,13 @@ namespace ToggleForge.Evaluation
                 throw new ArgumentNullException(nameof(playerId));
             }
 
-            var input = EncodeCanonically(
+            return BucketOf(EncodeCanonically(
                 AlgorithmTag,
                 flag.ProjectKey.Value,
                 flag.EnvironmentKey.Value,
                 flag.FlagKey.Value,
                 seed.Value,
-                playerId.Value);
-
-            using var sha256 = SHA256.Create();
-            var hash = sha256.ComputeHash(input);
-            var hashPrefix = BinaryPrimitives.ReadUInt64BigEndian(hash.AsSpan(0, HashPrefixSize));
-            return (int)(hashPrefix % BucketCount);
+                playerId.Value));
         }
 
         /// <summary>Prefixa cada campo com o tamanho, para que ("ab", "c") e ("a", "bc") não colidam.</summary>
@@ -66,6 +61,14 @@ namespace ToggleForge.Evaluation
             }
 
             return stream.ToArray();
+        }
+
+        private static int BucketOf(byte[] canonicalInput)
+        {
+            using var sha256 = SHA256.Create();
+            var hash = sha256.ComputeHash(canonicalInput);
+            var hashPrefix = BinaryPrimitives.ReadUInt64BigEndian(hash.AsSpan(0, HashPrefixSize));
+            return (int)(hashPrefix % BucketCount);
         }
     }
 }

@@ -10,8 +10,8 @@ namespace ToggleForge.Evaluation
     {
         public const int MaxLength = 64;
 
-        private const string InvalidValueMessage =
-            "A rollout seed must have 1 to 64 characters, not be blank "
+        private static readonly string _invalidValueMessage =
+            $"A rollout seed must have 1 to {MaxLength} characters, not be blank "
             + "and contain no control characters or unpaired surrogates.";
 
         private RolloutSeed(string value) => Value = value;
@@ -27,7 +27,7 @@ namespace ToggleForge.Evaluation
         public static RolloutSeed Parse(string value) =>
             TryParse(value, out var seed)
                 ? seed
-                : throw new ArgumentException(InvalidValueMessage, nameof(value));
+                : throw new ArgumentException(_invalidValueMessage, nameof(value));
 
         public override string ToString() => Value;
     }
