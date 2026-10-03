@@ -1,0 +1,10 @@
+bin/
+obj/
+/packages/
+riderModule.iml
+/_ReSharper.Caches/
+# IDE, ferramentas e SO
+.idea/
+.codex/
+.serena/
+.DS_Store
