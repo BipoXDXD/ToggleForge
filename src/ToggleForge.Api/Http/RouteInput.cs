@@ -25,6 +25,9 @@ internal static class RouteInput
     public static EnvironmentKey? Environment(string environmentKey, InputErrors errors) =>
         Parse<EnvironmentKey>(EnvironmentKey.TryParse(environmentKey, out var key), key, nameof(environmentKey), errors);
 
+    public static FlagKey? Flag(string flagKey, InputErrors errors) =>
+        Parse<FlagKey>(FlagKey.TryParse(flagKey, out var key), key, nameof(flagKey), errors);
+
     public static bool TryLocator(
         string organizationId,
         string projectKey,
