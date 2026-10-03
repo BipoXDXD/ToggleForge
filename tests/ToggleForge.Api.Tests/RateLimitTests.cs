@@ -73,6 +73,25 @@ public sealed class RateLimitTests(ApiFactory api)
         Assert.Equal(HttpStatusCode.OK, allowed.Status);
     }
 
+    /// <summary>Um cliente IPv6 costuma ter um /64 inteiro: trocar de endereço dentro dele não renova o limite.</summary>
+    [Theory]
+    [InlineData("2001:db8:1:2::1", "2001:db8:1:2:ffff::9", HttpStatusCode.TooManyRequests)]
+    [InlineData("2001:db8:1:2::1", "2001:db8:1:3::1", HttpStatusCode.OK)]
+    [InlineData("203.0.113.7", "::ffff:203.0.113.7", HttpStatusCode.TooManyRequests)]
+    [InlineData("203.0.113.7", "203.0.113.8", HttpStatusCode.OK)]
+    public async Task The_anonymous_limit_counts_IPv6_by_64_bit_network(string first, string second, HttpStatusCode expected)
+    {
+        await using var host = WithLimit("AnonymousPerMinute", 1);
+        using var client = ConsoleClient.Anonymous(host);
+        client.ComeFrom(first);
+        await GetAntiforgeryTokenAsync(client);
+
+        client.ComeFrom(second);
+        var response = await GetAntiforgeryTokenAsync(client);
+
+        Assert.Equal(expected, response.Status);
+    }
+
     [Fact]
     public async Task A_member_over_the_limit_gets_429_even_from_another_address()
     {
