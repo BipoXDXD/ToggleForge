@@ -101,13 +101,6 @@ public sealed class PercentageRolloutTests
         Assert.Single(decisions);
     }
 
-    [Fact]
-    public void Constructor_rejects_null_seed()
-    {
-        // Consumidores sem nullable reference types (scripts Unity) podem passar null.
-        Assert.Throws<ArgumentNullException>(() => new PercentageRollout(RolloutPercentage.All, null!));
-    }
-
     private static IEnumerable<EvaluationContext> SamplePlayers(int count) =>
         Enumerable.Range(1, count).Select(n => EvaluationContext.ForPlayer(PlayerId.Parse($"player-{n}")));
 }

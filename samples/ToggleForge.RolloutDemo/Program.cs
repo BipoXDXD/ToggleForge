@@ -5,7 +5,6 @@ using ToggleForge.RolloutDemo;
 const int PlayerCount = 100_000;
 var culture = CultureInfo.GetCultureInfo("pt-BR");
 
-// Composition root: o grafo é montado à mão (Poor Man's DI); o decorator envolve o avaliador real.
 var tallying = new TallyingFlagEvaluator(new FlagEvaluator());
 var newShop = new FlagIdentity(
     ProjectKey.Parse("studio-game"), EnvironmentKey.Parse("prod"), FlagKey.Parse("new-shop"));

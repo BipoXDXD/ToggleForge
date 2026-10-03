@@ -1,8 +1,7 @@
 namespace ToggleForge.Evaluation
 {
     /// <summary>
-    /// Avalia flags contra um snapshot. Nunca lança exceção por causa de configuração ausente ou inválida:
-    /// devolve o valor padrão com o motivo. Decorators (contagem, logs, métricas) implementam esta interface.
+    /// Nunca lança exceção por causa de configuração ausente ou inválida: devolve o valor padrão com o motivo.
     /// </summary>
     public interface IFlagEvaluator
     {

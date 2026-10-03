@@ -9,7 +9,9 @@ public sealed class NullArgumentTests
     private static ProjectKey Project { get; } = ProjectKey.Parse("studio-game");
     private static EnvironmentKey Environment { get; } = EnvironmentKey.Parse("prod");
     private static FlagKey Flag { get; } = FlagKey.Parse("new-shop");
-    private static PercentageRollout Rollout { get; } = new(RolloutPercentage.All, RolloutSeed.Parse("seed-1"));
+    private static RolloutSeed Seed { get; } = RolloutSeed.Parse("seed-1");
+    private static FlagIdentity Identity { get; } = new(Project, Environment, Flag);
+    private static PercentageRollout Rollout { get; } = new(RolloutPercentage.All, Seed);
 
     [Fact]
     public void FlagIdentity_rejects_null_keys()
@@ -26,9 +28,35 @@ public sealed class NullArgumentTests
     }
 
     [Fact]
-    public void PercentageRollout_rejects_null_percentage()
+    public void PercentageRollout_rejects_null_percentage_and_seed()
     {
-        AssertNullRejected("percentage", () => new PercentageRollout(null!, RolloutSeed.Parse("seed-1")));
+        AssertNullRejected("percentage", () => new PercentageRollout(null!, Seed));
+        AssertNullRejected("seed", () => new PercentageRollout(RolloutPercentage.All, null!));
+    }
+
+    [Fact]
+    public void PercentageRollout_Decide_rejects_null_flag_and_context()
+    {
+        AssertNullRejected("flag", () => Rollout.Decide(null!, EvaluationContext.Anonymous));
+        AssertNullRejected("context", () => Rollout.Decide(Identity, null!));
+    }
+
+    [Fact]
+    public void RolloutBucket_Compute_rejects_null_arguments()
+    {
+        var player = PlayerId.Parse("player");
+
+        AssertNullRejected("flag", () => RolloutBucket.Compute(null!, Seed, player));
+        AssertNullRejected("seed", () => RolloutBucket.Compute(Identity, null!, player));
+        AssertNullRejected("playerId", () => RolloutBucket.Compute(Identity, Seed, null!));
+    }
+
+    [Fact]
+    public void FlagEvaluator_rejects_null_context()
+    {
+        var snapshot = new ConfigurationSnapshot(Project, Environment, 1, []);
+
+        AssertNullRejected("context", () => new FlagEvaluator().EvaluateBoolean(snapshot, "new-shop", null!, false));
     }
 
     [Fact]

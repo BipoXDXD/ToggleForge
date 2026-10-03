@@ -58,7 +58,6 @@ namespace ToggleForge.Evaluation
             return new RolloutPercentage((int)basisPoints);
         }
 
-        /// <summary>Um bucket de 0 a 9999 está incluído quando fica abaixo do percentual.</summary>
         public bool Includes(int bucket) => bucket < BasisPoints;
 
         public override string ToString() =>

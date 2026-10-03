@@ -10,7 +10,6 @@ namespace ToggleForge.Evaluation
     {
         private EvaluationContext(PlayerId? playerId) => PlayerId = playerId;
 
-        /// <summary>Jogador ainda sem ID estável (por exemplo, antes do login).</summary>
         public static EvaluationContext Anonymous { get; } = new(null);
 
         public PlayerId? PlayerId { get; }

@@ -132,7 +132,6 @@ def vector_inputs() -> list[tuple[str, str, str, str, str]]:
         ("studio-game", "prod", "new-shop", "seed-1", "  padded  "),
         ("studio-game", "prod", "new-shop", "seed-1", "550e8400-e29b-41d4-a716-446655440000"),
         ("studio-game", "prod", "new-shop", "seed-1", "PLAYER-1"),
-        # Boundaries of field length.
         ("a", "b", "c", "d", "e"),
         (MAX_KEY, MAX_KEY, MAX_KEY, MAX_SEED, MAX_PLAYER_ID),
         ("studio-game", "prod", "new-shop", "semente-ação-🎲", "player-1"),

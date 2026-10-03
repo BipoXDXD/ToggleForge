@@ -58,6 +58,9 @@ Padrões iniciais: Strategy, Adapter e Decorator, aplicados onde houver variaç�
 
 ## Regras específicas
 
+- Comentário só quando agrega: o porquê, o contrato (o que exige, garante, quando lança), unidades,
+  premissas e o que o código não consegue dizer. Nada que repita o nome ou o código; nome melhor
+  vence comentário.
 - O algoritmo de rollout é contrato público. Qualquer mudança exige uma versão nova (ADR 0002) e
   vetores novos; nunca edite `rollout-v1.json` à mão.
 - A avaliação nunca lança exceção por causa de dado ruim: devolve o `defaultValue` com um `Reason`.

@@ -2,7 +2,6 @@ using ToggleForge.Evaluation;
 
 namespace ToggleForge.RolloutDemo;
 
-/// <summary>Publica a flag em etapas crescentes e avalia a mesma população de jogadores em cada uma.</summary>
 internal sealed class RolloutSimulation(IFlagEvaluator evaluator, FlagIdentity flag, RolloutSeed seed)
 {
     public IReadOnlyList<StageResult> Run(IReadOnlyList<PlayerId> players, IReadOnlyList<RolloutPercentage> stages)

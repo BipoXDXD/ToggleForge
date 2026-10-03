@@ -42,7 +42,6 @@ jobs:
       - name: Testes
         run: dotnet test --solution ToggleForge.slnx --configuration Release --no-build
 
-      # O oráculo Python e o JSON commitado precisam concordar; os testes C# conferem o mesmo JSON.
       - name: Verificar vetores do rollout
         run: python3 tools/rollout-vectors/generate.py --check
 

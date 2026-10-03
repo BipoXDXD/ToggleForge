@@ -45,18 +45,6 @@ public sealed class RolloutBucketTests
         Assert.True(differentBuckets >= 990, $"Only {differentBuckets} of 1000 players changed bucket.");
     }
 
-    [Fact]
-    public void Compute_rejects_null_arguments_from_callers_without_nullable_analysis()
-    {
-        var flag = new FlagIdentity(ProjectKey.Parse("p"), EnvironmentKey.Parse("e"), FlagKey.Parse("f"));
-        var seed = RolloutSeed.Parse("seed");
-        var player = PlayerId.Parse("player");
-
-        Assert.Throws<ArgumentNullException>(() => RolloutBucket.Compute(null!, seed, player));
-        Assert.Throws<ArgumentNullException>(() => RolloutBucket.Compute(flag, null!, player));
-        Assert.Throws<ArgumentNullException>(() => RolloutBucket.Compute(flag, seed, null!));
-    }
-
     private static int Compute(string projectKey, string environmentKey, string playerId = "player") =>
         RolloutBucket.Compute(
             new FlagIdentity(ProjectKey.Parse(projectKey), EnvironmentKey.Parse(environmentKey), FlagKey.Parse("flag")),

@@ -2,10 +2,6 @@ using System.Text.Json;
 
 namespace ToggleForge.Evaluation.Tests;
 
-/// <summary>
-/// Vetores e casos gerados pelo oráculo Python (tools/rollout-vectors/generate.py), independente da
-/// implementação C#.
-/// </summary>
 internal static class RolloutVectors
 {
     public static TheoryData<string, string, string, string, string, int> Buckets()

@@ -2,10 +2,7 @@ using ToggleForge.Evaluation;
 
 namespace ToggleForge.RolloutDemo;
 
-/// <summary>
-/// Decorator que conta os resultados por motivo sem que o chamador perceba. Não é thread-safe:
-/// a demo avalia num único thread.
-/// </summary>
+/// <summary>Não é thread-safe: a demo avalia num único thread.</summary>
 internal sealed class TallyingFlagEvaluator(IFlagEvaluator inner) : IFlagEvaluator
 {
     private readonly Dictionary<EvaluationReason, int> _countsByReason = [];

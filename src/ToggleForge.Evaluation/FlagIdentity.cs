@@ -2,7 +2,6 @@ using System;
 
 namespace ToggleForge.Evaluation
 {
-    /// <summary>Onde a flag vive: projeto, ambiente e chave. Os três entram no hash do rollout.</summary>
     public sealed class FlagIdentity
     {
         public FlagIdentity(ProjectKey projectKey, EnvironmentKey environmentKey, FlagKey flagKey)

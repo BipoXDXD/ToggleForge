@@ -96,15 +96,6 @@ public sealed class FlagEvaluatorTests
     }
 
     [Fact]
-    public void Evaluation_rejects_null_context()
-    {
-        var snapshot = SnapshotWith(Flag("new-shop", enabled: true, RolloutPercentage.All));
-
-        // Consumidores sem nullable reference types (scripts Unity) podem passar null.
-        Assert.Throws<ArgumentNullException>(() => _evaluator.EvaluateBoolean(snapshot, "new-shop", null!, defaultValue: false));
-    }
-
-    [Fact]
     public void Snapshot_rejects_duplicate_flag_keys()
     {
         var duplicate = Flag("new-shop", enabled: true, RolloutPercentage.All);
