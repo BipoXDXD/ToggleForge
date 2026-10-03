@@ -67,6 +67,19 @@ Arquitetura e domínio:
   - ORM, modelagem, normalização, anti-patterns, desnormalização e NoSQL (caps. 26–28, 30–32);
   - DML, isolamento e locks, cache em SQL, triggers, LISTEN/NOTIFY, auditoria e trigramas
     (caps. 35–39, 43, 45).
+- **Designing Data-Intensive Applications, 2ª ed.** (DDIA), caps. 1–5, 8–10, 12 e 13: os porquês por
+  trás do banco e do SDK.
+  - Trade-offs, requisitos não funcionais, modelos de dados e armazenamento (caps. 1–4): um Postgres só
+    até um problema medido pedir mais.
+  - Codificação e evolução (cap. 5): o snapshot e o contrato mudam de forma compatível, porque builds
+    antigos do jogo continuam no ar.
+  - Transações e isolamento (cap. 8): cada invariante sob disputa diz qual proteção usa (constraint, lock
+    ou isolamento) e tem teste com escritores concorrentes.
+  - Falhas de rede, relógios e ordenação (caps. 9–10): timeout, retry com idempotência, instantes em UTC
+    e ordem pela versão da publicação, nunca pelo relógio.
+  - Streams e integridade de ponta a ponta (caps. 12–13): outbox e CDC/LISTEN para propagar publicações,
+    idempotência de ponta a ponta e dado derivado reconstruível.
+  - Replicação, sharding e batch (caps. 6–7 e 11) ficam de fora enquanto o sistema roda num nó só.
 - **Code That Fits in Your Head** (CFH), caps. 2–8, 10–13 e 15:
   - checklists, complexidade, vertical slice, encapsulamento, triangulação, decomposição e design de
     API (caps. 2–8);

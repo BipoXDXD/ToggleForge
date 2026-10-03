@@ -15,6 +15,12 @@ public sealed class Result<T>
 
     public static implicit operator Result<T>(Failure failure) => new(failure);
 
+    public Result<TOut> Map<TOut>(Func<T, TOut> map)
+    {
+        ArgumentNullException.ThrowIfNull(map);
+        return TryGetValue(out var value, out var failure) ? map(value) : failure;
+    }
+
     public bool TryGetValue([MaybeNullWhen(false)] out T value, [NotNullWhen(false)] out Failure? failure)
     {
         value = _value;

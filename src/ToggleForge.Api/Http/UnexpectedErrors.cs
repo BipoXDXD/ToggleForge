@@ -31,7 +31,7 @@ internal static partial class UnexpectedErrors
     {
         var errors = new InputErrors();
         var pointer = exception.InnerException is JsonException { Path: { } path } ? ToPointer(path) : string.Empty;
-        errors.InBody(pointer, "The body is missing, is not valid JSON or has a field this operation does not accept.", ErrorTypes.InvalidBody);
+        errors.InBody(pointer, "The body is missing, is not valid JSON, has a null value or has a field this operation does not accept.", ErrorTypes.InvalidBody);
         return errors.ToResult();
     }
 

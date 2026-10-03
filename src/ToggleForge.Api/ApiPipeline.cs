@@ -29,6 +29,7 @@ internal static class ApiPipeline
 
         var environment = organization.MapGroup("/projects/{projectKey}/environments/{environmentKey}");
         environment.MapDraftEndpoints();
+        environment.MapFlagEndpoints();
         environment.MapPublicationEndpoints();
         environment.MapCredentialEndpoints();
 

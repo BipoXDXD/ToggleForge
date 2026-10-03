@@ -78,20 +78,6 @@ internal static class DraftEndpoints
             : null;
     }
 
-    private static RolloutPercentage? Rollout(int? basisPoints, InputErrors errors)
-    {
-        const string pointer = "/rolloutBasisPoints";
-        if (!errors.Require(basisPoints, pointer))
-        {
-            return null;
-        }
-
-        if (RolloutPercentage.TryFromBasisPoints(basisPoints.Value, out var rollout))
-        {
-            return rollout;
-        }
-
-        errors.InBody(pointer, "Use 0 to 10000 basis points (100 = 1%).");
-        return null;
-    }
+    private static RolloutPercentage? Rollout(int? basisPoints, InputErrors errors) =>
+        errors.Require(basisPoints, FlagInput.RolloutPointer) ? FlagInput.Rollout(basisPoints.Value, errors) : null;
 }

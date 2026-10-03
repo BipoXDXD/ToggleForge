@@ -16,6 +16,7 @@ internal static class Problems
             FailureKind.NotFound => (StatusCodes.Status404NotFound, "Not found"),
             FailureKind.Forbidden => (StatusCodes.Status403Forbidden, "Forbidden"),
             FailureKind.Conflict => (StatusCodes.Status409Conflict, "Conflict"),
+            FailureKind.PreconditionFailed => (StatusCodes.Status412PreconditionFailed, "Precondition failed"),
             var unknown => throw new InvalidOperationException($"Unknown failure kind '{unknown}'."),
         };
         return Json(new ProblemBody($"/problems/{failure.Code}", title, status, failure.Detail));

@@ -14,6 +14,13 @@ public static class AuthoringFailures
     public static Failure FlagLimitReached { get; } =
         new(FailureKind.Conflict, "limit-reached", $"A draft can have at most {ProjectEnvironment.MaxFlags} flags.");
 
+    public static Failure FlagNotFound { get; } =
+        new(FailureKind.NotFound, "not-found", "The draft has no flag with this key.");
+
+    /// <summary>A flag mudou depois da leitura que deu a ETag enviada em If-Match.</summary>
+    public static Failure FlagChanged { get; } =
+        new(FailureKind.PreconditionFailed, "flag-changed", "The flag changed after you read it. Read it again and reapply your change.");
+
     public static Failure DraftChanged { get; } =
         new(FailureKind.Conflict, "draft-changed", "The draft changed after it was reviewed. Reload it and review again.");
 

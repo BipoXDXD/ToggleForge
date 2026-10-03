@@ -34,8 +34,47 @@ public sealed class DraftService(
             environment.PendingChanges(current));
     }
 
+    public async Task<Result<FlagView>> GetFlagAsync(
+        Guid memberId, EnvironmentLocator locator, FlagKey key, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(locator);
+
+        if (!(await access.FindRoleAsync(memberId, locator.OrganizationId, cancellationToken)).TryGetValue(out _, out var failure))
+        {
+            return failure;
+        }
+
+        if (await environments.FindAsync(locator, cancellationToken) is not { } environment)
+        {
+            return AccessFailures.NotFound;
+        }
+
+        return environment.Flags.FirstOrDefault(flag => flag.Key == key) is { } found
+            ? FlagView.Of(found)
+            : AuthoringFailures.FlagNotFound;
+    }
+
     public async Task<Result<FlagView>> CreateFlagAsync(
-        Guid memberId, EnvironmentLocator locator, FlagKey key, FlagSettings settings, CancellationToken cancellationToken)
+        Guid memberId, EnvironmentLocator locator, FlagKey key, FlagSettings settings, CancellationToken cancellationToken) =>
+        (await EditAsync(memberId, locator, environment => environment.AddFlag(key, settings, RolloutSeeds.Generate()), cancellationToken))
+        .Map(FlagView.Of);
+
+    public async Task<Result<FlagView>> ChangeFlagAsync(
+        Guid memberId, EnvironmentLocator locator, FlagKey key, long expectedRevision, FlagChange change, CancellationToken cancellationToken) =>
+        (await EditAsync(memberId, locator, environment => environment.ChangeFlag(key, expectedRevision, change), cancellationToken))
+        .Map(FlagView.Of);
+
+    public async Task<Result<FlagView>> RemoveFlagAsync(
+        Guid memberId, EnvironmentLocator locator, FlagKey key, long expectedRevision, CancellationToken cancellationToken) =>
+        (await EditAsync(memberId, locator, environment => environment.RemoveFlag(key, expectedRevision), cancellationToken))
+        .Map(FlagView.Of);
+
+    /// <summary>
+    /// Toda escrita no rascunho: 404 antes de 403, ambiente travado até o commit (ADR 0005) e a edição do
+    /// domínio decide o resto.
+    /// </summary>
+    private async Task<Result<DraftFlag>> EditAsync(
+        Guid memberId, EnvironmentLocator locator, Func<ProjectEnvironment, Result<DraftFlag>> edit, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(locator);
 
@@ -55,13 +94,13 @@ public sealed class DraftService(
             return forbidden;
         }
 
-        if (!environment.AddFlag(key, settings, RolloutSeeds.Generate()).TryGetValue(out var flag, out failure))
+        if (!edit(environment).TryGetValue(out var flag, out failure))
         {
             return failure;
         }
 
         await unitOfWork.SaveOrFailAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return FlagView.Of(flag);
+        return flag;
     }
 }
