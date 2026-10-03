@@ -15,21 +15,24 @@ namespace ToggleForge.Evaluation
 
             if (snapshot is null)
             {
-                return new EvaluationResult<bool>(defaultValue, EvaluationReason.SnapshotMissing, snapshotVersion: null);
+                return Fallback(EvaluationReason.SnapshotMissing, snapshotVersion: null);
             }
 
             if (!FlagKey.TryParse(flagKey, out var key))
             {
-                return new EvaluationResult<bool>(defaultValue, EvaluationReason.InvalidFlagKey, snapshot.Version);
+                return Fallback(EvaluationReason.InvalidFlagKey, snapshot.Version);
             }
 
             if (!snapshot.TryGetFlag(key, out var flag))
             {
-                return new EvaluationResult<bool>(defaultValue, EvaluationReason.FlagNotFound, snapshot.Version);
+                return Fallback(EvaluationReason.FlagNotFound, snapshot.Version);
             }
 
             var identity = new FlagIdentity(snapshot.ProjectKey, snapshot.EnvironmentKey, flag.Key);
             return flag.Evaluate(identity, context, defaultValue, snapshot.Version);
+
+            EvaluationResult<bool> Fallback(EvaluationReason reason, long? snapshotVersion) =>
+                new(defaultValue, reason, snapshotVersion);
         }
     }
 }

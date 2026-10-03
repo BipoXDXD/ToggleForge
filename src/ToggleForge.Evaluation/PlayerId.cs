@@ -11,9 +11,7 @@ namespace ToggleForge.Evaluation
     {
         public const int MaxLength = 256;
 
-        private static readonly string _invalidValueMessage =
-            $"A player id must have 1 to {MaxLength} characters, not be blank "
-            + "and contain no control characters or unpaired surrogates.";
+        private static readonly string _invalidValueMessage = OpaqueText.InvalidValueMessage("A player id", MaxLength);
 
         private PlayerId(string value) => Value = value;
 

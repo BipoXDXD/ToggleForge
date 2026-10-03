@@ -10,9 +10,7 @@ namespace ToggleForge.Evaluation
     {
         public const int MaxLength = 64;
 
-        private static readonly string _invalidValueMessage =
-            $"A rollout seed must have 1 to {MaxLength} characters, not be blank "
-            + "and contain no control characters or unpaired surrogates.";
+        private static readonly string _invalidValueMessage = OpaqueText.InvalidValueMessage("A rollout seed", MaxLength);
 
         private RolloutSeed(string value) => Value = value;
 

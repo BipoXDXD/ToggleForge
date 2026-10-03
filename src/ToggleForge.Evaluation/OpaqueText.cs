@@ -18,6 +18,10 @@ namespace ToggleForge.Evaluation
             && !value.Any(char.IsControl)
             && IsWellFormedUtf16(value);
 
+        internal static string InvalidValueMessage(string subject, int maxLength) =>
+            $"{subject} must have 1 to {maxLength} characters, not be blank "
+            + "and contain no control characters or unpaired surrogates.";
+
         /// <summary>
         /// Surrogate solto não tem codificação UTF-8: viraria U+FFFD no hash e valores diferentes colidiriam.
         /// </summary>

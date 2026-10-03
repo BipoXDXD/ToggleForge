@@ -32,17 +32,18 @@ namespace ToggleForge.Evaluation
         {
             if (!IsEnabled)
             {
-                return new EvaluationResult<bool>(OffValue, EvaluationReason.Disabled, snapshotVersion);
+                return Result(OffValue, EvaluationReason.Disabled);
             }
 
             return Targeting.Decide(identity, context) switch
             {
-                TargetingDecision.Included => new EvaluationResult<bool>(OnValue, EvaluationReason.Included, snapshotVersion),
-                TargetingDecision.Excluded => new EvaluationResult<bool>(OffValue, EvaluationReason.Excluded, snapshotVersion),
-                TargetingDecision.PlayerIdRequired =>
-                    new EvaluationResult<bool>(defaultValue, EvaluationReason.MissingPlayerId, snapshotVersion),
+                TargetingDecision.Included => Result(OnValue, EvaluationReason.Included),
+                TargetingDecision.Excluded => Result(OffValue, EvaluationReason.Excluded),
+                TargetingDecision.PlayerIdRequired => Result(defaultValue, EvaluationReason.MissingPlayerId),
                 var unknown => throw new InvalidOperationException($"Unknown targeting decision '{unknown}'."),
             };
+
+            EvaluationResult<bool> Result(bool value, EvaluationReason reason) => new(value, reason, snapshotVersion);
         }
     }
 }
