@@ -94,6 +94,16 @@ internal sealed record PublicationListResponse(IReadOnlyList<PublicationSummaryR
 internal sealed record PageMetadata(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? NextPageToken);
 
+internal sealed record CredentialResponse(
+    Guid Id, string Name, string Prefix, DateTimeOffset CreatedAt, DateTimeOffset? LastUsedAt, DateTimeOffset? RevokedAt)
+{
+    /// <summary><c>lastUsedAt</c> fica nulo até o uso pelo SDK ser registrado.</summary>
+    public static CredentialResponse Of(Credential credential) =>
+        new(credential.Id, credential.Name.Value, credential.Prefix, credential.CreatedAt, LastUsedAt: null, credential.RevokedAt);
+}
+
+internal sealed record CredentialListResponse(IReadOnlyList<CredentialResponse> Data);
+
 internal sealed record CreatedCredentialResponse(
     Guid Id, string Name, string Prefix, DateTimeOffset CreatedAt, DateTimeOffset? LastUsedAt, DateTimeOffset? RevokedAt, string Secret)
 {

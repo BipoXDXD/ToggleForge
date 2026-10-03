@@ -75,4 +75,38 @@ public sealed class CredentialTests
         Assert.DoesNotContain(secret.Value, secret.ToString(), StringComparison.Ordinal);
         Assert.StartsWith(secret.DisplayPrefix, secret.ToString(), StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void Revoking_records_when_the_credential_stopped_working()
+    {
+        var credential = Issue();
+
+        credential.Revoke(_now.AddHours(1));
+
+        Assert.Equal(_now.AddHours(1), credential.RevokedAt);
+        Assert.False(credential.IsActive);
+    }
+
+    [Fact]
+    public void Revoking_again_keeps_the_first_revocation()
+    {
+        var credential = Issue();
+        credential.Revoke(_now.AddHours(1));
+
+        credential.Revoke(_now.AddHours(2));
+
+        Assert.Equal(_now.AddHours(1), credential.RevokedAt);
+    }
+
+    [Fact]
+    public void A_new_credential_is_active()
+    {
+        Assert.True(Issue().IsActive);
+    }
+
+    private static Credential Issue()
+    {
+        Assert.True(Credential.Issue(Guid.NewGuid(), Names.Of("Build 1"), _now, activeCredentials: 0).TryGetValue(out var issued, out _));
+        return issued.Credential;
+    }
 }

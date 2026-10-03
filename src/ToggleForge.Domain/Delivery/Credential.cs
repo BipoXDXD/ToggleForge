@@ -35,7 +35,9 @@ public sealed class Credential
 
     public DateTimeOffset CreatedAt { get; }
 
-    public DateTimeOffset? RevokedAt { get; }
+    public DateTimeOffset? RevokedAt { get; private set; }
+
+    public bool IsActive => RevokedAt is null;
 
     /// <summary>
     /// O segredo só existe neste retorno; a credencial guarda apenas o hash.
@@ -55,4 +57,10 @@ public sealed class Credential
             Guid.NewGuid(), environmentId, name, secret.DisplayPrefix, secret.ComputeHash(), now, revokedAt: null);
         return new IssuedCredential(credential, secret);
     }
+
+    /// <summary>
+    /// A partir de agora o jogo recebe 401 com esta credencial. Revogar de novo mantém o instante da primeira
+    /// revogação, então repetir o pedido devolve a mesma credencial.
+    /// </summary>
+    public void Revoke(DateTimeOffset now) => RevokedAt ??= now;
 }

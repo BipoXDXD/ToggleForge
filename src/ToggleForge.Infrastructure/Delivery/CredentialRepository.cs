@@ -18,5 +18,24 @@ internal sealed class CredentialRepository(DeliveryDbContext context) : ICredent
             .AsNoTracking()
             .SingleOrDefaultAsync(c => c.SecretHash == secretHash && c.RevokedAt == null, cancellationToken);
 
+    public async Task<IReadOnlyList<Credential>> ListActiveAsync(Guid environmentId, CancellationToken cancellationToken) =>
+        await context.Credentials
+            .AsNoTracking()
+            .Where(c => c.EnvironmentId == environmentId && c.RevokedAt == null)
+            .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<Credential>> ListRecentlyRevokedAsync(
+        Guid environmentId, int limit, CancellationToken cancellationToken) =>
+        await context.Credentials
+            .AsNoTracking()
+            .Where(c => c.EnvironmentId == environmentId && c.RevokedAt != null)
+            .OrderByDescending(c => c.RevokedAt)
+            .ThenByDescending(c => c.CreatedAt)
+            .Take(limit)
+            .ToListAsync(cancellationToken);
+
+    public Task<Credential?> FindAsync(Guid environmentId, Guid credentialId, CancellationToken cancellationToken) =>
+        context.Credentials.SingleOrDefaultAsync(c => c.Id == credentialId && c.EnvironmentId == environmentId, cancellationToken);
+
     public void Add(Credential credential) => context.Credentials.Add(credential);
 }

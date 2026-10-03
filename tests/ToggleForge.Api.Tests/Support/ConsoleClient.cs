@@ -149,6 +149,19 @@ public sealed class ConsoleClient : IDisposable
             $"{Paths.Environment(organizationId ?? OrganizationId, projectKey, environmentKey)}/credentials",
             new { name = "Unity build" });
 
+    public Task<ApiResponse> ListCredentialsAsync(string projectKey, string environmentKey = "dev", Guid? organizationId = null) =>
+        SendAsync(
+            "listCredentials",
+            HttpMethod.Get,
+            $"{Paths.Environment(organizationId ?? OrganizationId, projectKey, environmentKey)}/credentials");
+
+    public Task<ApiResponse> RevokeCredentialAsync(
+        string projectKey, string credentialId, string environmentKey = "dev", Guid? organizationId = null) =>
+        SendAsync(
+            "revokeCredential",
+            HttpMethod.Post,
+            $"{Paths.Environment(organizationId ?? OrganizationId, projectKey, environmentKey)}/credentials/{credentialId}/revocation");
+
     /// <summary>Projeto com uma flag publicada em <c>dev</c>; devolve a revisão publicada.</summary>
     public async Task<long> PublishedProjectAsync(string projectKey, string flagKey = "new-shop")
     {

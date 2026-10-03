@@ -778,7 +778,9 @@ paths:
       description: Owner only; other members get 403. Secrets are never returned here.
       responses:
         '200':
-          description: Active and revoked credentials, newest first.
+          description: |
+            Every active credential and the most recently revoked ones, up to 50, newest first. Older revoked
+            credentials leave the list but stay on record.
           headers:
             Cache-Control:
               $ref: '#/components/headers/CacheControlPrivate'

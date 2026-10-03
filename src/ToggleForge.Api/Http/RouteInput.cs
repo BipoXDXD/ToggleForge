@@ -20,6 +20,19 @@ internal static class RouteInput
         return false;
     }
 
+    public static Guid? Credential(string credentialId, InputErrors errors)
+    {
+        ArgumentNullException.ThrowIfNull(errors);
+
+        if (Guid.TryParseExact(credentialId, "D", out var id))
+        {
+            return id;
+        }
+
+        errors.InPath(nameof(credentialId), "The credential id is a UUID.");
+        return null;
+    }
+
     public static ProjectKey? Project(string projectKey, InputErrors errors) =>
         Parse<ProjectKey>(ProjectKey.TryParse(projectKey, out var key), key, nameof(projectKey), errors);
 

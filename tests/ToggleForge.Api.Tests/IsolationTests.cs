@@ -7,7 +7,7 @@ namespace ToggleForge.Api.Tests;
 public sealed class IsolationTests(ApiFactory api)
 {
     public static TheoryData<string> Operations =>
-        ["getProject", "createProject", "getDraft", "createFlag", "getFlag", "updateFlag", "deleteFlag", "listPublications", "getPublication", "publishDraft", "rollBack", "createCredential"];
+        ["getProject", "createProject", "getDraft", "createFlag", "getFlag", "updateFlag", "deleteFlag", "listPublications", "getPublication", "publishDraft", "rollBack", "listCredentials", "createCredential", "revokeCredential"];
 
     [Theory]
     [MemberData(nameof(Operations))]
@@ -16,9 +16,10 @@ public sealed class IsolationTests(ApiFactory api)
         using var owner = await ConsoleClient.SignUpAsync(api);
         using var intruder = await ConsoleClient.SignUpAsync(api);
         var revision = await owner.PublishedProjectAsync("space-race");
+        var credentialId = (await owner.CreateCredentialAsync("space-race")).Json["id"]!.GetValue<string>();
         var before = await StateAsync(owner);
 
-        var response = await SendAsync(intruder, operation, owner.OrganizationId, revision);
+        var response = await SendAsync(intruder, operation, owner.OrganizationId, revision, credentialId);
 
         Assert.Equal(HttpStatusCode.NotFound, response.Status);
         Assert.Equal("/problems/not-found", response.ProblemType);
@@ -41,7 +42,8 @@ public sealed class IsolationTests(ApiFactory api)
         Assert.Equal(foreign.Body, missing.Body);
     }
 
-    private static Task<ApiResponse> SendAsync(ConsoleClient client, string operation, Guid organizationId, long revision) =>
+    private static Task<ApiResponse> SendAsync(
+        ConsoleClient client, string operation, Guid organizationId, long revision, string credentialId) =>
         operation switch
         {
             "getProject" => client.GetProjectAsync("space-race", organizationId),
@@ -55,7 +57,9 @@ public sealed class IsolationTests(ApiFactory api)
             "getPublication" => client.GetPublicationAsync("space-race", "1", organizationId),
             "publishDraft" => client.PublishAsync("space-race", revision, ConsoleClient.NewIdempotencyKey(), organizationId: organizationId),
             "rollBack" => client.RollBackAsync("space-race", 1, 1, ConsoleClient.NewIdempotencyKey(), organizationId: organizationId),
+            "listCredentials" => client.ListCredentialsAsync("space-race", organizationId: organizationId),
             "createCredential" => client.CreateCredentialAsync("space-race", organizationId: organizationId),
+            "revokeCredential" => client.RevokeCredentialAsync("space-race", credentialId, organizationId: organizationId),
             _ => throw new ArgumentOutOfRangeException(nameof(operation), operation, "Unknown operation."),
         };
 
@@ -63,5 +67,6 @@ public sealed class IsolationTests(ApiFactory api)
         (await owner.SendAsync("getSession", HttpMethod.Get, Paths.Session)).Body
         + (await owner.GetProjectAsync("space-race")).Body
         + (await owner.GetDraftAsync("space-race")).Body
+        + (await owner.ListCredentialsAsync("space-race")).Body
         + (await owner.GetProjectAsync("hijack")).Status;
 }
