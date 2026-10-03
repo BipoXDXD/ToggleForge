@@ -10,8 +10,9 @@ public interface IPublicationRepository
     Task<IReadOnlyList<PublicationHeader>> ListAsync(
         Guid environmentId, long? beforeVersion, int limit, CancellationToken cancellationToken);
 
-    /// <summary>A publicação em vigor de cada ambiente do projeto que já publicou, numa só consulta.</summary>
-    Task<IReadOnlyDictionary<Guid, Publication>> FindCurrentByEnvironmentAsync(Guid projectId, CancellationToken cancellationToken);
+    /// <summary>A publicação em vigor de cada ambiente dos projetos dados que já publicou, numa só consulta.</summary>
+    Task<IReadOnlyDictionary<Guid, Publication>> FindCurrentByEnvironmentAsync(
+        IReadOnlyCollection<Guid> projectIds, CancellationToken cancellationToken);
 
     void Add(Publication publication);
 }

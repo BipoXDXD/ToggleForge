@@ -6,9 +6,10 @@ namespace ToggleForge.Infrastructure.Authoring;
 
 internal sealed class EnvironmentRepository(AuthoringDbContext context) : IEnvironmentRepository
 {
-    public async Task<IReadOnlyList<ProjectEnvironment>> ListAsync(Guid projectId, CancellationToken cancellationToken) =>
+    public async Task<IReadOnlyList<ProjectEnvironment>> ListAsync(
+        IReadOnlyCollection<Guid> projectIds, CancellationToken cancellationToken) =>
         await context.Environments
-            .Where(e => e.ProjectId == projectId)
+            .Where(e => projectIds.Contains(e.ProjectId))
             .OrderBy(e => e.Key)
             .ToListAsync(cancellationToken);
 

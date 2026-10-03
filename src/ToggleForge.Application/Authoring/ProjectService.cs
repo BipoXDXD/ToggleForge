@@ -47,7 +47,7 @@ public sealed class ProjectService(
 
         await unitOfWork.SaveOrFailAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return await DescribeAsync(created.Project, created.Environments, cancellationToken);
+        return Describe(created.Project, created.Environments, current: new Dictionary<Guid, Publication>());
     }
 
     public async Task<Result<ProjectView>> GetAsync(
@@ -63,22 +63,26 @@ public sealed class ProjectService(
             return AccessFailures.NotFound;
         }
 
-        return await DescribeAsync(project, await environments.ListAsync(project.Id, cancellationToken), cancellationToken);
+        return (await DescribeAsync([project], cancellationToken))[0];
     }
 
-    private async Task<ProjectView> DescribeAsync(
-        Project project, IReadOnlyList<ProjectEnvironment> projectEnvironments, CancellationToken cancellationToken)
+    /// <summary>Uma consulta para os ambientes e outra para as publicações em vigor, quantos forem os projetos.</summary>
+    private async Task<IReadOnlyList<ProjectView>> DescribeAsync(
+        IReadOnlyList<Project> projectsToDescribe, CancellationToken cancellationToken)
     {
-        var current = await publications.FindCurrentByEnvironmentAsync(project.Id, cancellationToken);
-        var views = projectEnvironments
-            .OrderBy(environment => environment.Key.Value, StringComparer.Ordinal)
-            .Select(environment => new EnvironmentView(
-                environment.Key,
-                environment.Name,
-                environment.CurrentVersion,
-                environment.DraftRevision,
-                HasUnpublishedChanges: environment.PendingChanges(current.GetValueOrDefault(environment.Id)).Count > 0))
-            .ToList();
-        return new ProjectView(project.Key, project.Name, views);
+        var projectIds = projectsToDescribe.Select(project => project.Id).ToList();
+        var environmentsByProject = (await environments.ListAsync(projectIds, cancellationToken)).ToLookup(environment => environment.ProjectId);
+        var current = await publications.FindCurrentByEnvironmentAsync(projectIds, cancellationToken);
+        return projectsToDescribe.Select(project => Describe(project, environmentsByProject[project.Id], current)).ToList();
     }
+
+    private static ProjectView Describe(
+        Project project, IEnumerable<ProjectEnvironment> projectEnvironments, IReadOnlyDictionary<Guid, Publication> current) =>
+        new(
+            project.Key,
+            project.Name,
+            projectEnvironments
+                .OrderBy(environment => environment.Key.Value, StringComparer.Ordinal)
+                .Select(environment => EnvironmentView.Of(environment, current.GetValueOrDefault(environment.Id)))
+                .ToList());
 }

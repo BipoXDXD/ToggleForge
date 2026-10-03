@@ -7,7 +7,17 @@ namespace ToggleForge.Application.Authoring;
 public sealed record ProjectView(ProjectKey Key, DisplayName Name, IReadOnlyList<EnvironmentView> Environments);
 
 public sealed record EnvironmentView(
-    EnvironmentKey Key, DisplayName Name, long? CurrentVersion, long DraftRevision, bool HasUnpublishedChanges);
+    EnvironmentKey Key, DisplayName Name, long? CurrentVersion, long DraftRevision, bool HasUnpublishedChanges)
+{
+    /// <summary><paramref name="current"/> é a publicação em vigor do ambiente, nula se ele nunca publicou.</summary>
+    internal static EnvironmentView Of(ProjectEnvironment environment, Publication? current) =>
+        new(
+            environment.Key,
+            environment.Name,
+            environment.CurrentVersion,
+            environment.DraftRevision,
+            HasUnpublishedChanges: environment.PendingChanges(current).Count > 0);
+}
 
 public sealed record FlagView(FlagKey Key, FlagSettings Settings, long Revision)
 {
