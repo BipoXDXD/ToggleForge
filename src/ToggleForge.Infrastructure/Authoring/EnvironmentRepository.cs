@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using ToggleForge.Application.Authoring;
 using ToggleForge.Domain.Authoring;
+using ToggleForge.Evaluation;
 
 namespace ToggleForge.Infrastructure.Authoring;
 
@@ -11,6 +12,12 @@ internal sealed class EnvironmentRepository(AuthoringDbContext context) : IEnvir
         await context.Environments
             .Where(e => projectIds.Contains(e.ProjectId))
             .OrderBy(e => e.Key)
+            .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<EnvironmentKey>> ListKeysAsync(Guid projectId, CancellationToken cancellationToken) =>
+        await context.Environments
+            .Where(e => e.ProjectId == projectId)
+            .Select(e => e.Key)
             .ToListAsync(cancellationToken);
 
     public Task<ProjectEnvironment?> FindAsync(EnvironmentLocator locator, CancellationToken cancellationToken) =>

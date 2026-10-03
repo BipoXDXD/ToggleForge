@@ -50,6 +50,17 @@ public sealed class ProjectService(
         return Describe(created.Project, created.Environments, current: new Dictionary<Guid, Publication>());
     }
 
+    public async Task<Result<IReadOnlyList<ProjectView>>> ListAsync(
+        Guid memberId, Guid organizationId, CancellationToken cancellationToken)
+    {
+        if (!(await access.FindRoleAsync(memberId, organizationId, cancellationToken)).TryGetValue(out _, out var failure))
+        {
+            return failure;
+        }
+
+        return await DescribeAsync(await projects.ListAsync(organizationId, cancellationToken), cancellationToken);
+    }
+
     public async Task<Result<ProjectView>> GetAsync(
         Guid memberId, Guid organizationId, ProjectKey key, CancellationToken cancellationToken)
     {
@@ -66,8 +77,58 @@ public sealed class ProjectService(
         return (await DescribeAsync([project], cancellationToken))[0];
     }
 
+    public async Task<Result<EnvironmentView>> CreateEnvironmentAsync(
+        Guid memberId, Guid organizationId, ProjectKey projectKey, EnvironmentKey key, DisplayName name, CancellationToken cancellationToken)
+    {
+        if (!(await access.FindRoleAsync(memberId, organizationId, cancellationToken)).TryGetValue(out var role, out var failure))
+        {
+            return failure;
+        }
+
+        if (await projects.FindAsync(organizationId, projectKey, cancellationToken) is not { } project)
+        {
+            return AccessFailures.NotFound;
+        }
+
+        if (MemberAccess.Require(role, RolePermissions.CanAdminister) is { } forbidden)
+        {
+            return forbidden;
+        }
+
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+        await projects.LockEnvironmentsAsync(project.Id, cancellationToken);
+        var existingKeys = await environments.ListKeysAsync(project.Id, cancellationToken);
+        if (!project.CreateEnvironment(key, name, existingKeys).TryGetValue(out var environment, out failure))
+        {
+            return failure;
+        }
+
+        environments.Add(environment);
+        await unitOfWork.SaveOrFailAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return EnvironmentView.Of(environment, current: null);
+    }
+
+    public async Task<Result<EnvironmentView>> GetEnvironmentAsync(
+        Guid memberId, EnvironmentLocator locator, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(locator);
+
+        if (!(await access.FindRoleAsync(memberId, locator.OrganizationId, cancellationToken)).TryGetValue(out _, out var failure))
+        {
+            return failure;
+        }
+
+        if (await environments.FindAsync(locator, cancellationToken) is not { } environment)
+        {
+            return AccessFailures.NotFound;
+        }
+
+        return EnvironmentView.Of(environment, await publications.FindAsync(environment, cancellationToken));
+    }
+
     /// <summary>Uma consulta para os ambientes e outra para as publicações em vigor, quantos forem os projetos.</summary>
-    private async Task<IReadOnlyList<ProjectView>> DescribeAsync(
+    private async Task<List<ProjectView>> DescribeAsync(
         IReadOnlyList<Project> projectsToDescribe, CancellationToken cancellationToken)
     {
         var projectIds = projectsToDescribe.Select(project => project.Id).ToList();
