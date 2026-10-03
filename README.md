@@ -39,7 +39,8 @@ var evaluator = new FlagEvaluator();
 var context = EvaluationContext.ForPlayer(PlayerId.Parse("player-42"));
 
 var result = evaluator.EvaluateBoolean(snapshot, "new-shop", context, defaultValue: false);
-// result.Value, result.Reason (Included, Excluded, Disabled, FlagNotFound...), result.SnapshotVersion
+// result.Value, result.Reason (Included, Excluded, Disabled, FlagNotFound...), result.SnapshotVersion,
+// result.Bucket (o bucket do jogador quando ele decidiu o resultado)
 ```
 
 ## Demonstração

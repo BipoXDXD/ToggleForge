@@ -32,7 +32,7 @@ namespace ToggleForge.Evaluation
             return flag.Evaluate(identity, context, defaultValue, snapshot.Version);
 
             EvaluationResult<bool> Fallback(EvaluationReason reason, long? snapshotVersion) =>
-                new(defaultValue, reason, snapshotVersion);
+                new(defaultValue, reason, snapshotVersion, bucket: null);
         }
     }
 }

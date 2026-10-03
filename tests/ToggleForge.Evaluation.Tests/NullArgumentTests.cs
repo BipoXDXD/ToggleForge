@@ -47,6 +47,17 @@ public sealed class NullArgumentTests
     }
 
     [Fact]
+    public void BooleanFlag_Evaluate_rejects_null_keys_and_context()
+    {
+        var flag = new BooleanFlag(Flag, isEnabled: true, onValue: true, offValue: false, Rollout);
+        var player = EvaluationContext.ForPlayer(PlayerId.Parse("player"));
+
+        AssertNullRejected("projectKey", () => flag.Evaluate(null!, Environment, player, defaultValue: false));
+        AssertNullRejected("environmentKey", () => flag.Evaluate(Project, null!, player, defaultValue: false));
+        AssertNullRejected("context", () => flag.Evaluate(Project, Environment, null!, defaultValue: false));
+    }
+
+    [Fact]
     public void RolloutBucket_Compute_rejects_null_arguments()
     {
         var player = PlayerId.Parse("player");
