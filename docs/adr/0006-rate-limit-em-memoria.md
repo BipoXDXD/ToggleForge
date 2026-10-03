@@ -45,6 +45,10 @@ segundos como o contrato pede. Os tetos são options (`RateLimits:MemberPerMinut
 `RateLimits:GameClientPerMinute`, `RateLimits:AnonymousPerMinute`), validados na partida: um valor abaixo
 de 1 impede a API de subir.
 
+"IP" quer dizer a rede do cliente: o endereço IPv4, ou o prefixo /64 no IPv6, porque um cliente IPv6
+costuma ter o /64 inteiro e trocaria de endereço a cada requisição para escapar do teto. IPv4 mapeado
+em IPv6 conta como o próprio IPv4.
+
 A credencial entra num claim próprio na autenticação do SDK. O id da conta e o da credencial ficam só nas
 chaves das partições, em memória; nenhum deles vai para log.
 
@@ -69,7 +73,7 @@ chaves das partições, em memória; nenhum deles vai para log.
 - `RateLimitTests`:
   - tentar várias contas do mesmo IP leva a 429 com `Retry-After`;
   - sondar e-mails pelo cadastro também;
-  - cada IP tem o próprio teto anônimo;
+  - cada IP tem o próprio teto anônimo, e o IPv6 conta pelo /64;
   - o membro passa do teto mesmo trocando de IP, sem bloquear os colegas;
   - o jogo passa do teto, sem afetar outro IP com a mesma credencial nem outra credencial no mesmo IP;
   - um teto abaixo de 1 impede a partida.
