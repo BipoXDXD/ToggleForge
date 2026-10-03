@@ -31,6 +31,33 @@ npm ci --prefix tools/api-lint && npm run lint --prefix tools/api-lint   # Spect
 Prioridade: **Adaptive Code 2e** no dia a dia; **Dive Into Design Patterns** quando surgir um problema
 de design; **Clean Architecture with .NET** (Dino Esposito) nas decisões de arquitetura.
 
+Arquitetura e domínio:
+
+- **Fundamentals of Software Architecture 2e** (FSA), caps. 2–11, 14–15 e 18–23:
+  - pensamento arquitetural, modularidade, características (definir, medir, governar com fitness
+    functions) e componentes (caps. 2–9);
+  - estilos layered, modular monolith, service-based, event-driven e microservices, e como escolher
+    (caps. 10–11, 14–15, 18–19);
+  - padrões, ADRs, análise de risco e diagramas (caps. 20–23).
+- **Learning Domain-Driven Design** (LDDD), caps. 1–15:
+  - subdomínios, linguagem ubíqua e bounded contexts (caps. 1–4);
+  - transaction script ou active record para lógica simples, domain model para a complexa, e o tempo
+    como dimensão (caps. 5–7);
+  - padrões de arquitetura e comunicação, heurísticas, evolução, EventStorming, microservices e EDA
+    (caps. 8–15).
+- **The Art of PostgreSQL** (AoP), caps. 4, 7–8, 13–18, 22–23, 26–28, 30–32, 35–39, 43 e 45:
+  - lógica de negócio em SQL, SQL é código, estratégia de índices (caps. 4, 7–8);
+  - consultas: SELECT, ORDER BY sem OFFSET, GROUP BY, NULL, window functions, joins (caps. 13–18);
+  - tipos e tipos desnormalizados (caps. 22–23);
+  - ORM, modelagem, normalização, anti-patterns, desnormalização e NoSQL (caps. 26–28, 30–32);
+  - DML, isolamento e locks, cache em SQL, triggers, LISTEN/NOTIFY, auditoria e trigramas
+    (caps. 35–39, 43, 45).
+- **Code That Fits in Your Head** (CFH), caps. 2–8, 10–13 e 15:
+  - checklists, complexidade, vertical slice, encapsulamento, triangulação, decomposição e design de
+    API (caps. 2–8);
+  - evoluir código existente, editar testes, troubleshooting, separação de responsabilidades e os
+    suspeitos de sempre: performance e segurança (caps. 10–13, 15).
+
 Qualidade de código (base para código bem produzido e com poucos erros):
 
 - **Code Complete 2e**, caps. 5–8 (design, classes, rotinas, programação defensiva), 11 (nomes),
