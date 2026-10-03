@@ -15,8 +15,12 @@ public sealed class RoleTests(ApiFactory api)
         { "viewer", "publishDraft" },
         { "viewer", "rollBack" },
         { "viewer", "createCredential" },
+        { "viewer", "listCredentials" },
+        { "viewer", "revokeCredential" },
         { "editor", "createProject" },
+        { "editor", "listCredentials" },
         { "editor", "createCredential" },
+        { "editor", "revokeCredential" },
     };
 
     [Theory]
@@ -26,6 +30,7 @@ public sealed class RoleTests(ApiFactory api)
         using var owner = await ConsoleClient.SignUpAsync(api);
         await owner.CreateProjectAsync("space-race");
         var revision = ConsoleClient.Revision(await owner.CreateFlagAsync("space-race", "new-shop"));
+        var credentialId = (await owner.CreateCredentialAsync("space-race")).Json["id"]!.GetValue<string>();
         using var member = await MemberWithRoleAsync(owner, role);
 
         var response = operation switch
@@ -36,7 +41,9 @@ public sealed class RoleTests(ApiFactory api)
             "deleteFlag" => await member.DeleteFlagAsync("space-race", "new-shop", $"\"{revision}\"", owner.OrganizationId),
             "publishDraft" => await member.PublishAsync("space-race", revision, ConsoleClient.NewIdempotencyKey(), organizationId: owner.OrganizationId),
             "rollBack" => await member.RollBackAsync("space-race", 1, 1, ConsoleClient.NewIdempotencyKey(), organizationId: owner.OrganizationId),
+            "listCredentials" => await member.ListCredentialsAsync("space-race", organizationId: owner.OrganizationId),
             "createCredential" => await member.CreateCredentialAsync("space-race", organizationId: owner.OrganizationId),
+            "revokeCredential" => await member.RevokeCredentialAsync("space-race", credentialId, organizationId: owner.OrganizationId),
             _ => throw new ArgumentOutOfRangeException(nameof(operation), operation, "Unknown operation."),
         };
 
@@ -45,6 +52,8 @@ public sealed class RoleTests(ApiFactory api)
         var draft = await owner.GetDraftAsync("space-race");
         Assert.Equal(revision, draft.Json["revision"]!.GetValue<long>());
         Assert.Null(draft.Json["basedOnVersion"]?.GetValue<long>());
+        var credential = Assert.Single((await owner.ListCredentialsAsync("space-race")).Json["data"]!.AsArray())!;
+        Assert.Null(credential["revokedAt"]?.GetValue<DateTimeOffset>());
     }
 
     [Fact]
