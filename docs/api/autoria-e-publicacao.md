@@ -48,7 +48,9 @@ removida e recriada com a mesma chave ganha seed nova.
 |---|---|---|---|---|
 | Simular um jogador | ambiente, rascunho ou versão publicada, ID do jogador | valor, motivo e bucket de cada flag | ID de jogador inválido (mesma regra do `PlayerId`); versão inexistente | Simular avaliação |
 
-A simulação usa o mesmo `FlagEvaluator` do SDK; ela explica o resultado, não grava nada.
+A simulação avalia cada flag com o mesmo código do SDK (`BooleanFlag.Evaluate`, que o `FlagEvaluator`
+usa) e mostra o bucket do jogador quando ele decidiu o resultado. Ela explica, não grava nada. O ID do
+jogador pode ser dado pessoal do estúdio, por isso vai no corpo e não volta na resposta.
 
 ### 4. Publicar (Editor)
 
@@ -119,6 +121,7 @@ framework de autenticação escolhido.
 | I2 | Enumeração de projetos de outras organizações | IDs imprevisíveis e a mesma resposta para "não existe" e "é de outro" | Coberto pelo teste A×B de T1 |
 | I3 | Erro expõe stack trace ou SQL | Problem Details genérico com referência opaca | `An_unexpected_error_hides_its_details_and_logs_them_under_the_reference` |
 | I4 | Cadastro revela se um e-mail já tem conta | **Aceito** até existir confirmação por e-mail; o rate limit por IP limita a enumeração | Pendente com o rate limiter global |
+| I5 | ID do jogador simulado (possível dado pessoal) vaza por URL, resposta, cache ou log | ID só no corpo, fora da resposta, `Cache-Control: no-store`, nenhum log com o corpo | `The_player_id_never_reaches_the_response_or_the_logs` (canário) |
 | D1 | Rascunho gigante ou corpo enorme | Limite de flags por ambiente, de ambientes por projeto e de tamanho do corpo | Testes on/off point em cada limite |
 | D2 | Polling agressivo do SDK | `ETag`/"não mudou", `Cache-Control`, rate limit por credencial com `Retry-After` | `The_game_gets_304_while_the_snapshot_is_unchanged`; rate limit pendente |
 | E1 | Viewer publica ou Editor gerencia credenciais (BFLA) | Papel checado em cada operação, negado por padrão | Papel inferior em cada rota privilegiada → 403 |

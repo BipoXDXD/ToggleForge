@@ -53,6 +53,15 @@ public sealed record PublicationSummaryView(
 /// <summary><see cref="NextBeforeVersion"/> é nulo na última página.</summary>
 public sealed record PublicationPage(IReadOnlyList<PublicationSummaryView> Items, long? NextBeforeVersion);
 
+/// <summary><see cref="Version"/> é a publicação simulada; nula quando foi o rascunho.</summary>
+public sealed record SimulationView(long? Version, IReadOnlyList<SimulationResultView> Results);
+
+public sealed record SimulationResultView(FlagKey FlagKey, bool Value, EvaluationReason Reason, int? Bucket)
+{
+    internal static SimulationResultView Of(FlagKey key, EvaluationResult<bool> result) =>
+        new(key, result.Value, result.Reason, result.Bucket);
+}
+
 /// <summary>O que o SDK recebe: nada além do necessário para avaliar.</summary>
 public sealed record SnapshotView(
     ProjectKey ProjectKey, EnvironmentKey EnvironmentKey, long Version, DateTimeOffset PublishedAt, IReadOnlyList<PublishedFlag> Flags);

@@ -7,7 +7,7 @@ namespace ToggleForge.Api.Tests;
 public sealed class IsolationTests(ApiFactory api)
 {
     public static TheoryData<string> Operations =>
-        ["listProjects", "getProject", "createProject", "createEnvironment", "getEnvironment", "getDraft", "createFlag", "getFlag", "updateFlag", "deleteFlag", "listPublications", "getPublication", "publishDraft", "rollBack", "listCredentials", "createCredential", "revokeCredential"];
+        ["listProjects", "getProject", "createProject", "createEnvironment", "getEnvironment", "getDraft", "createFlag", "getFlag", "updateFlag", "deleteFlag", "listPublications", "getPublication", "publishDraft", "rollBack", "simulatePlayer", "listCredentials", "createCredential", "revokeCredential"];
 
     [Theory]
     [MemberData(nameof(Operations))]
@@ -60,6 +60,7 @@ public sealed class IsolationTests(ApiFactory api)
             "getPublication" => client.GetPublicationAsync("space-race", "1", organizationId),
             "publishDraft" => client.PublishAsync("space-race", revision, ConsoleClient.NewIdempotencyKey(), organizationId: organizationId),
             "rollBack" => client.RollBackAsync("space-race", 1, 1, ConsoleClient.NewIdempotencyKey(), organizationId: organizationId),
+            "simulatePlayer" => client.SimulatePublicationAsync("space-race", "player-42", 1, organizationId: organizationId),
             "listCredentials" => client.ListCredentialsAsync("space-race", organizationId: organizationId),
             "createCredential" => client.CreateCredentialAsync("space-race", organizationId: organizationId),
             "revokeCredential" => client.RevokeCredentialAsync("space-race", credentialId, organizationId: organizationId),

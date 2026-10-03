@@ -94,6 +94,30 @@ public sealed class FlagEvaluatorTests
         AssertResult(result, expectedValue, expectedReason, SnapshotVersion);
     }
 
+    [Fact]
+    public void A_partial_rollout_result_carries_the_player_bucket()
+    {
+        var snapshot = SnapshotWith(Flag("new-shop", enabled: true, RolloutPercentage.FromPercent(50m)));
+
+        var result = _evaluator.EvaluateBoolean(snapshot, "new-shop", ReferencePlayer(), defaultValue: false);
+
+        Assert.Equal(NewShopFlag.ReferencePlayerBucket, result.Bucket);
+    }
+
+    [Theory]
+    [InlineData("new-shop", false, 5_000)]
+    [InlineData("new-shop", true, 0)]
+    [InlineData("new-shop", true, 10_000)]
+    [InlineData("battle-pass", true, 5_000)]
+    public void A_result_that_does_not_depend_on_the_player_has_no_bucket(string flagKey, bool enabled, int basisPoints)
+    {
+        var snapshot = SnapshotWith(Flag("new-shop", enabled, RolloutPercentage.FromBasisPoints(basisPoints)));
+
+        var result = _evaluator.EvaluateBoolean(snapshot, flagKey, ReferencePlayer(), defaultValue: false);
+
+        Assert.Null(result.Bucket);
+    }
+
     private static void AssertResult(
         EvaluationResult<bool> result, bool expectedValue, EvaluationReason expectedReason, long? expectedVersion)
     {

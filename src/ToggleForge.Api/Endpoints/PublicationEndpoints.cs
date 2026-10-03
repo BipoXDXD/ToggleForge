@@ -225,26 +225,10 @@ internal static class PublicationEndpoints
 
     private static RollbackCommand? Command(RollbackRequest request, InputErrors errors)
     {
-        var target = Version(request.TargetVersion, TargetVersionPointer, errors);
-        var expectedCurrent = Version(request.ExpectedCurrentVersion, "/expectedCurrentVersion", errors);
+        var target = errors.RequireVersion(request.TargetVersion, TargetVersionPointer);
+        var expectedCurrent = errors.RequireVersion(request.ExpectedCurrentVersion, "/expectedCurrentVersion");
         return target is null || expectedCurrent is null
             ? null
             : new RollbackCommand(target.Value, expectedCurrent.Value, request.DiscardDraftChanges ?? false);
-    }
-
-    private static long? Version(long? value, string pointer, InputErrors errors)
-    {
-        if (!errors.Require(value, pointer))
-        {
-            return null;
-        }
-
-        if (value.Value < 1)
-        {
-            errors.InBody(pointer, "Versions start at 1.");
-            return null;
-        }
-
-        return value;
     }
 }

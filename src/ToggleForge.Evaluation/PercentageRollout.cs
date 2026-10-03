@@ -18,7 +18,7 @@ namespace ToggleForge.Evaluation
 
         public RolloutSeed Seed { get; }
 
-        public TargetingDecision Decide(FlagIdentity flag, EvaluationContext context)
+        public TargetingOutcome Decide(FlagIdentity flag, EvaluationContext context)
         {
             if (flag is null)
             {
@@ -32,21 +32,21 @@ namespace ToggleForge.Evaluation
 
             if (Percentage.IncludesNobody)
             {
-                return TargetingDecision.Excluded;
+                return TargetingOutcome.Unbucketed(TargetingDecision.Excluded);
             }
 
             if (Percentage.IncludesEveryone)
             {
-                return TargetingDecision.Included;
+                return TargetingOutcome.Unbucketed(TargetingDecision.Included);
             }
 
             if (context.PlayerId is null)
             {
-                return TargetingDecision.PlayerIdRequired;
+                return TargetingOutcome.Unbucketed(TargetingDecision.PlayerIdRequired);
             }
 
             var bucket = RolloutBucket.Compute(flag, Seed, context.PlayerId);
-            return Percentage.Includes(bucket) ? TargetingDecision.Included : TargetingDecision.Excluded;
+            return TargetingOutcome.Bucketed(bucket, Percentage.Includes(bucket));
         }
     }
 }

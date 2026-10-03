@@ -155,6 +155,21 @@ public sealed class ConsoleClient : IDisposable
                 : new { targetVersion, expectedCurrentVersion, discardDraftChanges },
             request => request.Headers.Add("Idempotency-Key", idempotencyKey));
 
+    public Task<ApiResponse> SimulateDraftAsync(
+        string projectKey, string playerId, string environmentKey = "dev", Guid? organizationId = null) =>
+        SimulateAsync(projectKey, new { playerId, source = "draft" }, environmentKey, organizationId);
+
+    public Task<ApiResponse> SimulatePublicationAsync(
+        string projectKey, string playerId, long version, string environmentKey = "dev", Guid? organizationId = null) =>
+        SimulateAsync(projectKey, new { playerId, source = "publication", version }, environmentKey, organizationId);
+
+    public Task<ApiResponse> SimulateAsync(string projectKey, object body, string environmentKey = "dev", Guid? organizationId = null) =>
+        SendAsync(
+            "simulatePlayer",
+            HttpMethod.Post,
+            $"{Paths.Environment(organizationId ?? OrganizationId, projectKey, environmentKey)}/simulations",
+            body);
+
     public Task<ApiResponse> CreateCredentialAsync(string projectKey, string environmentKey = "dev", Guid? organizationId = null) =>
         SendAsync(
             "createCredential",

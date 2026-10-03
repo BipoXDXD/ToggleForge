@@ -29,6 +29,7 @@ internal static class ApiServices
         services.AddScoped<DraftService>();
         services.AddScoped<PublishingService>();
         services.AddScoped<PublicationHistoryService>();
+        services.AddScoped<SimulationService>();
         services.AddSingleton<PageTokens>();
         services.AddScoped<CredentialService>();
         services.AddScoped<SnapshotService>();
