@@ -1,4 +1,3 @@
-using System.Globalization;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
@@ -12,7 +11,6 @@ namespace ToggleForge.Api.Endpoints;
 internal static class SessionEndpoints
 {
     private const string SessionPath = "/api/v1/session";
-    private const int MaxRetryAfterSeconds = 3600;
 
     public static void MapSessionEndpoints(this RouteGroupBuilder api)
     {
@@ -145,8 +143,6 @@ internal static class SessionEndpoints
     private static string RetryAfterSeconds(DateTimeOffset? lockoutEnd, TimeProvider clock)
     {
         var now = clock.GetUtcNow();
-        var remaining = (lockoutEnd ?? now) - now;
-        return Math.Clamp((int)Math.Ceiling(remaining.TotalSeconds), 1, MaxRetryAfterSeconds)
-            .ToString(CultureInfo.InvariantCulture);
+        return RetryAfter.Seconds((lockoutEnd ?? now) - now);
     }
 }
