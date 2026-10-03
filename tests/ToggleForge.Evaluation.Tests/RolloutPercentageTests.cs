@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace ToggleForge.Evaluation.Tests;
 
 public sealed class RolloutPercentageTests
@@ -44,7 +46,7 @@ public sealed class RolloutPercentageTests
     [InlineData("100", 10_000)]
     public void FromPercent_converts_to_basis_points(string percent, int expectedBasisPoints)
     {
-        var rollout = RolloutPercentage.FromPercent(decimal.Parse(percent, System.Globalization.CultureInfo.InvariantCulture));
+        var rollout = RolloutPercentage.FromPercent(decimal.Parse(percent, CultureInfo.InvariantCulture));
 
         Assert.Equal(expectedBasisPoints, rollout.BasisPoints);
     }
@@ -57,11 +59,30 @@ public sealed class RolloutPercentageTests
     [InlineData("-79228162514264337593543950335")]
     public void FromPercent_rejects_out_of_range_or_finer_than_one_basis_point(string percent)
     {
-        var value = decimal.Parse(percent, System.Globalization.CultureInfo.InvariantCulture);
+        var value = decimal.Parse(percent, CultureInfo.InvariantCulture);
 
         var error = Assert.Throws<ArgumentOutOfRangeException>(() => RolloutPercentage.FromPercent(value));
 
         Assert.Equal("percent", error.ParamName);
+    }
+
+    [Theory]
+    [InlineData(0, "0%")]
+    [InlineData(1, "0.01%")]
+    [InlineData(1_250, "12.5%")]
+    [InlineData(10_000, "100%")]
+    public void ToString_formats_the_percentage_independently_of_culture(int basisPoints, string expected)
+    {
+        var previousCulture = CultureInfo.CurrentCulture;
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("pt-BR");
+        try
+        {
+            Assert.Equal(expected, RolloutPercentage.FromBasisPoints(basisPoints).ToString());
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previousCulture;
+        }
     }
 
     [Fact]
