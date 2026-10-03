@@ -96,17 +96,20 @@ framework de autenticação escolhido.
 1. **Rollback e rascunho.** Reverter também substitui o rascunho pelo conteúdo restaurado. Se o rascunho
    tem mudanças não publicadas, a operação é recusada, a menos que o Editor confirme o descarte; assim a
    próxima publicação não reaplica a mudança que motivou o rollback. Reverter para um conteúdo igual ao
-   atual é recusado como "já em vigor", pelo mesmo motivo da decisão 2.
-2. **"Nada a publicar".** Publicar um rascunho idêntico à versão atual é recusado como conflito de
+   atual é recusado como "já em vigor", pelo mesmo motivo da decisão 3.
+2. **Lista de credenciais.** Só as ativas têm teto (5); as revogadas se acumulam. A lista mostra sempre
+   todas as ativas e completa com as revogadas mais recentes até 50. As mais antigas saem da lista e
+   continuam gravadas para auditoria.
+3. **"Nada a publicar".** Publicar um rascunho idêntico à versão atual é recusado como conflito de
    estado, para o histórico não ganhar versões vazias.
-3. **Forma das ações.** Publicação e rollback têm vida própria (histórico, consulta), então viram
+4. **Forma das ações.** Publicação e rollback têm vida própria (histórico, consulta), então viram
    recursos nominalizados em vez de métodos customizados (ADR 0004).
 
 ## Ameaças (STRIDE)
 
 | # | Ameaça | Mitigação | Teste que prova |
 |---|---|---|---|
-| S1 | Credencial do SDK extraída do build | Só lê o snapshot publicado de um ambiente; snapshot sem dado sensível; revogação | `A_credential_reads_only_its_own_environment`; revogação pendente (`revokeCredential`) |
+| S1 | Credencial do SDK extraída do build | Só lê o snapshot publicado de um ambiente; snapshot sem dado sensível; revogação | `A_credential_reads_only_its_own_environment` e `Revoked_credential_is_rejected_from_the_next_request_on` |
 | S2 | Sessão do painel sequestrada | Cookie `HttpOnly`/`Secure`/`SameSite`, sessão nova no login, invalidada no logout, CSRF nas mutações | `Every_mutation_rejects_a_session_without_the_antiforgery_token`, `The_session_cookie_is_host_only_secure_http_only_and_strict` e `The_old_session_cookie_is_rejected_after_signing_out` |
 | T1 | Usuário altera recurso de outra organização (BOLA) | Toda consulta filtra pela organização da sessão; recurso alheio responde como inexistente | Teste A×B em cada rota: 404, corpo sem dados de A, recurso de A intacto |
 | T2 | Cliente envia seed, versão, autor ou organização (mass assignment) | DTO de entrada estrito, campo desconhecido recusado; seed e versão gerados no servidor | `Unknown_fields_are_rejected_and_nothing_is_saved` |
