@@ -9,6 +9,7 @@ public sealed class RoleTests(ApiFactory api)
     public static TheoryData<string, string> Forbidden => new()
     {
         { "viewer", "createProject" },
+        { "viewer", "createEnvironment" },
         { "viewer", "createFlag" },
         { "viewer", "updateFlag" },
         { "viewer", "deleteFlag" },
@@ -18,6 +19,7 @@ public sealed class RoleTests(ApiFactory api)
         { "viewer", "listCredentials" },
         { "viewer", "revokeCredential" },
         { "editor", "createProject" },
+        { "editor", "createEnvironment" },
         { "editor", "listCredentials" },
         { "editor", "createCredential" },
         { "editor", "revokeCredential" },
@@ -36,6 +38,7 @@ public sealed class RoleTests(ApiFactory api)
         var response = operation switch
         {
             "createProject" => await member.CreateProjectAsync("another", owner.OrganizationId),
+            "createEnvironment" => await member.CreateEnvironmentAsync("space-race", "staging", owner.OrganizationId),
             "createFlag" => await member.CreateFlagAsync("space-race", "battle-pass", organizationId: owner.OrganizationId),
             "updateFlag" => await member.UpdateFlagAsync("space-race", "new-shop", $"\"{revision}\"", """{"enabled":false}""", owner.OrganizationId),
             "deleteFlag" => await member.DeleteFlagAsync("space-race", "new-shop", $"\"{revision}\"", owner.OrganizationId),
@@ -52,6 +55,7 @@ public sealed class RoleTests(ApiFactory api)
         var draft = await owner.GetDraftAsync("space-race");
         Assert.Equal(revision, draft.Json["revision"]!.GetValue<long>());
         Assert.Null(draft.Json["basedOnVersion"]?.GetValue<long>());
+        Assert.Equal(2, (await owner.GetProjectAsync("space-race")).Json["environments"]!.AsArray().Count);
         var credential = Assert.Single((await owner.ListCredentialsAsync("space-race")).Json["data"]!.AsArray())!;
         Assert.Null(credential["revokedAt"]?.GetValue<DateTimeOffset>());
     }
@@ -77,7 +81,7 @@ public sealed class RoleTests(ApiFactory api)
     }
 
     [Fact]
-    public async Task A_viewer_reads_the_project_and_the_draft()
+    public async Task A_viewer_reads_projects_environments_and_drafts()
     {
         using var owner = await ConsoleClient.SignUpAsync(api);
         await owner.CreateProjectAsync("space-race");
@@ -85,6 +89,8 @@ public sealed class RoleTests(ApiFactory api)
 
         Assert.Equal(HttpStatusCode.OK, (await viewer.GetProjectAsync("space-race", owner.OrganizationId)).Status);
         Assert.Equal(HttpStatusCode.OK, (await viewer.GetDraftAsync("space-race", organizationId: owner.OrganizationId)).Status);
+        Assert.Equal(HttpStatusCode.OK, (await viewer.ListProjectsAsync(owner.OrganizationId)).Status);
+        Assert.Equal(HttpStatusCode.OK, (await viewer.GetEnvironmentAsync("space-race", "dev", owner.OrganizationId)).Status);
     }
 
     private async Task<ConsoleClient> MemberWithRoleAsync(ConsoleClient owner, string role)

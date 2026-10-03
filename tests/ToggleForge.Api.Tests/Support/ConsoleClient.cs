@@ -71,6 +71,19 @@ public sealed class ConsoleClient : IDisposable
     public Task<ApiResponse> CreateProjectAsync(string key, Guid? organizationId = null) =>
         SendAsync("createProject", HttpMethod.Post, Paths.Projects(organizationId ?? OrganizationId), new { key, name = $"Project {key}" });
 
+    public Task<ApiResponse> ListProjectsAsync(Guid? organizationId = null) =>
+        SendAsync("listProjects", HttpMethod.Get, Paths.Projects(organizationId ?? OrganizationId));
+
+    public Task<ApiResponse> CreateEnvironmentAsync(string projectKey, string key, Guid? organizationId = null) =>
+        SendAsync(
+            "createEnvironment",
+            HttpMethod.Post,
+            $"{Paths.Project(organizationId ?? OrganizationId, projectKey)}/environments",
+            new { key, name = $"Environment {key}" });
+
+    public Task<ApiResponse> GetEnvironmentAsync(string projectKey, string environmentKey, Guid? organizationId = null) =>
+        SendAsync("getEnvironment", HttpMethod.Get, Paths.Environment(organizationId ?? OrganizationId, projectKey, environmentKey));
+
     public Task<ApiResponse> GetProjectAsync(string key, Guid? organizationId = null) =>
         SendAsync("getProject", HttpMethod.Get, Paths.Project(organizationId ?? OrganizationId, key));
 
