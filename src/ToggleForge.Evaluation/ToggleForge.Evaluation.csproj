@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    netstandard2.1 + C# 9 é o que a Unity suporta. Este projeto não pode ter PackageReference:
+    o núcleo é compartilhado entre simulador e SDK e precisa rodar em IL2CPP sem dependências.
+  -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <ImplicitUsings>disable</ImplicitUsings>
+  </PropertyGroup>
+
+</Project>
