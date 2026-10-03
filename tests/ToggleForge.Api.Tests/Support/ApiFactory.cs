@@ -25,6 +25,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 
     public LogCapture Logs { get; } = new();
 
+    /// <summary>Para os testes que sobem o binário da API fora do TestServer, como os comandos de manutenção.</summary>
+    public string ConnectionString => _postgres.GetConnectionString();
+
     public async ValueTask InitializeAsync()
     {
         await _postgres.StartAsync(TestContext.Current.CancellationToken);
