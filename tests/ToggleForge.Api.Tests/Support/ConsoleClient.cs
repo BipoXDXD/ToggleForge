@@ -85,6 +85,22 @@ public sealed class ConsoleClient : IDisposable
             $"{Paths.Environment(organizationId ?? OrganizationId, projectKey, environmentKey)}/draft/flags",
             new { key = flagKey, enabled = true, onValue = true, offValue = false, rolloutBasisPoints });
 
+    public Task<ApiResponse> GetFlagAsync(string projectKey, string flagKey, Guid? organizationId = null) =>
+        SendAsync("getFlag", HttpMethod.Get, FlagPath(projectKey, flagKey, organizationId));
+
+    /// <summary>Merge patch com o corpo cru, para poder mandar null, campo desconhecido ou corpo vazio.</summary>
+    public Task<ApiResponse> UpdateFlagAsync(
+        string projectKey, string flagKey, string? ifMatch, string json, Guid? organizationId = null, string mediaType = "application/merge-patch+json") =>
+        SendAsync(
+            "updateFlag",
+            HttpMethod.Patch,
+            FlagPath(projectKey, flagKey, organizationId),
+            new StringContent(json, Encoding.UTF8, mediaType),
+            request => AddIfMatch(request, ifMatch));
+
+    public Task<ApiResponse> DeleteFlagAsync(string projectKey, string flagKey, string? ifMatch, Guid? organizationId = null) =>
+        SendAsync("deleteFlag", HttpMethod.Delete, FlagPath(projectKey, flagKey, organizationId), content: null, request => AddIfMatch(request, ifMatch));
+
     public Task<ApiResponse> PublishAsync(
         string projectKey,
         long draftRevision,
@@ -169,5 +185,16 @@ public sealed class ConsoleClient : IDisposable
         }
 
         return _antiforgeryToken;
+    }
+
+    private string FlagPath(string projectKey, string flagKey, Guid? organizationId) =>
+        $"{Paths.Environment(organizationId ?? OrganizationId, projectKey, "dev")}/draft/flags/{flagKey}";
+
+    private static void AddIfMatch(HttpRequestMessage request, string? ifMatch)
+    {
+        if (ifMatch is not null)
+        {
+            request.Headers.TryAddWithoutValidation("If-Match", ifMatch);
+        }
     }
 }

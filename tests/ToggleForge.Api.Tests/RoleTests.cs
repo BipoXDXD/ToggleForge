@@ -10,6 +10,8 @@ public sealed class RoleTests(ApiFactory api)
     {
         { "viewer", "createProject" },
         { "viewer", "createFlag" },
+        { "viewer", "updateFlag" },
+        { "viewer", "deleteFlag" },
         { "viewer", "publishDraft" },
         { "viewer", "createCredential" },
         { "editor", "createProject" },
@@ -29,6 +31,8 @@ public sealed class RoleTests(ApiFactory api)
         {
             "createProject" => await member.CreateProjectAsync("another", owner.OrganizationId),
             "createFlag" => await member.CreateFlagAsync("space-race", "battle-pass", organizationId: owner.OrganizationId),
+            "updateFlag" => await member.UpdateFlagAsync("space-race", "new-shop", $"\"{revision}\"", """{"enabled":false}""", owner.OrganizationId),
+            "deleteFlag" => await member.DeleteFlagAsync("space-race", "new-shop", $"\"{revision}\"", owner.OrganizationId),
             "publishDraft" => await member.PublishAsync("space-race", revision, ConsoleClient.NewIdempotencyKey(), organizationId: owner.OrganizationId),
             "createCredential" => await member.CreateCredentialAsync("space-race", organizationId: owner.OrganizationId),
             _ => throw new ArgumentOutOfRangeException(nameof(operation), operation, "Unknown operation."),
@@ -42,17 +46,22 @@ public sealed class RoleTests(ApiFactory api)
     }
 
     [Fact]
-    public async Task An_editor_creates_flags_and_publishes()
+    public async Task An_editor_creates_changes_and_removes_flags_and_publishes()
     {
         using var owner = await ConsoleClient.SignUpAsync(api);
         await owner.CreateProjectAsync("space-race");
         using var editor = await MemberWithRoleAsync(owner, "editor");
 
         var flag = await editor.CreateFlagAsync("space-race", "new-shop", organizationId: owner.OrganizationId);
+        var other = await editor.CreateFlagAsync("space-race", "battle-pass", organizationId: owner.OrganizationId);
+        var changed = await editor.UpdateFlagAsync("space-race", "new-shop", flag.Header("ETag"), """{"enabled":false}""", owner.OrganizationId);
+        var removed = await editor.DeleteFlagAsync("space-race", "battle-pass", other.Header("ETag"), owner.OrganizationId);
         var publication = await editor.PublishAsync(
-            "space-race", ConsoleClient.Revision(flag), ConsoleClient.NewIdempotencyKey(), organizationId: owner.OrganizationId);
+            "space-race", ConsoleClient.Revision(changed) + 1, ConsoleClient.NewIdempotencyKey(), organizationId: owner.OrganizationId);
 
         Assert.Equal(HttpStatusCode.Created, flag.Status);
+        Assert.Equal(HttpStatusCode.OK, changed.Status);
+        Assert.Equal(HttpStatusCode.NoContent, removed.Status);
         Assert.Equal(HttpStatusCode.Created, publication.Status);
     }
 
