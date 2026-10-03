@@ -28,6 +28,15 @@ dotnet run --project samples/ToggleForge.RolloutDemo
 Prioridade: **Adaptive Code 2e** no dia a dia; **Dive Into Design Patterns** quando surgir um problema
 de design; **Clean Architecture with .NET** (Dino Esposito) nas decisões de arquitetura.
 
+Design da API HTTP (Marco 2 em diante): **The Design of Web APIs, 2ª ed.**, caps. 2–7 e 12.
+
+- Antes de codar uma feature da API, preencha o API Capabilities Canvas em `docs/api/<feature>.md`:
+  usuário, caso de uso, passos, entradas, sucesso, falha e operação, sem HTTP (caps. 2–3).
+- Recursos, ações, status e modelos derivados do modelo completo (caps. 4–5).
+- Spec-first: o contrato OpenAPI 3.1 é escrito e revisado antes da implementação (caps. 6–7).
+- Segurança no design: superfície mínima, nada sensível na URL, `ETag`/`If-Match` e
+  `Idempotency-Key`, e "quem vê o quê" descrito em cada operação (cap. 12).
+
 Padrões iniciais: Strategy, Adapter e Decorator, aplicados onde houver variação prevista ou borda real:
 
 - Strategy: `ITargetingRule` (rollout percentual hoje; segmentação no Marco 5).
