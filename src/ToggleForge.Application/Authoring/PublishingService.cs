@@ -17,7 +17,7 @@ public sealed class PublishingService(
     IAuthoringUnitOfWork unitOfWork,
     TimeProvider clock)
 {
-    public async Task<Result<PublicationView>> PublishAsync(
+    public Task<Result<PublicationView>> PublishAsync(
         Guid memberId,
         EnvironmentLocator locator,
         PublishCommand command,
@@ -28,12 +28,27 @@ public sealed class PublishingService(
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(idempotencyKey);
 
-        if (!(await access.FindRoleAsync(memberId, locator.OrganizationId, cancellationToken)).TryGetValue(out var role, out var failure))
+        var attempt = new Attempt(memberId, idempotencyKey, Fingerprint(locator, command));
+        return RecordAsync(
+            locator,
+            attempt,
+            (environment, current, now, _) => Task.FromResult(
+                environment.Publish(command.ReviewedDraftRevision, command.Summary, memberId, now, current)),
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Esqueleto de toda operação que cria uma publicação: papel, ambiente travado, idempotência e gravação na
+    /// mesma transação.
+    /// </summary>
+    private async Task<Result<PublicationView>> RecordAsync(
+        EnvironmentLocator locator, Attempt attempt, PublicationChange change, CancellationToken cancellationToken)
+    {
+        if (!(await access.FindRoleAsync(attempt.MemberId, locator.OrganizationId, cancellationToken)).TryGetValue(out var role, out var failure))
         {
             return failure;
         }
 
-        var attempt = new Attempt(memberId, idempotencyKey, Fingerprint(locator, command));
         await using (var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken))
         {
             if (await environments.FindForUpdateAsync(locator, cancellationToken) is not { } environment)
@@ -46,10 +61,10 @@ public sealed class PublishingService(
                 return forbidden;
             }
 
-            if (await PublishLockedAsync(environment, command, attempt, cancellationToken) is { } published)
+            if (await RecordLockedAsync(environment, change, attempt, cancellationToken) is { } recorded)
             {
                 await transaction.CommitAsync(cancellationToken);
-                return published;
+                return recorded;
             }
         }
 
@@ -64,8 +79,8 @@ public sealed class PublishingService(
     /// Com o ambiente já travado, então uma repetição simultânea espera a original e vira replay. Nulo quando a
     /// gravação perde a corrida pela chave de idempotência.
     /// </summary>
-    private async Task<Result<PublicationView>?> PublishLockedAsync(
-        ProjectEnvironment environment, PublishCommand command, Attempt attempt, CancellationToken cancellationToken)
+    private async Task<Result<PublicationView>?> RecordLockedAsync(
+        ProjectEnvironment environment, PublicationChange change, Attempt attempt, CancellationToken cancellationToken)
     {
         if (await ReplayAsync(attempt, cancellationToken) is { } replayed)
         {
@@ -74,8 +89,7 @@ public sealed class PublishingService(
 
         var current = await publications.FindAsync(environment, cancellationToken);
         var now = clock.GetUtcNowInMicroseconds();
-        if (!environment.Publish(command.ReviewedDraftRevision, command.Summary, attempt.MemberId, now, current)
-                .TryGetValue(out var publication, out var failure))
+        if (!(await change(environment, current, now, cancellationToken)).TryGetValue(out var publication, out var failure))
         {
             return failure;
         }
@@ -136,6 +150,10 @@ public sealed class PublishingService(
         });
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
     }
+
+    /// <summary>A mudança no ambiente travado que gera a publicação, dada a publicação em vigor.</summary>
+    private delegate Task<Result<Publication>> PublicationChange(
+        ProjectEnvironment environment, Publication? current, DateTimeOffset now, CancellationToken cancellationToken);
 
     /// <summary>O que a idempotência compara: quem publica, com qual chave e com qual pedido.</summary>
     private sealed record Attempt(Guid MemberId, IdempotencyKey Key, string Fingerprint);
