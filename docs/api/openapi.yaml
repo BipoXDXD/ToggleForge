@@ -52,7 +52,9 @@ paths:
       tags: [Session]
       operationId: getAntiforgeryToken
       summary: Get an antiforgery token
-      description: Issues the token that every console mutation sends in `X-XSRF-TOKEN`, together with its cookie.
+      description: |
+        Issues the token that every console mutation sends in `X-XSRF-TOKEN`, together with its cookie.
+        The token is bound to the signed-in member: fetch a new one after signing in or out.
       security: []
       responses:
         '200':
@@ -812,10 +814,8 @@ paths:
               $ref: '#/components/schemas/CredentialCreation'
       responses:
         '201':
-          description: Credential created.
+          description: Credential created. There is no operation to read one credential, so no Location.
           headers:
-            Location:
-              $ref: '#/components/headers/Location'
             Cache-Control:
               $ref: '#/components/headers/CacheControlNoStore'
           content:
@@ -1472,6 +1472,7 @@ components:
           $ref: '#/components/schemas/Revision'
         summary:
           type: string
+          minLength: 1
           maxLength: 280
           pattern: '^[^\u0000-\u001F\u007F]*$'
 
@@ -1509,6 +1510,7 @@ components:
             - type: 'null'
         summary:
           type: string
+          minLength: 1
           maxLength: 280
           pattern: '^[^\u0000-\u001F\u007F]*$'
 
@@ -1743,4 +1745,4 @@ components:
         instance:
           type: string
           pattern: '^/unexpected-errors/[0-9a-f]{32}$'
-          maxLength: 49
+          maxLength: 51
