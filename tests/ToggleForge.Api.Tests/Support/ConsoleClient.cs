@@ -25,6 +25,13 @@ public sealed class ConsoleClient : IDisposable
 
     public CookieContainer Cookies { get; } = new();
 
+    /// <summary>Faz as próximas requisições virem deste IP; só vale num host com <see cref="ClientAddresses"/>.</summary>
+    public void ComeFrom(string address)
+    {
+        _http.DefaultRequestHeaders.Remove(ClientAddresses.Header);
+        _http.DefaultRequestHeaders.Add(ClientAddresses.Header, address);
+    }
+
     public string Email { get; private set; } = string.Empty;
 
     public Guid MemberId { get; private set; }

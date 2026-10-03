@@ -19,6 +19,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
     public static readonly Uri BaseAddress = new("https://localhost");
 
+    private const string Unlimited = "1000000";
+
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:18-alpine").Build();
 
     public LogCapture Logs { get; } = new();
@@ -54,6 +56,10 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseSetting("ConnectionStrings:ToggleForge", _postgres.GetConnectionString());
+        // Todo teste vem do mesmo "IP" e cria contas: os tetos reais ficam para RateLimitTests.
+        builder.UseSetting("RateLimits:MemberPerMinute", Unlimited);
+        builder.UseSetting("RateLimits:GameClientPerMinute", Unlimited);
+        builder.UseSetting("RateLimits:AnonymousPerMinute", Unlimited);
         builder.ConfigureLogging(logging => logging.ClearProviders().AddProvider(Logs));
         builder.ConfigureTestServices(services => services.AddSingleton<TimeProvider>(new HundredNanosecondClock()));
     }
