@@ -41,14 +41,31 @@ Qualidade de código (base para código bem produzido e com poucos erros):
   mutation testing. O Stryker.NET ainda não suporta o Microsoft.Testing.Platform, então a varredura
   é feita com mutações manuais.
 
-Design da API HTTP (Marco 2 em diante): **The Design of Web APIs, 2ª ed.**, caps. 2–7 e 12.
+Design da API HTTP (Marco 2 em diante), três livros lidos juntos:
 
-- Antes de codar uma feature da API, preencha o API Capabilities Canvas em `docs/api/<feature>.md`:
-  usuário, caso de uso, passos, entradas, sucesso, falha e operação, sem HTTP (caps. 2–3).
-- Recursos, ações, status e modelos derivados do modelo completo (caps. 4–5).
-- Spec-first: o contrato OpenAPI 3.1 é escrito e revisado antes da implementação (caps. 6–7).
-- Segurança no design: superfície mínima, nada sensível na URL, `ETag`/`If-Match` e
-  `Idempotency-Key`, e "quem vê o quê" descrito em cada operação (cap. 12).
+- **The Design of Web APIs, 2ª ed.** (DWA), caps. 2–7 e 12: o processo.
+  - Antes de codar uma feature da API, preencha o API Capabilities Canvas em `docs/api/<feature>.md`:
+    usuário, caso de uso, passos, entradas, sucesso, falha e operação, sem HTTP (caps. 2–3).
+  - Recursos, ações, status e modelos derivados do modelo completo (caps. 4–5).
+  - Spec-first: o contrato OpenAPI 3.1 é escrito e revisado antes da implementação (caps. 6–7).
+  - Segurança no design: superfície mínima, nada sensível na URL, `ETag`/`If-Match` e
+    `Idempotency-Key`, e "quem vê o quê" descrito em cada operação (cap. 12).
+- **API Design Patterns** (ADP), caps. 3–9, 21–22, 24 e 26–29: os padrões de cada operação.
+  - Nomes, escopo e hierarquia de recursos, tipos e defaults, IDs (caps. 3–6).
+  - Métodos padrão, atualização parcial com field mask e métodos customizados como
+    `:publish` e `:rollback` (caps. 7–9).
+  - Paginação por token opaco com teto de página e filtros com allowlist (caps. 21–22).
+  - Política de compatibilidade e versionamento (cap. 24).
+  - Deduplicação por `Idempotency-Key`, validação com `validateOnly`, revisões de recurso e
+    retry seguro (caps. 26–29). As publicações imutáveis do ToggleForge são as revisões do cap. 28.
+- **Secure APIs** (SA), caps. 2–9, 11 e 12: as ameaças e a prova de que foram mitigadas.
+  - Modelagem de ameaças e princípios (caps. 2–3): cada feature com dado de outro tenant, credencial
+    ou permissão registra ameaça → mitigação → teste.
+  - OWASP API Top 10, com ênfase em BOLA, BFLA, BOPLA e consumo de recursos (caps. 4–5).
+  - Segurança no design, autenticação e autorização (caps. 6–8), infraestrutura (cap. 9),
+    observabilidade (cap. 11) e testes de segurança (cap. 12).
+  - Os capítulos conceituais vencem os exemplos do próprio livro: o login do cap. 8 omite PKCE e
+    `state`, e o cap. 11 loga headers inteiros. Siga o cap. 7 e nunca logue `Authorization` nem `Cookie`.
 
 Padrões iniciais: Strategy, Adapter e Decorator, aplicados onde houver variação prevista ou borda real:
 
