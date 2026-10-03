@@ -1,5 +1,4 @@
 using ToggleForge.Api;
-using ToggleForge.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("ToggleForge");
@@ -12,10 +11,8 @@ if (string.IsNullOrWhiteSpace(connectionString))
 builder.Services.AddToggleForgeApi(connectionString);
 var app = builder.Build();
 
-// Migrations rodam num passo explícito do deploy, nunca a cada boot de instância.
-if (args.Contains("--migrate"))
+if (await MaintenanceCommands.TryRunAsync(app, args))
 {
-    await app.Services.MigrateToggleForgeDatabaseAsync(CancellationToken.None);
     return;
 }
 
