@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Só para o dotnet-ef gerar migrations com o Api como startup project; não vai para o publish. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ToggleForge.Application\ToggleForge.Application.csproj" />
+    <ProjectReference Include="..\ToggleForge.Infrastructure\ToggleForge.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ToggleForge.Api.Tests" />
+  </ItemGroup>
+
+</Project>

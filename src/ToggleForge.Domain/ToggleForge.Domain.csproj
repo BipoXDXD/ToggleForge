@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Regras de negócio puras: nenhum pacote, só o núcleo de avaliação (ADR 0005). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ToggleForge.Evaluation\ToggleForge.Evaluation.csproj" />
+  </ItemGroup>
+
+</Project>

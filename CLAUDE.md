@@ -14,13 +14,28 @@ python3 tools/rollout-vectors/generate.py              # regenera os vetores do 
 python3 tools/rollout-vectors/generate.py --check      # confere o JSON commitado (roda no CI)
 dotnet run --project samples/ToggleForge.RolloutDemo
 npm ci --prefix tools/api-lint && npm run lint --prefix tools/api-lint   # Spectral + OWASP na spec
+dotnet run --project src/ToggleForge.Api -- --migrate  # aplica as migrations; precisa de ConnectionStrings:ToggleForge
+dotnet run --project src/ToggleForge.Api               # sobe a API
+dotnet tool restore && dotnet ef migrations add <Nome> --context <Módulo>DbContext \
+  --project src/ToggleForge.Infrastructure --startup-project src/ToggleForge.Api --output-dir <Módulo>/Migrations
 ```
+
+Os testes da API sobem um Postgres com Testcontainers: o Docker precisa estar rodando. A connection string
+local vai em User Secrets (`dotnet user-secrets set ConnectionStrings:ToggleForge "..." --project
+src/ToggleForge.Api`), nunca no repositório.
 
 ## Layout
 
 - `src/ToggleForge.Evaluation`: núcleo de avaliação. netstandard2.1 com C# 9 (compatível com Unity),
   sem `PackageReference` nem `ProjectReference` (ADR 0001).
-- `tests/`: um projeto de teste por projeto de produção; asserts do próprio xUnit.
+- `src/ToggleForge.Domain`, `Application`, `Infrastructure` e `Api`: a API do Marco 2, em camadas, com os
+  módulos Access, Authoring e Delivery como namespaces; cada módulo tem o próprio `DbContext` e schema
+  (ADR 0005). Migrations em `Infrastructure/<Módulo>/Migrations`, geradas e nunca editadas à mão.
+- `tests/`: asserts do próprio xUnit.
+  - `Evaluation.Tests` e `Domain.Tests`: regras de negócio, sem banco nem mock.
+  - `Api.Tests`: integração ponta a ponta com Postgres real, cobrindo `Application`, `Infrastructure` e
+    `Api`. Toda resposta é conferida contra `docs/api/openapi.yaml`, e os testes de arquitetura guardam as
+    fronteiras entre módulos. Cada teste cria as próprias contas e organizações, sem dados compartilhados.
 - `samples/`: demonstrações executáveis.
 - `tools/rollout-vectors`: oráculo Python do algoritmo de rollout (ADR 0002).
 - `docs/api`: canvas de capacidades, ameaças e o contrato `openapi.yaml` (ADR 0004).
@@ -31,6 +46,33 @@ npm ci --prefix tools/api-lint && npm run lint --prefix tools/api-lint   # Spect
 Prioridade: **Adaptive Code 2e** no dia a dia; **Dive Into Design Patterns** quando surgir um problema
 de design; **Clean Architecture with .NET** (Dino Esposito) nas decisões de arquitetura.
 
+Arquitetura e domínio:
+
+- **Fundamentals of Software Architecture 2e** (FSA), caps. 2–11, 14–15 e 18–23:
+  - pensamento arquitetural, modularidade, características (definir, medir, governar com fitness
+    functions) e componentes (caps. 2–9);
+  - estilos layered, modular monolith, service-based, event-driven e microservices, e como escolher
+    (caps. 10–11, 14–15, 18–19);
+  - padrões, ADRs, análise de risco e diagramas (caps. 20–23).
+- **Learning Domain-Driven Design** (LDDD), caps. 1–15:
+  - subdomínios, linguagem ubíqua e bounded contexts (caps. 1–4);
+  - transaction script ou active record para lógica simples, domain model para a complexa, e o tempo
+    como dimensão (caps. 5–7);
+  - padrões de arquitetura e comunicação, heurísticas, evolução, EventStorming, microservices e EDA
+    (caps. 8–15).
+- **The Art of PostgreSQL** (AoP), caps. 4, 7–8, 13–18, 22–23, 26–28, 30–32, 35–39, 43 e 45:
+  - lógica de negócio em SQL, SQL é código, estratégia de índices (caps. 4, 7–8);
+  - consultas: SELECT, ORDER BY sem OFFSET, GROUP BY, NULL, window functions, joins (caps. 13–18);
+  - tipos e tipos desnormalizados (caps. 22–23);
+  - ORM, modelagem, normalização, anti-patterns, desnormalização e NoSQL (caps. 26–28, 30–32);
+  - DML, isolamento e locks, cache em SQL, triggers, LISTEN/NOTIFY, auditoria e trigramas
+    (caps. 35–39, 43, 45).
+- **Code That Fits in Your Head** (CFH), caps. 2–8, 10–13 e 15:
+  - checklists, complexidade, vertical slice, encapsulamento, triangulação, decomposição e design de
+    API (caps. 2–8);
+  - evoluir código existente, editar testes, troubleshooting, separação de responsabilidades e os
+    suspeitos de sempre: performance e segurança (caps. 10–13, 15).
+
 Qualidade de código (base para código bem produzido e com poucos erros):
 
 - **Code Complete 2e**, caps. 5–8 (design, classes, rotinas, programação defensiva), 11 (nomes),
@@ -40,6 +82,14 @@ Qualidade de código (base para código bem produzido e com poucos erros):
 - **The Pragmatic Programmer 2e**, caps. 2 (ETC, DRY, ortogonalidade), 4 (contratos, dead programs,
   asserções), 5 (desacoplamento, Tell Don't Ask), 6 (concorrência), 7 (coincidência, testes,
   property-based, nomes) e 9.
+- **Unit Testing: Principles, Practices, and Patterns** (Khorikov) é a referência de testes:
+  - teste comportamento observável, nunca detalhe de implementação; refactoring não quebra teste;
+  - regra de negócio no domínio, testada sem mock (estilo output/state);
+  - controllers e serviços de aplicação finos, cobertos por testes de integração do caminho feliz
+    mais longo e dos casos de borda que o unit test não alcança;
+  - o Postgres é dependência gerenciada: real nos testes (Testcontainers), nunca mock de
+    repositório; mock só para dependência não gerenciada (e-mail, API de terceiro), e o relógio entra
+    como `TimeProvider`.
 - Todo teste novo é visto falhando (ou sabotando o código) antes de contar; código crítico passa por
   mutation testing. O Stryker.NET ainda não suporta o Microsoft.Testing.Platform, então a varredura
   é feita com mutações manuais.

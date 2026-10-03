@@ -1,6 +1,6 @@
 # 0004 — API HTTP com Minimal APIs, Identity por cookie e contrato spec-first
 
-- **Status:** Aceita
+- **Status:** Aceita; emendada pela ADR 0005 (validação de entrada e sessão)
 - **Data:** 2026-10-03
 
 ## Contexto
@@ -29,7 +29,7 @@ Alternativas consideradas:
 ## Decisão
 
 **Minimal APIs.** Um route group por área, `TypedResults` em todo handler e `AddValidation` para o
-formato da entrada. O endpoint só lê a requisição, chama o caso de uso e traduz o resultado; regra de
+formato da entrada (substituído pelo parse no endpoint na ADR 0005). O endpoint só lê a requisição, chama o caso de uso e traduz o resultado; regra de
 negócio fica no domínio. No .NET 10, endpoints de API com cookie respondem 401/403 em vez de redirecionar
 para o login.
 

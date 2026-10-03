@@ -3,9 +3,15 @@
     <Project Path="samples/ToggleForge.RolloutDemo/ToggleForge.RolloutDemo.csproj" />
   </Folder>
   <Folder Name="/src/">
+    <Project Path="src/ToggleForge.Api/ToggleForge.Api.csproj" />
+    <Project Path="src/ToggleForge.Application/ToggleForge.Application.csproj" />
+    <Project Path="src/ToggleForge.Domain/ToggleForge.Domain.csproj" />
     <Project Path="src/ToggleForge.Evaluation/ToggleForge.Evaluation.csproj" />
+    <Project Path="src/ToggleForge.Infrastructure/ToggleForge.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/ToggleForge.Api.Tests/ToggleForge.Api.Tests.csproj" />
+    <Project Path="tests/ToggleForge.Domain.Tests/ToggleForge.Domain.Tests.csproj" />
     <Project Path="tests/ToggleForge.Evaluation.Tests/ToggleForge.Evaluation.Tests.csproj" />
   </Folder>
 </Solution>
