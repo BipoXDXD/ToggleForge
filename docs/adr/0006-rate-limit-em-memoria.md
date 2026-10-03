@@ -62,7 +62,7 @@ chaves das partições, em memória; nenhum deles vai para log.
   primeira barreira para isso.
 - **Antes do deploy:** atrás do ingress do Container Apps, o IP da conexão é o do proxy, e todos os
   clientes cairiam na mesma partição. O deploy precisa configurar `ForwardedHeaders` confiando só no
-  proxy da plataforma, junto com o repositório das chaves do Data Protection (ADR 0005).
+  proxy da plataforma. As chaves do Data Protection já estão resolvidas (ADR 0008).
 - Um ataque distribuído com a credencial extraída não é barrado por credencial; a defesa é revogar a
   credencial e, se preciso, um teto por ambiente medido depois.
 - Os testes da API sobem com tetos altíssimos, porque todos vêm do mesmo "IP"; `RateLimitTests` usa

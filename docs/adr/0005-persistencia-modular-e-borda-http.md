@@ -123,9 +123,8 @@ boot de instância. A limpeza da idempotência segue o mesmo modelo (`Maintenanc
   - Fora da janela, um `UPDATE ... where last_used_at is null or last_used_at < now - 5 min` repete a
     regra, então réplicas que disputam a mesma janela gravam uma vez só.
   - Nenhum uso se perde num crash, ao contrário do buffer.
-- O Data Protection guarda as chaves no perfil do usuário e não as compartilha entre instâncias. Antes do
-  deploy, as chaves precisam de um repositório comum e protegido (banco ou blob com cofre), senão cookies e
-  tokens de página emitidos por uma instância falham em outra ou depois de um restart.
+- As chaves do Data Protection ficam no Postgres, cifradas por certificado e compartilhadas por todas as
+  instâncias (ADR 0008).
 - O teste de integração cria contas e organizações novas a cada caso, então os testes não dividem dados
   e dispensam limpar o banco (Respawn).
 
