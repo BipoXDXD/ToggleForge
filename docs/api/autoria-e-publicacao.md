@@ -113,6 +113,7 @@ framework de autenticação escolhido.
 |---|---|---|---|
 | S1 | Credencial do SDK extraída do build | Só lê o snapshot publicado de um ambiente; snapshot sem dado sensível; revogação | `A_credential_reads_only_its_own_environment` e `Revoked_credential_is_rejected_from_the_next_request_on` |
 | S2 | Sessão do painel sequestrada | Cookie `HttpOnly`/`Secure`/`SameSite`, sessão nova no login, invalidada no logout, CSRF nas mutações | `Every_mutation_rejects_a_session_without_the_antiforgery_token`, `The_session_cookie_is_host_only_secure_http_only_and_strict` e `The_old_session_cookie_is_rejected_after_signing_out` |
+| S3 | Conta criada com senha vazada (credential stuffing) | Senha nova conferida no Pwned Passwords; vazada é recusada (ADR 0007) | `A_password_found_in_breaches_is_rejected_on_password_and_creates_nothing` |
 | T1 | Usuário altera recurso de outra organização (BOLA) | Toda consulta filtra pela organização da sessão; recurso alheio responde como inexistente | Teste A×B em cada rota: 404, corpo sem dados de A, recurso de A intacto |
 | T2 | Cliente envia seed, versão, autor ou organização (mass assignment) | DTO de entrada estrito, campo desconhecido recusado; seed e versão gerados no servidor | `Unknown_fields_are_rejected_and_nothing_is_saved` |
 | T3 | Edição concorrente sobrescreve outra (lost update) | Revisão esperada em toda alteração e na publicação; versão atual vista no rollback | `Second_update_with_stale_revision_conflicts_and_keeps_the_first` e `Simultaneous_rollbacks_from_the_same_version_apply_once` |
@@ -122,6 +123,7 @@ framework de autenticação escolhido.
 | I3 | Erro expõe stack trace ou SQL | Problem Details genérico com referência opaca | `An_unexpected_error_hides_its_details_and_logs_them_under_the_reference` |
 | I4 | Cadastro revela se um e-mail já tem conta | **Aceito** até existir confirmação por e-mail; o rate limit por IP limita a enumeração (ADR 0006) | `Probing_emails_through_sign_up_from_one_address_gets_429` e `Guessing_many_accounts_from_one_address_gets_429_with_Retry_After` |
 | I5 | ID do jogador simulado (possível dado pessoal) vaza por URL, resposta, cache ou log | ID só no corpo, fora da resposta, `Cache-Control: no-store`, nenhum log com o corpo | `The_player_id_never_reaches_the_response_or_the_logs` (canário) |
+| I6 | A checagem de senha vazada entrega a senha ou o e-mail a um terceiro | k-anonymity: só os 5 primeiros hex do SHA-1, com padding (ADR 0007) | `Only_the_first_5_hex_of_the_SHA1_leave_the_api_with_padding` (canário) |
 | D1 | Rascunho gigante ou corpo enorme | Limite de flags por ambiente, de ambientes por projeto e de tamanho do corpo | Testes on/off point em cada limite |
 | D2 | Polling agressivo do SDK | `ETag`/"não mudou", `Cache-Control`, rate limit por credencial e IP com `Retry-After` (ADR 0006) | `The_game_gets_304_while_the_snapshot_is_unchanged`, `A_game_client_over_the_limit_gets_429_with_Retry_After` e `Other_players_with_the_same_credential_keep_syncing` |
 | E1 | Viewer publica ou Editor gerencia credenciais (BFLA) | Papel checado em cada operação, negado por padrão | Papel inferior em cada rota privilegiada → 403 |

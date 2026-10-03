@@ -12,4 +12,7 @@ public static class AccessFailures
 
     public static Failure EmailTaken { get; } =
         new(FailureKind.Conflict, "email-taken", "An account with this email already exists. Sign in instead.");
+
+    public static Failure PasswordBreached { get; } =
+        new(FailureKind.InvalidValue, "password-breached", "This password appears in known data breaches. Choose another one.");
 }

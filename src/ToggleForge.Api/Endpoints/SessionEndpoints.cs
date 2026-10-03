@@ -52,6 +52,12 @@ internal static class SessionEndpoints
         var registered = await accounts.RegisterAsync(new AccountRegistration(email, password, organizationName), cancellationToken);
         if (!registered.TryGetValue(out var memberId, out var failure))
         {
+            if (failure == AccessFailures.PasswordBreached)
+            {
+                errors.InBody("/password", failure.Detail);
+                return errors.ToResult();
+            }
+
             return Problems.From(failure);
         }
 

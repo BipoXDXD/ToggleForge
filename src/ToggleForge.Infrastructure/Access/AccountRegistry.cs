@@ -33,15 +33,28 @@ internal sealed class AccountRegistry(AccessDbContext context, UserManager<Ident
 
         if (!created.Succeeded)
         {
-            return created.Errors.Any(error => _duplicateCodes.Contains(error.Code))
-                ? AccessFailures.EmailTaken
-                : throw new InvalidOperationException(
-                    "The API accepted an account Identity rejects: " + string.Join(", ", created.Errors.Select(e => e.Code)));
+            return FailureOf(created);
         }
 
         context.Organizations.Add(Organization.Found(registration.OrganizationName, member.Id));
         await context.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return member.Id;
+    }
+
+    private static Failure FailureOf(IdentityResult created)
+    {
+        if (created.Errors.Any(error => _duplicateCodes.Contains(error.Code)))
+        {
+            return AccessFailures.EmailTaken;
+        }
+
+        if (created.Errors.Any(error => error.Code == BreachedPasswordValidator.ErrorCode))
+        {
+            return AccessFailures.PasswordBreached;
+        }
+
+        throw new InvalidOperationException(
+            "The API accepted an account Identity rejects: " + string.Join(", ", created.Errors.Select(e => e.Code)));
     }
 }

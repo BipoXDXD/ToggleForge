@@ -17,6 +17,8 @@ internal static class Problems
             FailureKind.Forbidden => (StatusCodes.Status403Forbidden, "Forbidden"),
             FailureKind.Conflict => (StatusCodes.Status409Conflict, "Conflict"),
             FailureKind.PreconditionFailed => (StatusCodes.Status412PreconditionFailed, "Precondition failed"),
+            FailureKind.InvalidValue => throw new InvalidOperationException(
+                $"'{failure.Code}' is an input error: the endpoint must report it on its field."),
             var unknown => throw new InvalidOperationException($"Unknown failure kind '{unknown}'."),
         };
         return Json(new ProblemBody($"/problems/{failure.Code}", title, status, failure.Detail));
