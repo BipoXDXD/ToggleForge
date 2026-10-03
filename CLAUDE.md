@@ -28,6 +28,19 @@ dotnet run --project samples/ToggleForge.RolloutDemo
 Prioridade: **Adaptive Code 2e** no dia a dia; **Dive Into Design Patterns** quando surgir um problema
 de design; **Clean Architecture with .NET** (Dino Esposito) nas decisões de arquitetura.
 
+Qualidade de código (base para código bem produzido e com poucos erros):
+
+- **Code Complete 2e**, caps. 5–8 (design, classes, rotinas, programação defensiva), 11 (nomes),
+  22–23 (testes do desenvolvedor, depuração) e 32 (código autodocumentado).
+- **Refactoring 2e**, caps. 1–4 (smells, testes) e 6–8, 10–11 (catálogo). Nomeie o smell e o
+  refactoring pelo nome em inglês; refactoring e mudança de comportamento em commits separados.
+- **The Pragmatic Programmer 2e**, caps. 2 (ETC, DRY, ortogonalidade), 4 (contratos, dead programs,
+  asserções), 5 (desacoplamento, Tell Don't Ask), 6 (concorrência), 7 (coincidência, testes,
+  property-based, nomes) e 9.
+- Todo teste novo é visto falhando (ou sabotando o código) antes de contar; código crítico passa por
+  mutation testing. O Stryker.NET ainda não suporta o Microsoft.Testing.Platform, então a varredura
+  é feita com mutações manuais.
+
 Design da API HTTP (Marco 2 em diante): **The Design of Web APIs, 2ª ed.**, caps. 2–7 e 12.
 
 - Antes de codar uma feature da API, preencha o API Capabilities Canvas em `docs/api/<feature>.md`:
