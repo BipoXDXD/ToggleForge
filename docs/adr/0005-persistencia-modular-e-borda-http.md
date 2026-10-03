@@ -91,6 +91,13 @@ mesmo tempo esbarra na PK; a perdedora lê o registro da outra e responde 409 `i
   do Identity renovaria o cookie a cada conferência, com `Set-Cookie` e `Cache-Control: no-cache,
   no-store` em todas as respostas. A sessão dura 8 horas, sem sliding expiration.
 
+**Paginação do histórico** (ADP cap. 21): keyset pela PK `(environment_id, version)`, buscando um item a
+mais para saber se há próxima página, sem OFFSET nem contagem. O cursor viaja num token opaco cifrado e
+autenticado pelo Data Protection do ASP.NET Core, preso ao membro e ao path canônico da coleção e válido por
+60 minutos; token de outro membro, de outra coleção, adulterado ou vencido é 400 no `pageToken`. Um HMAC
+próprio daria o mesmo com mais código de criptografia nosso; um cursor em claro deixaria o cliente forjar
+posições e misturar coleções.
+
 **Migrations** com o `dotnet-ef` do manifesto local, uma pasta por módulo, aplicadas por
 `dotnet run --project src/ToggleForge.Api -- --migrate`: um passo explícito do deploy, nunca a cada
 boot de instância.
@@ -106,6 +113,9 @@ boot de instância.
   contrato promete.
 - `lastUsedAt` da credencial ainda não é atualizado; atualizar a cada download do SDK seria uma escrita
   por requisição e pede um desenho próprio (amostragem ou buffer).
+- O Data Protection guarda as chaves no perfil do usuário e não as compartilha entre instâncias. Antes do
+  deploy, as chaves precisam de um repositório comum e protegido (banco ou blob com cofre), senão cookies e
+  tokens de página emitidos por uma instância falham em outra ou depois de um restart.
 - O teste de integração cria contas e organizações novas a cada caso, então os testes não dividem dados
   e dispensam limpar o banco (Respawn).
 
@@ -119,6 +129,8 @@ boot de instância.
 - `PublishingTests` e `RollbackTests`: repetição, reuso da chave com outro corpo ou noutra operação, a
   mesma chave por outro membro, retries simultâneos, revisão ou versão desatualizada, "nada a publicar" e
   "já em vigor".
+- `PublicationHistoryTests`: páginas na fronteira do tamanho (4 e 5 versões em páginas de 2), token de outro
+  membro, de outro ambiente, adulterado e vencido (59:59 aceito, 60:00 recusado).
 - Toda resposta dos testes da API é conferida contra `docs/api/openapi.yaml` (status declarado, corpo e
   headers). `DefaultDenyTests` varre as rotas registradas: cada uma é uma operação do contrato, exige
   autenticação fora da allowlist e, se for mutação, exige o token antiforgery.

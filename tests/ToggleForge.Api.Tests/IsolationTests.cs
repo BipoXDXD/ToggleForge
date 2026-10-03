@@ -7,7 +7,7 @@ namespace ToggleForge.Api.Tests;
 public sealed class IsolationTests(ApiFactory api)
 {
     public static TheoryData<string> Operations =>
-        ["getProject", "createProject", "getDraft", "createFlag", "getFlag", "updateFlag", "deleteFlag", "publishDraft", "rollBack", "createCredential"];
+        ["getProject", "createProject", "getDraft", "createFlag", "getFlag", "updateFlag", "deleteFlag", "listPublications", "getPublication", "publishDraft", "rollBack", "createCredential"];
 
     [Theory]
     [MemberData(nameof(Operations))]
@@ -51,6 +51,8 @@ public sealed class IsolationTests(ApiFactory api)
             "getFlag" => client.GetFlagAsync("space-race", "new-shop", organizationId),
             "updateFlag" => client.UpdateFlagAsync("space-race", "new-shop", $"\"{revision}\"", """{"enabled":false}""", organizationId),
             "deleteFlag" => client.DeleteFlagAsync("space-race", "new-shop", $"\"{revision}\"", organizationId),
+            "listPublications" => client.ListPublicationsAsync("space-race", organizationId: organizationId),
+            "getPublication" => client.GetPublicationAsync("space-race", "1", organizationId),
             "publishDraft" => client.PublishAsync("space-race", revision, ConsoleClient.NewIdempotencyKey(), organizationId: organizationId),
             "rollBack" => client.RollBackAsync("space-race", 1, 1, ConsoleClient.NewIdempotencyKey(), organizationId: organizationId),
             "createCredential" => client.CreateCredentialAsync("space-race", organizationId: organizationId),

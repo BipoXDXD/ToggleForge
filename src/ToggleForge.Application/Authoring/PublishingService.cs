@@ -127,7 +127,7 @@ public sealed class PublishingService(
             return null;
         }
 
-        return await ViewAsync(publication, cancellationToken);
+        return await memberships.ViewAsync(publication, cancellationToken);
     }
 
     /// <summary>Nulo quando a chave ainda não foi usada.</summary>
@@ -145,23 +145,7 @@ public sealed class PublishingService(
 
         var publication = await publications.FindAsync(record.EnvironmentId, record.Version, cancellationToken)
             ?? throw new InvalidOperationException($"Idempotency record points to missing version {record.Version}.");
-        return await ViewAsync(publication, cancellationToken);
-    }
-
-    private async Task<PublicationView> ViewAsync(Publication publication, CancellationToken cancellationToken)
-    {
-        var emails = await memberships.FindEmailsAsync([publication.PublishedBy], cancellationToken);
-        var publisherEmail = emails.TryGetValue(publication.PublishedBy, out var email)
-            ? email
-            : throw new InvalidOperationException($"Publisher {publication.PublishedBy} has no account.");
-        return new PublicationView(
-            publication.Version,
-            publication.PublishedAt,
-            new MemberView(publication.PublishedBy, publisherEmail),
-            publication.Origin,
-            publication.RestoredVersion,
-            publication.Summary,
-            publication.Flags);
+        return await memberships.ViewAsync(publication, cancellationToken);
     }
 
     /// <summary>

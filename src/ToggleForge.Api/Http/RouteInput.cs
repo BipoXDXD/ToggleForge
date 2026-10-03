@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using ToggleForge.Application.Authoring;
 using ToggleForge.Evaluation;
 
@@ -27,6 +28,19 @@ internal static class RouteInput
 
     public static FlagKey? Flag(string flagKey, InputErrors errors) =>
         Parse<FlagKey>(FlagKey.TryParse(flagKey, out var key), key, nameof(flagKey), errors);
+
+    public static long? Version(string version, InputErrors errors)
+    {
+        ArgumentNullException.ThrowIfNull(errors);
+
+        if (long.TryParse(version, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed) && parsed >= 1)
+        {
+            return parsed;
+        }
+
+        errors.InPath(nameof(version), "Versions are integers starting at 1.");
+        return null;
+    }
 
     public static bool TryLocator(
         string organizationId,

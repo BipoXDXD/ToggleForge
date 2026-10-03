@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using ToggleForge.Api.Authentication;
@@ -15,8 +16,72 @@ internal static class PublicationEndpoints
 
     public static void MapPublicationEndpoints(this RouteGroupBuilder environment)
     {
+        environment.MapGet("/publications", ListAsync).WithName("listPublications");
         environment.MapPost("/publications", PublishAsync).WithName("publishDraft").AddEndpointFilter<AntiforgeryFilter>();
+        environment.MapGet("/publications/{version}", GetAsync).WithName("getPublication");
         environment.MapPost("/rollbacks", RollBackAsync).WithName("rollBack").AddEndpointFilter<AntiforgeryFilter>();
+    }
+
+    private static async Task<Results<Ok<PublicationListResponse>, JsonHttpResult<ProblemBody>>> ListAsync(
+        string organizationId,
+        string projectKey,
+        string environmentKey,
+        [FromQuery] string? maxPageSize,
+        [FromQuery] string? pageToken,
+        HttpContext context,
+        PublicationHistoryService history,
+        PageTokens pageTokens,
+        CancellationToken cancellationToken)
+    {
+        var errors = new InputErrors();
+        var memberId = context.User.MemberId();
+        RouteInput.TryLocator(organizationId, projectKey, environmentKey, errors, out var locator);
+        var size = PageSize(maxPageSize, errors);
+        var beforeVersion = locator is null ? null : BeforeVersion(pageToken, memberId, locator, pageTokens, errors);
+
+        if (errors.Any || locator is null || size is null)
+        {
+            return errors.ToResult();
+        }
+
+        var listed = await history.ListAsync(memberId, locator, new PageRequest(size.Value, beforeVersion), cancellationToken);
+        if (!listed.TryGetValue(out var page, out var failure))
+        {
+            return Problems.From(failure);
+        }
+
+        CacheControl.Private(context.Response);
+        var nextPageToken = page.NextBeforeVersion is { } next
+            ? pageTokens.Issue(memberId, ResourcePaths.Publications(locator), next)
+            : null;
+        return TypedResults.Ok(new PublicationListResponse(
+            page.Items.Select(PublicationSummaryResponse.Of).ToList(), new PageMetadata(nextPageToken)));
+    }
+
+    private static async Task<Results<Ok<PublicationResponse>, JsonHttpResult<ProblemBody>>> GetAsync(
+        string organizationId,
+        string projectKey,
+        string environmentKey,
+        string version,
+        HttpContext context,
+        PublicationHistoryService history,
+        CancellationToken cancellationToken)
+    {
+        var errors = new InputErrors();
+        RouteInput.TryLocator(organizationId, projectKey, environmentKey, errors, out var locator);
+        var number = RouteInput.Version(version, errors);
+        if (errors.Any || locator is null || number is null)
+        {
+            return errors.ToResult();
+        }
+
+        if (!(await history.GetAsync(context.User.MemberId(), locator, number.Value, cancellationToken)).TryGetValue(out var publication, out var failure))
+        {
+            return Problems.From(failure);
+        }
+
+        CacheControl.Private(context.Response);
+        return TypedResults.Ok(PublicationResponse.Of(publication));
     }
 
     /// <summary>Repetir com a mesma chave e o mesmo corpo devolve a publicação original, também com 201 (ADP cap. 26).</summary>
@@ -81,6 +146,40 @@ internal static class PublicationEndpoints
         }
 
         return Problems.From(failure);
+    }
+
+    /// <summary>O token só vale na coleção para a qual foi emitido, identificada pelo path canônico.</summary>
+    private static long? BeforeVersion(
+        string? pageToken, Guid memberId, EnvironmentLocator locator, PageTokens pageTokens, InputErrors errors)
+    {
+        if (pageToken is null)
+        {
+            return null;
+        }
+
+        if (pageTokens.TryRead(pageToken, memberId, ResourcePaths.Publications(locator), out var cursor))
+        {
+            return cursor;
+        }
+
+        errors.InQuery(nameof(pageToken), "Use the nextPageToken of a page you listed in the last 60 minutes, or leave it out.");
+        return null;
+    }
+
+    private static int? PageSize(string? value, InputErrors errors)
+    {
+        if (value is null)
+        {
+            return PageRequest.DefaultSize;
+        }
+
+        if (int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var size) && size is >= 1 and <= PageRequest.MaxSize)
+        {
+            return size;
+        }
+
+        errors.InQuery("maxPageSize", $"Use an integer from 1 to {PageRequest.MaxSize}, or leave it out for {PageRequest.DefaultSize}.");
+        return null;
     }
 
     private static IdempotencyKey? IdempotencyKeyOf(string? value, InputErrors errors)

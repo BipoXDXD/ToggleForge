@@ -20,6 +20,9 @@ internal sealed class InputErrors
 
     public void MissingInBody(string pointer) => InBody(pointer, "The value is required.", ErrorTypes.MissingValue);
 
+    public void InQuery(string name, string detail) =>
+        _errors.Add(new ProblemError(ErrorTypes.InvalidValue, detail, new ProblemSource("query", Name: name)));
+
     public void InPath(string name, string detail) =>
         _errors.Add(new ProblemError(ErrorTypes.InvalidValue, detail, new ProblemSource("path", Name: name)));
 

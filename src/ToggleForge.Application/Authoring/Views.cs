@@ -28,6 +28,21 @@ public sealed record PublicationView(
     ChangeSummary? Summary,
     IReadOnlyList<PublishedFlag> Flags);
 
+public sealed record PublicationSummaryView(
+    long Version,
+    DateTimeOffset PublishedAt,
+    MemberView PublishedBy,
+    PublicationOrigin Origin,
+    long? RestoredVersion,
+    ChangeSummary? Summary)
+{
+    internal static PublicationSummaryView Of(PublicationHeader header, MemberView publisher) =>
+        new(header.Version, header.PublishedAt, publisher, header.Origin, header.RestoredVersion, header.Summary);
+}
+
+/// <summary><see cref="NextBeforeVersion"/> é nulo na última página.</summary>
+public sealed record PublicationPage(IReadOnlyList<PublicationSummaryView> Items, long? NextBeforeVersion);
+
 /// <summary>O que o SDK recebe: nada além do necessário para avaliar.</summary>
 public sealed record SnapshotView(
     ProjectKey ProjectKey, EnvironmentKey EnvironmentKey, long Version, DateTimeOffset PublishedAt, IReadOnlyList<PublishedFlag> Flags);

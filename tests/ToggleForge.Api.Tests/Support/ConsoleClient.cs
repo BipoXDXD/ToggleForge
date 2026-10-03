@@ -115,6 +115,17 @@ public sealed class ConsoleClient : IDisposable
             summary is null ? new { draftRevision } : new { draftRevision, summary },
             request => request.Headers.Add("Idempotency-Key", idempotencyKey));
 
+    /// <param name="query">Query string sem o "?", como <c>maxPageSize=2&amp;pageToken=...</c>.</param>
+    public Task<ApiResponse> ListPublicationsAsync(
+        string projectKey, string? query = null, string environmentKey = "dev", Guid? organizationId = null) =>
+        SendAsync(
+            "listPublications",
+            HttpMethod.Get,
+            $"{Paths.Environment(organizationId ?? OrganizationId, projectKey, environmentKey)}/publications{(query is null ? string.Empty : "?" + query)}");
+
+    public Task<ApiResponse> GetPublicationAsync(string projectKey, string version, Guid? organizationId = null) =>
+        SendAsync("getPublication", HttpMethod.Get, $"{Paths.Environment(organizationId ?? OrganizationId, projectKey, "dev")}/publications/{version}");
+
     public Task<ApiResponse> RollBackAsync(
         string projectKey,
         long targetVersion,
