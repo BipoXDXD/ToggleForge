@@ -28,12 +28,38 @@ public sealed class PublishingService(
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(idempotencyKey);
 
-        var attempt = new Attempt(memberId, idempotencyKey, Fingerprint(locator, command));
+        var request = new { command.ReviewedDraftRevision, Summary = command.Summary?.Value };
+        var attempt = new Attempt(memberId, idempotencyKey, Fingerprint("publishDraft", locator, request));
         return RecordAsync(
             locator,
             attempt,
             (environment, current, now, _) => Task.FromResult(
                 environment.Publish(command.ReviewedDraftRevision, command.Summary, memberId, now, current)),
+            cancellationToken);
+    }
+
+    public Task<Result<PublicationView>> RollBackAsync(
+        Guid memberId,
+        EnvironmentLocator locator,
+        RollbackCommand command,
+        IdempotencyKey idempotencyKey,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(locator);
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(idempotencyKey);
+
+        var attempt = new Attempt(memberId, idempotencyKey, Fingerprint("rollBack", locator, command));
+        return RecordAsync(
+            locator,
+            attempt,
+            async (environment, current, now, ct) => environment.RollBack(
+                await publications.FindAsync(environment.Id, command.TargetVersion, ct),
+                command.ExpectedCurrentVersion,
+                command.DiscardDraftChanges,
+                memberId,
+                now,
+                current),
             cancellationToken);
     }
 
@@ -138,15 +164,19 @@ public sealed class PublishingService(
             publication.Flags);
     }
 
-    private static string Fingerprint(EnvironmentLocator locator, PublishCommand command)
+    /// <summary>
+    /// A operação entra no fingerprint para a mesma chave não servir a publicar e a reverter. O pedido é
+    /// serializado pelo tipo concreto, então só pode ter valores primitivos.
+    /// </summary>
+    private static string Fingerprint(string operation, EnvironmentLocator locator, object request)
     {
         var canonical = JsonSerializer.Serialize(new
         {
+            Operation = operation,
             locator.OrganizationId,
             ProjectKey = locator.ProjectKey.Value,
             EnvironmentKey = locator.EnvironmentKey.Value,
-            command.ReviewedDraftRevision,
-            Summary = command.Summary?.Value,
+            Request = request,
         });
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
     }
