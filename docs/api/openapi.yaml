@@ -83,6 +83,10 @@ paths:
 
         A taken email answers 409 `email-taken`. That reveals whether an email is registered; the risk is
         accepted until email confirmation exists and is limited by the rate limit (STRIDE I4).
+
+        A password found in known data breaches is a 400 on `/password`. The check sends only the first 5
+        hex characters of the password's SHA-1 to Pwned Passwords; if that service is down, the password is
+        accepted.
       security: []
       parameters:
         - $ref: '#/components/parameters/Antiforgery'

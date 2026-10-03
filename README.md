@@ -14,7 +14,7 @@ O plano de produto está em [`ToggleForge.md`](ToggleForge.md), e as decisões d
 | Marco | Entrega | Situação |
 |---|---|---|
 | 1 — Núcleo | Avaliação booleana, contexto, rollout percentual e fallback | ✅ Concluído |
-| 2 — API persistente | Rascunho, publicação, rollback, autenticação e isolamento | 🚧 Todas as operações do contrato, o rate limit e a limpeza da idempotência prontos; falta o preparo do deploy |
+| 2 — API persistente | Rascunho, publicação, rollback, autenticação e isolamento | 🚧 Operações do contrato, rate limit, limpeza da idempotência e checagem de senha vazada prontos; falta o preparo do deploy |
 | 3 — Console | Editor, simulador, publicação e histórico (Blazor + Tailwind) | Planejado |
 | 4 — SDK e configurações | Sincronização, cache, JSON e app demonstrativo | Planejado |
 | 5 — Unity e segmentação | Adaptador, jogo simples e regras por atributos | Planejado |
