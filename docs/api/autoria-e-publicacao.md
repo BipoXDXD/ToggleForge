@@ -91,17 +91,15 @@ Simular avaliação, Publicar rascunho, Listar publicações, Ler publicação, 
 credencial, Listar credenciais, Revogar credencial e Baixar snapshot. Entrar e sair da conta vêm do
 framework de autenticação escolhido.
 
-## Pontos em aberto para o contrato
+## Decisões do contrato
 
-1. **Rollback e rascunho.** Se o rascunho tem mudanças não publicadas, reverter mexe nele? Recomendação:
-   reverter também substitui o rascunho pelo conteúdo restaurado, mas recusa se houver mudanças
-   pendentes, a menos que o Editor confirme que quer descartá-las. Sem isso, a próxima publicação
-   reaplicaria a mudança que motivou o rollback.
+1. **Rollback e rascunho.** Reverter também substitui o rascunho pelo conteúdo restaurado. Se o rascunho
+   tem mudanças não publicadas, a operação é recusada, a menos que o Editor confirme o descarte; assim a
+   próxima publicação não reaplica a mudança que motivou o rollback.
 2. **"Nada a publicar".** Publicar um rascunho idêntico à versão atual é recusado como conflito de
    estado, para o histórico não ganhar versões vazias.
 3. **Forma das ações.** Publicação e rollback têm vida própria (histórico, consulta), então viram
-   recursos nominalizados (`publications`) em vez de métodos customizados (DWA 4.7; divergência com o
-   ADP cap. 9 registrada em `~/.claude/knowledge/api-security.md`).
+   recursos nominalizados em vez de métodos customizados (ADR 0004).
 
 ## Ameaças (STRIDE)
 
@@ -116,6 +114,7 @@ framework de autenticação escolhido.
 | I1 | Segredo da credencial vaza por resposta ou log | Só o hash é guardado; segredo exibido uma vez; log com allowlist de headers | Canário semeado no segredo nunca aparece em resposta nem em log |
 | I2 | Enumeração de projetos de outras organizações | IDs imprevisíveis e a mesma resposta para "não existe" e "é de outro" | Coberto pelo teste A×B de T1 |
 | I3 | Erro expõe stack trace ou SQL | Problem Details genérico com referência opaca | `Unexpected_error_hides_internal_details` |
+| I4 | Cadastro revela se um e-mail já tem conta | **Aceito** até existir confirmação por e-mail; o rate limit por IP limita a enumeração | `Account_creation_over_the_limit_gets_429` |
 | D1 | Rascunho gigante ou corpo enorme | Limite de flags por ambiente, de ambientes por projeto e de tamanho do corpo | Testes on/off point em cada limite |
 | D2 | Polling agressivo do SDK | `ETag`/"não mudou", `Cache-Control`, rate limit por credencial com `Retry-After` | `Sdk_over_the_limit_gets_429_with_retry_after` |
 | E1 | Viewer publica ou Editor gerencia credenciais (BFLA) | Papel checado em cada operação, negado por padrão | Papel inferior em cada rota privilegiada → 403 |
