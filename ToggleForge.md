@@ -37,14 +37,14 @@ A prioridade pode mudar por interesse ou feedback. Cada feature deve ter um comp
 
 Para uma flag booleana, propõe-se `onValue` e `offValue`. Uma flag inativa retorna `offValue`; uma ativa retorna `onValue` para jogadores incluídos no rollout e `offValue` para os demais. O `defaultValue` do SDK cobre falhas de avaliação, não substitui uma configuração válida.
 
-O rollout usa um hash determinístico versionado, com codificação canônica dos campos: projeto, ambiente, flag, jogador e semente fixa. A versão da publicação não entra no hash. Assim, passar de 10% para 20% preserva os participantes já incluídos, mantendo a mesma semente e algoritmo. O percentual representa uma distribuição aproximada, não uma quantidade exata de jogadores.
+O rollout usa um hash determinístico versionado, com codificação canônica dos campos: projeto, ambiente, flag, jogador e semente fixa. A versão da publicação não entra no hash. Assim, passar de 10% para 20% preserva os participantes já incluídos, mantendo a mesma semente e algoritmo. O percentual representa uma distribuição aproximada, não uma quantidade exata de jogadores. A especificação v1 (SHA-256 truncado, percentual em basis points) está em `docs/rollout-algorithm.md` e a decisão em `docs/adr/0002-algoritmo-de-rollout-v1.md`.
 
 ## 4. Stack recomendada e alternativas
 
 | Área | Base inicial | Motivo ou alternativa |
 | --- | --- | --- |
 | Backend | C# e ASP.NET Core em .NET 10 | Controllers ou Minimal APIs conforme preferência |
-| Frontend | Blazor Web App, componentes Razor e CSS próprio | Mantém o foco em C#; React com TypeScript é uma alternativa |
+| Frontend | Blazor Web App, componentes Razor e Tailwind CSS | Decidido em `docs/adr/0003-frontend-blazor-tailwind.md`; render mode fica para o Marco 3 |
 | Persistência | EF Core com PostgreSQL | Dapper ou SQL explícito podem entrar em consultas específicas |
 | Autenticação | ASP.NET Core Identity para o painel | OIDC com provedor externo pode substituir ou complementar |
 | SDK | Núcleo em C# compatível com .NET Standard 2.1 | Adaptador Unity validado na versão e plataformas escolhidas |
@@ -190,7 +190,7 @@ A hipótese de receita é assinatura por projeto/equipe, com limites de ambiente
 
 Observar a integração com dois ou três estúdios antes de expandir: tempo até a primeira publicação útil, dificuldades, uso do rollback, continuidade e disposição de pagar. Clareza, integração em C# e comportamento offline previsível são diferenciais propostos, ainda sujeitos a validação.
 
-A próxima decisão prática é confirmar a base de frontend e iniciar o núcleo de avaliação junto de uma demonstração simples. Se outra feature motivar mais, podemos mudar a primeira entrega e atualizar este plano.
+A base de frontend foi confirmada (Blazor + Tailwind) e o núcleo de avaliação começou junto de uma demonstração simples (`samples/ToggleForge.RolloutDemo`). Se outra feature motivar mais, podemos mudar a primeira entrega e atualizar este plano.
 
 ## Referências
 
