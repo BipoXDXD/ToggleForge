@@ -88,7 +88,7 @@ public sealed class FlagEvaluatorTests
             isEnabled: true,
             onValue: false,
             offValue: true,
-            new PercentageRollout(RolloutPercentage.FromBasisPoints(basisPoints), "seed-1"));
+            new PercentageRollout(RolloutPercentage.FromBasisPoints(basisPoints), RolloutSeed.Parse("seed-1")));
 
         var result = _evaluator.EvaluateBoolean(SnapshotWith(inverted), "legacy-shop", AnyPlayer(), defaultValue: false);
 
@@ -153,7 +153,12 @@ public sealed class FlagEvaluatorTests
     }
 
     private static BooleanFlag Flag(string key, bool enabled, RolloutPercentage percentage) =>
-        new(FlagKey.Parse(key), enabled, onValue: true, offValue: false, new PercentageRollout(percentage, "seed-1"));
+        new(
+            FlagKey.Parse(key),
+            enabled,
+            onValue: true,
+            offValue: false,
+            new PercentageRollout(percentage, RolloutSeed.Parse("seed-1")));
 
     private static ConfigurationSnapshot SnapshotWith(params BooleanFlag[] flags) =>
         new(ProjectKey.Parse("studio-game"), EnvironmentKey.Parse("prod"), SnapshotVersion, flags);

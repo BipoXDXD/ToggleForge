@@ -53,6 +53,8 @@ public sealed class RolloutPercentageTests
     [InlineData("-0.01")]
     [InlineData("100.01")]
     [InlineData("12.345")]
+    [InlineData("79228162514264337593543950335")]
+    [InlineData("-79228162514264337593543950335")]
     public void FromPercent_rejects_out_of_range_or_finer_than_one_basis_point(string percent)
     {
         var value = decimal.Parse(percent, System.Globalization.CultureInfo.InvariantCulture);

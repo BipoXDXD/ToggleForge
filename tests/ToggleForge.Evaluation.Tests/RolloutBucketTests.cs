@@ -2,19 +2,16 @@ namespace ToggleForge.Evaluation.Tests;
 
 public sealed class RolloutBucketTests
 {
-    public static TheoryData<string, string, string, string, string, int> ReferenceVectors => RolloutVectors.All();
+    public static TheoryData<string, string, string, string, string, int> ReferenceVectors => RolloutVectors.Buckets();
 
     [Theory]
     [MemberData(nameof(ReferenceVectors))]
     public void Compute_matches_the_reference_vector(
         string projectKey, string environmentKey, string flagKey, string seed, string playerId, int expectedBucket)
     {
-        var bucket = RolloutBucket.Compute(
-            ProjectKey.Parse(projectKey),
-            EnvironmentKey.Parse(environmentKey),
-            FlagKey.Parse(flagKey),
-            seed,
-            PlayerId.Parse(playerId));
+        var flag = new FlagIdentity(ProjectKey.Parse(projectKey), EnvironmentKey.Parse(environmentKey), FlagKey.Parse(flagKey));
+
+        var bucket = RolloutBucket.Compute(flag, RolloutSeed.Parse(seed), PlayerId.Parse(playerId));
 
         Assert.Equal(expectedBucket, bucket);
     }
@@ -48,12 +45,22 @@ public sealed class RolloutBucketTests
         Assert.True(differentBuckets >= 990, $"Only {differentBuckets} of 1000 players changed bucket.");
     }
 
+    [Fact]
+    public void Compute_rejects_null_arguments_from_callers_without_nullable_analysis()
+    {
+        var flag = new FlagIdentity(ProjectKey.Parse("p"), EnvironmentKey.Parse("e"), FlagKey.Parse("f"));
+        var seed = RolloutSeed.Parse("seed");
+        var player = PlayerId.Parse("player");
+
+        Assert.Throws<ArgumentNullException>(() => RolloutBucket.Compute(null!, seed, player));
+        Assert.Throws<ArgumentNullException>(() => RolloutBucket.Compute(flag, null!, player));
+        Assert.Throws<ArgumentNullException>(() => RolloutBucket.Compute(flag, seed, null!));
+    }
+
     private static int Compute(string projectKey, string environmentKey, string playerId = "player") =>
         RolloutBucket.Compute(
-            ProjectKey.Parse(projectKey),
-            EnvironmentKey.Parse(environmentKey),
-            FlagKey.Parse("flag"),
-            "seed",
+            new FlagIdentity(ProjectKey.Parse(projectKey), EnvironmentKey.Parse(environmentKey), FlagKey.Parse("flag")),
+            RolloutSeed.Parse("seed"),
             PlayerId.Parse(playerId));
 
     private static IEnumerable<string> SamplePlayers(int count) =>

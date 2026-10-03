@@ -2,7 +2,8 @@ namespace ToggleForge.Evaluation.Tests;
 
 public sealed class PercentageRolloutTests
 {
-    private const string Seed = "seed-1";
+
+    private static RolloutSeed Seed { get; } = RolloutSeed.Parse("seed-1");
 
     private static FlagIdentity NewShop { get; } = new(
         ProjectKey.Parse("studio-game"), EnvironmentKey.Parse("prod"), FlagKey.Parse("new-shop"));
@@ -80,7 +81,7 @@ public sealed class PercentageRolloutTests
     public void Included_share_approximates_the_percentage(int basisPoints)
     {
         const int PlayerCount = 100_000;
-        const int ToleranceInPlayers = 1_000; // ±1 ponto percentual, > 10 desvios-padrão da binomial.
+        const int ToleranceInPlayers = 1_000; // ±1 ponto percentual: > 6 desvios-padrão da binomial no pior caso (50%).
         var rollout = new PercentageRollout(RolloutPercentage.FromBasisPoints(basisPoints), Seed);
 
         var included = SamplePlayers(PlayerCount).Count(player => rollout.Decide(NewShop, player) == TargetingDecision.Included);
@@ -105,16 +106,6 @@ public sealed class PercentageRolloutTests
     {
         // Consumidores sem nullable reference types (scripts Unity) podem passar null.
         Assert.Throws<ArgumentNullException>(() => new PercentageRollout(RolloutPercentage.All, null!));
-    }
-
-    [Theory]
-    [InlineData("")]
-    [InlineData("   ")]
-    public void Constructor_rejects_blank_seed(string seed)
-    {
-        var error = Assert.Throws<ArgumentException>(() => new PercentageRollout(RolloutPercentage.All, seed));
-
-        Assert.Equal("seed", error.ParamName);
     }
 
     private static IEnumerable<EvaluationContext> SamplePlayers(int count) =>

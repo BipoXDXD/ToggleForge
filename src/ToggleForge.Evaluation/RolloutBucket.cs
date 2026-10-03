@@ -21,16 +21,30 @@ namespace ToggleForge.Evaluation
 
         private const int HashPrefixSize = 8;
 
-        public static int Compute(
-            ProjectKey projectKey, EnvironmentKey environmentKey, FlagKey flagKey, string seed, PlayerId playerId)
+        public static int Compute(FlagIdentity flag, RolloutSeed seed, PlayerId playerId)
         {
+            if (flag is null)
+            {
+                throw new ArgumentNullException(nameof(flag));
+            }
+
             if (seed is null)
             {
                 throw new ArgumentNullException(nameof(seed));
             }
 
+            if (playerId is null)
+            {
+                throw new ArgumentNullException(nameof(playerId));
+            }
+
             var input = EncodeCanonically(
-                AlgorithmTag, projectKey.Value, environmentKey.Value, flagKey.Value, seed, playerId.Value);
+                AlgorithmTag,
+                flag.ProjectKey.Value,
+                flag.EnvironmentKey.Value,
+                flag.FlagKey.Value,
+                seed.Value,
+                playerId.Value);
 
             using var sha256 = SHA256.Create();
             var hash = sha256.ComputeHash(input);

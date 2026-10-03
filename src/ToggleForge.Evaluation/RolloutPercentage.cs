@@ -14,6 +14,8 @@ namespace ToggleForge.Evaluation
 
         private const int BasisPointsPerPercent = 100;
 
+        private const decimal MaxPercent = 100m;
+
         private RolloutPercentage(int basisPoints) => BasisPoints = basisPoints;
 
         public static RolloutPercentage None { get; } = new(0);
@@ -36,11 +38,16 @@ namespace ToggleForge.Evaluation
         /// <summary>Converte um percentual com até duas casas decimais (por exemplo, 12,5).</summary>
         public static RolloutPercentage FromPercent(decimal percent)
         {
-            var basisPoints = percent * BasisPointsPerPercent;
-            if (basisPoints != decimal.Truncate(basisPoints) || basisPoints < 0 || basisPoints > MaxBasisPoints)
+            // A faixa é checada antes de multiplicar: percentuais enormes estourariam o decimal.
+            if (percent < 0 || percent > MaxPercent)
             {
-                throw new ArgumentOutOfRangeException(
-                    nameof(percent), percent, "Expected 0 to 100 with at most two decimal places.");
+                throw InvalidPercent(percent);
+            }
+
+            var basisPoints = percent * BasisPointsPerPercent;
+            if (basisPoints != decimal.Truncate(basisPoints))
+            {
+                throw InvalidPercent(percent);
             }
 
             return new RolloutPercentage((int)basisPoints);
@@ -48,5 +55,8 @@ namespace ToggleForge.Evaluation
 
         public override string ToString() =>
             ((decimal)BasisPoints / BasisPointsPerPercent).ToString("0.##", CultureInfo.InvariantCulture) + "%";
+
+        private static ArgumentOutOfRangeException InvalidPercent(decimal percent) =>
+            new(nameof(percent), percent, "Expected 0 to 100 with at most two decimal places.");
     }
 }

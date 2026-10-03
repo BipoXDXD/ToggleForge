@@ -3,14 +3,14 @@ using ToggleForge.Evaluation;
 using ToggleForge.RolloutDemo;
 
 const int PlayerCount = 100_000;
-const string Seed = "seed-1";
 var culture = CultureInfo.GetCultureInfo("pt-BR");
 
 // Composition root: o grafo é montado à mão (Poor Man's DI); o decorator envolve o avaliador real.
 var tallying = new TallyingFlagEvaluator(new FlagEvaluator());
 var newShop = new FlagIdentity(
     ProjectKey.Parse("studio-game"), EnvironmentKey.Parse("prod"), FlagKey.Parse("new-shop"));
-var simulation = new RolloutSimulation(tallying, newShop, Seed);
+var seed = RolloutSeed.Parse("seed-1");
+var simulation = new RolloutSimulation(tallying, newShop, seed);
 
 var players = Enumerable.Range(1, PlayerCount).Select(n => PlayerId.Parse($"player-{n}")).ToList();
 RolloutPercentage[] stages =
@@ -39,7 +39,7 @@ var secondStage = simulation.Publish(version: 2, RolloutPercentage.FromPercent(2
 foreach (var sample in new[] { "player-1", "player-3", "player-8" })
 {
     var playerId = PlayerId.Parse(sample);
-    var bucket = RolloutBucket.Compute(newShop.ProjectKey, newShop.EnvironmentKey, newShop.FlagKey, Seed, playerId);
+    var bucket = RolloutBucket.Compute(newShop, seed, playerId);
     var result = tallying.EvaluateBoolean(
         secondStage, "new-shop", EvaluationContext.ForPlayer(playerId), defaultValue: false);
     Console.WriteLine(string.Create(

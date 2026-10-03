@@ -8,25 +8,15 @@ namespace ToggleForge.Evaluation
     /// </summary>
     public sealed class PercentageRollout : ITargetingRule
     {
-        public PercentageRollout(RolloutPercentage percentage, string seed)
+        public PercentageRollout(RolloutPercentage percentage, RolloutSeed seed)
         {
-            if (seed is null)
-            {
-                throw new ArgumentNullException(nameof(seed));
-            }
-
-            if (seed.Trim().Length == 0)
-            {
-                throw new ArgumentException("The rollout seed must not be blank.", nameof(seed));
-            }
-
             Percentage = percentage ?? throw new ArgumentNullException(nameof(percentage));
-            Seed = seed;
+            Seed = seed ?? throw new ArgumentNullException(nameof(seed));
         }
 
         public RolloutPercentage Percentage { get; }
 
-        public string Seed { get; }
+        public RolloutSeed Seed { get; }
 
         public TargetingDecision Decide(FlagIdentity flag, EvaluationContext context)
         {
@@ -55,7 +45,7 @@ namespace ToggleForge.Evaluation
                 return TargetingDecision.PlayerIdRequired;
             }
 
-            var bucket = RolloutBucket.Compute(flag.ProjectKey, flag.EnvironmentKey, flag.FlagKey, Seed, context.PlayerId);
+            var bucket = RolloutBucket.Compute(flag, Seed, context.PlayerId);
             return bucket < Percentage.BasisPoints ? TargetingDecision.Included : TargetingDecision.Excluded;
         }
     }

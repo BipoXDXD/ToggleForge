@@ -1,6 +1,5 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
 
 namespace ToggleForge.Evaluation
 {
@@ -22,7 +21,7 @@ namespace ToggleForge.Evaluation
 
         public static bool TryParse(string? value, [NotNullWhen(true)] out PlayerId? playerId)
         {
-            playerId = IsValid(value) ? new PlayerId(value) : null;
+            playerId = OpaqueText.IsValid(value, MaxLength) ? new PlayerId(value) : null;
             return playerId is not null;
         }
 
@@ -32,39 +31,5 @@ namespace ToggleForge.Evaluation
                 : throw new ArgumentException(InvalidValueMessage, nameof(value));
 
         public override string ToString() => Value;
-
-        private static bool IsValid([NotNullWhen(true)] string? value) =>
-            value is not null
-            && value.Length is > 0 and <= MaxLength
-            && !value.All(char.IsWhiteSpace)
-            && !value.Any(char.IsControl)
-            && IsWellFormedUtf16(value);
-
-        /// <summary>
-        /// Surrogate solto não tem codificação UTF-8: viraria U+FFFD no hash e IDs diferentes colidiriam.
-        /// </summary>
-        private static bool IsWellFormedUtf16(string value)
-        {
-            for (var index = 0; index < value.Length; index++)
-            {
-                if (char.IsLowSurrogate(value[index]))
-                {
-                    return false;
-                }
-
-                if (char.IsHighSurrogate(value[index]))
-                {
-                    var hasLowSurrogate = index + 1 < value.Length && char.IsLowSurrogate(value[index + 1]);
-                    if (!hasLowSurrogate)
-                    {
-                        return false;
-                    }
-
-                    index++;
-                }
-            }
-
-            return true;
-        }
     }
 }

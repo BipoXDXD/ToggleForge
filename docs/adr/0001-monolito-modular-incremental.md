@@ -32,8 +32,10 @@ pura: não referencia nenhum outro projeto da solução nem pacote de terceiro.
 
 ## Consequências
 
-- O núcleo compila para netstandard2.1, então APIs mais novas da BCL (`HashData`, `Span`-first, etc.)
-  não estão disponíveis. Records e `init` exigem o polyfill `IsExternalInit`.
+- O núcleo compila para netstandard2.1, então APIs mais novas da BCL (`SHA256.HashData`,
+  `Convert.ToHexString`, etc.) não estão disponíveis; `Span<T>`,
+  `stackalloc` e `BinaryPrimitives` estão. O polyfill `IsExternalInit` só será necessário se usarmos
+  `init` ou records posicionais; os records atuais têm só `{ get; }`.
 - Até o Marco 2 não há teste de arquitetura (fitness function): a ausência de referências no csproj já
   é garantida pelo compilador. O teste entra quando existirem duas camadas que possam violar a regra.
 

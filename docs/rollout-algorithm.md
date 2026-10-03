@@ -10,8 +10,15 @@ outras linguagens) deve reproduzir exatamente os vetores de
 | Campo | Formato |
 |---|---|
 | `projectKey`, `environmentKey`, `flagKey` | 1 a 64 caracteres em `[a-z0-9._-]`, começando por letra ou dígito |
-| `seed` | string da flag, fixa durante a vida da flag |
-| `playerId` | 1 a 256 caracteres UTF-16, não em branco, sem caractere de controle nem surrogate solto; **não** é normalizado nem aparado |
+| `seed` | texto opaco de 1 a 64 code units, fixo durante a vida da flag |
+| `playerId` | texto opaco de 1 a 256 code units |
+
+**Texto opaco** (seed e `playerId`): UTF-16 bem formado (sem surrogate solto), nenhum caractere de
+controle (categoria Unicode `Cc`) e pelo menos um caractere fora das categorias de separador (`Zs`, `Zl`,
+`Zp`). O valor **não** é normalizado nem aparado: `"Ação"` em NFC e em NFD caem em buckets diferentes.
+Valor fora dessa regra é inválido: o `PlayerId.TryParse` falha e o jogo (ou o SDK) avalia com
+`EvaluationContext.Anonymous`, que num rollout parcial devolve o valor padrão. Os casos
+de referência estão em `playerIdCases` e `seedCases` no arquivo de vetores.
 
 ## Cálculo
 
