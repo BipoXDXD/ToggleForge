@@ -1,0 +1,43 @@
+extends:
+  - spectral:oas
+  - '@stoplight/spectral-owasp-ruleset'
+
+rules:
+  # Nenhum consumidor roda em navegador de outra origem: o SDK é um cliente nativo e o console é servido
+  # pela mesma origem. CORS fica desligado (negado por padrão); a ADR do render mode do Marco 3 revê isso.
+  owasp:api8:2023-define-cors-origin: off
+
+  # Os headers RateLimit-* são um draft da IETF que o rate limiter do ASP.NET Core não emite. O SA 5.1
+  # pede 429 com Retry-After, cobrado pela regra abaixo em toda operação.
+  owasp:api4:2023-rate-limit: off
+  every-operation-declares-429:
+    description: Toda operação declara 429 (SA 5.1); a resposta TooManyRequests traz o Retry-After.
+    severity: error
+    given: $.paths[*][get,put,post,delete,patch]
+    then:
+      - field: responses.429
+        function: truthy
+
+overrides:
+  # pageToken é o cursor opaco de paginação do ADP cap. 21, não uma credencial.
+  - files:
+      - '../../docs/api/openapi.yaml#/components/parameters/PageToken/name'
+    rules:
+      owasp:api2:2023-no-credentials-in-url: off
+
+  # Allowlist pública da ADR 0004: obter o token antiforgery, criar conta e entrar acontecem antes de
+  # existir sessão. Nenhuma outra operação pode aparecer aqui.
+  - files:
+      - '../../docs/api/openapi.yaml#/paths/~1api~1v1~1antiforgery-token/get'
+      - '../../docs/api/openapi.yaml#/paths/~1api~1v1~1accounts/post'
+      - '../../docs/api/openapi.yaml#/paths/~1api~1v1~1session/post'
+    rules:
+      owasp:api2:2023-read-restricted: off
+      owasp:api2:2023-write-restricted: off
+      owasp:api8:2023-define-error-responses-401: off
+
+  # O token antiforgery não recebe nenhuma entrada; não há 400 possível.
+  - files:
+      - '../../docs/api/openapi.yaml#/paths/~1api~1v1~1antiforgery-token/get'
+    rules:
+      owasp:api8:2023-define-error-validation: off

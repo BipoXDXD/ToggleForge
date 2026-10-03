@@ -1,0 +1,1746 @@
+openapi: 3.1.0
+info:
+  title: ToggleForge API
+  version: 1.0.0
+  summary: Feature flags and remote configuration for game studios.
+  description: |
+    Two consumers share this contract:
+
+    - the **console** (`/api/v1`), used by studio members signed in with a session cookie;
+    - the **game SDK** (`/sdk/v1`), which downloads the published snapshot of one environment with an
+      environment credential.
+
+    Conventions (ADR 0004):
+
+    - Every operation requires authentication unless it declares `security: []`.
+    - Every console mutation requires the antiforgery token in `X-XSRF-TOKEN`.
+    - Resources of another organization answer exactly like missing ones (404).
+    - Request bodies reject unknown fields with 400.
+    - Errors use Problem Details (RFC 9457) and list every problem found in `errors`.
+    - Rollout percentages travel as basis points: 0 to 10000, where 100 means 1%.
+  contact:
+    name: ToggleForge
+    url: https://github.com/BipoXDXD/ToggleForge
+  license:
+    name: MIT
+    identifier: MIT
+servers:
+  - url: https://api.toggleforge.example
+    description: Production placeholder until the deployment exists (Marco 6).
+    x-internal: false
+security:
+  - sessionCookie: []
+tags:
+  - name: Session
+    description: Sign up, sign in and sign out of the console.
+  - name: Projects
+    description: Projects and environments of an organization.
+  - name: Draft
+    description: Flags being edited; games never see them before publication.
+  - name: Simulation
+    description: Explain what a player would get, without saving anything.
+  - name: Publications
+    description: Immutable versions that games download, and rollbacks to earlier ones.
+  - name: Credentials
+    description: Environment credentials embedded in game builds.
+  - name: SDK
+    description: Configuration download used by the game.
+
+paths:
+  /api/v1/antiforgery-token:
+    get:
+      tags: [Session]
+      operationId: getAntiforgeryToken
+      summary: Get an antiforgery token
+      description: Issues the token that every console mutation sends in `X-XSRF-TOKEN`, together with its cookie.
+      security: []
+      responses:
+        '200':
+          description: Token issued.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AntiforgeryToken'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+
+  /api/v1/accounts:
+    post:
+      tags: [Session]
+      operationId: createAccount
+      summary: Create an account
+      description: |
+        Creates a member, their organization (with the member as owner) and signs them in.
+
+        A taken email answers 409 `email-taken`. That reveals whether an email is registered; the risk is
+        accepted until email confirmation exists and is limited by the rate limit (STRIDE I4).
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Antiforgery'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountCreation'
+      responses:
+        '201':
+          description: Account created and signed in.
+          headers:
+            Location:
+              $ref: '#/components/headers/Location'
+            Set-Cookie:
+              $ref: '#/components/headers/SessionCookie'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+
+  /api/v1/session:
+    get:
+      tags: [Session]
+      operationId: getSession
+      summary: Read the current session
+      description: Returns the signed-in member and the organizations they belong to.
+      responses:
+        '200':
+          description: Current session.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+    post:
+      tags: [Session]
+      operationId: signIn
+      summary: Sign in
+      description: |
+        Wrong password and unknown email produce the same 401 response, in the same time.
+        Repeated failures lock the account temporarily and answer 429, whatever the client IP.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Antiforgery'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Credentials'
+      responses:
+        '200':
+          description: Signed in; a new session cookie replaces any previous one.
+          headers:
+            Set-Cookie:
+              $ref: '#/components/headers/SessionCookie'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+    delete:
+      tags: [Session]
+      operationId: signOut
+      summary: Sign out
+      description: Invalidates the session on the server; the old cookie is rejected afterwards.
+      parameters:
+        - $ref: '#/components/parameters/Antiforgery'
+      responses:
+        '204':
+          description: Signed out.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+
+  /api/v1/organizations/{organizationId}/projects:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+    get:
+      tags: [Projects]
+      operationId: listProjects
+      summary: List projects
+      description: |
+        Who sees what: any member of the organization sees all of its projects.
+        404 when the organization does not exist or the caller is not a member.
+      responses:
+        '200':
+          description: Projects of the organization, ordered by key. Never more than the project limit.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPrivate'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+    post:
+      tags: [Projects]
+      operationId: createProject
+      summary: Create a project
+      description: |
+        Creates the project with the environments `dev` and `prod`, each with an empty draft.
+        Owner only: other members get 403. 409 `key-taken` when the key exists in the organization;
+        409 `limit-reached` at 20 projects.
+      parameters:
+        - $ref: '#/components/parameters/Antiforgery'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectCreation'
+      responses:
+        '201':
+          description: Project created.
+          headers:
+            Location:
+              $ref: '#/components/headers/Location'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+
+  /api/v1/organizations/{organizationId}/projects/{projectKey}:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+      - $ref: '#/components/parameters/ProjectKey'
+    get:
+      tags: [Projects]
+      operationId: getProject
+      summary: Read a project
+      description: |
+        Who sees what: any member of the organization.
+        404 when the organization or the project does not exist, or the caller is not a member.
+      responses:
+        '200':
+          description: The project and its environments.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPrivate'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+
+  /api/v1/organizations/{organizationId}/projects/{projectKey}/environments:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+      - $ref: '#/components/parameters/ProjectKey'
+    post:
+      tags: [Projects]
+      operationId: createEnvironment
+      summary: Create an environment
+      description: |
+        Owner only: other members get 403. 409 `key-taken` when the key exists in the project;
+        409 `limit-reached` at 10 environments.
+      parameters:
+        - $ref: '#/components/parameters/Antiforgery'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnvironmentCreation'
+      responses:
+        '201':
+          description: Environment created with an empty draft and no publication.
+          headers:
+            Location:
+              $ref: '#/components/headers/Location'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Environment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+
+  /api/v1/organizations/{organizationId}/projects/{projectKey}/environments/{environmentKey}:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+      - $ref: '#/components/parameters/ProjectKey'
+      - $ref: '#/components/parameters/EnvironmentKey'
+    get:
+      tags: [Projects]
+      operationId: getEnvironment
+      summary: Read an environment
+      description: Who sees what, and when it answers 404, as in getProject.
+      responses:
+        '200':
+          description: The environment, its current version and whether the draft has unpublished changes.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPrivate'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Environment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+
+  /api/v1/organizations/{organizationId}/projects/{projectKey}/environments/{environmentKey}/draft:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+      - $ref: '#/components/parameters/ProjectKey'
+      - $ref: '#/components/parameters/EnvironmentKey'
+    get:
+      tags: [Draft]
+      operationId: getDraft
+      summary: Read the draft
+      description: |
+        Who sees what: any member of the organization. Lists every flag of the draft and what differs from
+        the current publication. 404 as in getProject.
+      responses:
+        '200':
+          description: The draft.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPrivate'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Draft'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+
+  /api/v1/organizations/{organizationId}/projects/{projectKey}/environments/{environmentKey}/draft/flags:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+      - $ref: '#/components/parameters/ProjectKey'
+      - $ref: '#/components/parameters/EnvironmentKey'
+    post:
+      tags: [Draft]
+      operationId: createFlag
+      summary: Create a flag in the draft
+      description: |
+        Owner and editor only: viewers get 403. The server generates the rollout seed.
+        409 `key-taken` when the key exists in the draft; 409 `limit-reached` at 200 flags.
+      parameters:
+        - $ref: '#/components/parameters/Antiforgery'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FlagCreation'
+      responses:
+        '201':
+          description: Flag created; the draft revision increases.
+          headers:
+            Location:
+              $ref: '#/components/headers/Location'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Flag'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+
+  /api/v1/organizations/{organizationId}/projects/{projectKey}/environments/{environmentKey}/draft/flags/{flagKey}:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+      - $ref: '#/components/parameters/ProjectKey'
+      - $ref: '#/components/parameters/EnvironmentKey'
+      - $ref: '#/components/parameters/FlagKey'
+    get:
+      tags: [Draft]
+      operationId: getFlag
+      summary: Read a flag of the draft
+      description: Any member of the organization. 404 also when the flag is not in the draft.
+      responses:
+        '200':
+          description: The flag; its ETag is the value for If-Match.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPrivate'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Flag'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+    patch:
+      tags: [Draft]
+      operationId: updateFlag
+      summary: Change a flag of the draft
+      description: |
+        Owner and editor only. Absent fields keep their value; `null` is rejected because no field can
+        be cleared. The key and the seed never change.
+      parameters:
+        - $ref: '#/components/parameters/Antiforgery'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: '#/components/schemas/FlagModification'
+      responses:
+        '200':
+          description: Flag changed; the draft revision increases.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Flag'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+    delete:
+      tags: [Draft]
+      operationId: deleteFlag
+      summary: Remove a flag from the draft
+      description: |
+        Owner and editor only. Games keep receiving the flag until the next publication. Recreating the
+        key later generates a new seed. A second delete answers 404.
+      parameters:
+        - $ref: '#/components/parameters/Antiforgery'
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '204':
+          description: Flag removed; the draft revision increases.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+
+  /api/v1/organizations/{organizationId}/projects/{projectKey}/environments/{environmentKey}/simulations:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+      - $ref: '#/components/parameters/ProjectKey'
+      - $ref: '#/components/parameters/EnvironmentKey'
+    post:
+      tags: [Simulation]
+      operationId: simulatePlayer
+      summary: Simulate a player
+      description: |
+        Evaluates every flag of the draft or of a publication for one player, with the same evaluator the
+        SDK uses. Nothing is saved, so the answer is 200. The player id travels in the body because
+        studios may use personal data as ids.
+        Any member of the organization. A missing version is a 400 on `version`, not a 404.
+      parameters:
+        - $ref: '#/components/parameters/Antiforgery'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SimulationRequest'
+      responses:
+        '200':
+          description: One result per flag, ordered by flag key.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Simulation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+
+  /api/v1/organizations/{organizationId}/projects/{projectKey}/environments/{environmentKey}/publications:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+      - $ref: '#/components/parameters/ProjectKey'
+      - $ref: '#/components/parameters/EnvironmentKey'
+    get:
+      tags: [Publications]
+      operationId: listPublications
+      summary: List publications
+      description: Any member of the organization. Newest first.
+      parameters:
+        - $ref: '#/components/parameters/MaxPageSize'
+        - $ref: '#/components/parameters/PageToken'
+      responses:
+        '200':
+          description: A page of publications; `nextPageToken` is absent on the last page.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPrivate'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicationList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+    post:
+      tags: [Publications]
+      operationId: publishDraft
+      summary: Publish the draft
+      description: |
+        Owner and editor only. Turns the draft into the next immutable version and makes it current for
+        games, in one transaction with the audit record.
+
+        Conflicts (409), told apart by `type`:
+        - `draft-changed`: the draft is no longer at `draftRevision`; reload and review again.
+        - `nothing-to-publish`: the draft equals the current publication.
+        - `idempotency-key-reused`: the key was used with a different body.
+
+        Repeating the request with the same key and body returns the original response.
+      parameters:
+        - $ref: '#/components/parameters/Antiforgery'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublicationRequest'
+      responses:
+        '201':
+          description: Published.
+          headers:
+            Location:
+              $ref: '#/components/headers/Location'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Publication'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+
+  /api/v1/organizations/{organizationId}/projects/{projectKey}/environments/{environmentKey}/publications/{version}:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+      - $ref: '#/components/parameters/ProjectKey'
+      - $ref: '#/components/parameters/EnvironmentKey'
+      - $ref: '#/components/parameters/Version'
+    get:
+      tags: [Publications]
+      operationId: getPublication
+      summary: Read a publication
+      description: Any member of the organization. 404 also when the version does not exist.
+      responses:
+        '200':
+          description: The publication with every flag it contains.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPrivate'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Publication'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+
+  /api/v1/organizations/{organizationId}/projects/{projectKey}/environments/{environmentKey}/rollbacks:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+      - $ref: '#/components/parameters/ProjectKey'
+      - $ref: '#/components/parameters/EnvironmentKey'
+    post:
+      tags: [Publications]
+      operationId: rollBack
+      summary: Roll back to an earlier publication
+      description: |
+        Owner and editor only. Publishes a new version with the content of `targetVersion` and replaces
+        the draft with that content. History is kept.
+
+        A `targetVersion` that does not exist is a 400 on that field. Conflicts (409), told apart by `type`:
+        - `current-version-changed`: another publication happened after `expectedCurrentVersion`.
+        - `draft-has-pending-changes`: the draft has unpublished changes and `discardDraftChanges` is false.
+        - `already-current`: `targetVersion` is the current version.
+        - `idempotency-key-reused`: the key was used with a different body.
+      parameters:
+        - $ref: '#/components/parameters/Antiforgery'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RollbackRequest'
+      responses:
+        '201':
+          description: Rolled back; `Location` points to the new publication.
+          headers:
+            Location:
+              $ref: '#/components/headers/Location'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Publication'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+
+  /api/v1/organizations/{organizationId}/projects/{projectKey}/environments/{environmentKey}/credentials:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+      - $ref: '#/components/parameters/ProjectKey'
+      - $ref: '#/components/parameters/EnvironmentKey'
+    get:
+      tags: [Credentials]
+      operationId: listCredentials
+      summary: List credentials
+      description: Owner only; other members get 403. Secrets are never returned here.
+      responses:
+        '200':
+          description: Active and revoked credentials, newest first.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPrivate'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CredentialList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+    post:
+      tags: [Credentials]
+      operationId: createCredential
+      summary: Create a credential
+      description: |
+        Owner only. The response is the only time the secret is shown; the server keeps its SHA-256.
+        409 `limit-reached` at 5 active credentials.
+      parameters:
+        - $ref: '#/components/parameters/Antiforgery'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CredentialCreation'
+      responses:
+        '201':
+          description: Credential created.
+          headers:
+            Location:
+              $ref: '#/components/headers/Location'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatedCredential'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+
+  /api/v1/organizations/{organizationId}/projects/{projectKey}/environments/{environmentKey}/credentials/{credentialId}/revocation:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+      - $ref: '#/components/parameters/ProjectKey'
+      - $ref: '#/components/parameters/EnvironmentKey'
+      - $ref: '#/components/parameters/CredentialId'
+    post:
+      tags: [Credentials]
+      operationId: revokeCredential
+      summary: Revoke a credential
+      description: |
+        Owner only. Games using the credential get 401 from the next request on. Revoking twice returns the
+        same revoked credential.
+      parameters:
+        - $ref: '#/components/parameters/Antiforgery'
+      responses:
+        '200':
+          description: The revoked credential.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Credential'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+
+  /sdk/v1/snapshot:
+    get:
+      tags: [SDK]
+      operationId: getSnapshot
+      summary: Download the published configuration
+      description: |
+        Returns the current publication of the credential's environment, with only what evaluation needs.
+        The credential is the only input: the environment is never chosen by the client.
+        Send the last ETag in If-None-Match to get 304 when nothing changed.
+      security:
+        - sdkCredential: []
+      parameters:
+        - name: If-None-Match
+          in: header
+          required: false
+          description: ETag of the snapshot the game already has.
+          schema:
+            type: string
+            maxLength: 64
+            pattern: '^(W/)?"[A-Za-z0-9._-]{1,60}"$'
+      responses:
+        '200':
+          description: The current snapshot.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPrivate'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Snapshot'
+        '304':
+          description: The game already has the current snapshot.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-ToggleForge
+      description: HttpOnly, Secure, SameSite=Strict session cookie set by signIn and createAccount.
+    sdkCredential:
+      type: http
+      scheme: bearer
+      description: Environment credential, `tfsdk_` followed by 43 base64url characters.
+
+  parameters:
+    Antiforgery:
+      name: X-XSRF-TOKEN
+      in: header
+      required: true
+      description: Token from getAntiforgeryToken. Missing or invalid → 400.
+      schema:
+        type: string
+        maxLength: 512
+        pattern: '^[A-Za-z0-9_-]+$'
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: ETag of the flag as last read. Missing → 428; stale → 412 and nothing changes.
+      schema:
+        type: string
+        maxLength: 64
+        pattern: '^(W/)?"[A-Za-z0-9._-]{1,60}"$'
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: |
+        Client-generated key, scoped to the member. Kept for 24 hours. Same key and body → the original
+        response; same key and another body → 409 `idempotency-key-reused`.
+      schema:
+        type: string
+        pattern: '^[A-Za-z0-9_-]{16,64}$'
+        minLength: 16
+        maxLength: 64
+    OrganizationId:
+      name: organizationId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/OrganizationId'
+    ProjectKey:
+      name: projectKey
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Key'
+    EnvironmentKey:
+      name: environmentKey
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Key'
+    FlagKey:
+      name: flagKey
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Key'
+    Version:
+      name: version
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Version'
+    CredentialId:
+      name: credentialId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+        maxLength: 36
+    MaxPageSize:
+      name: maxPageSize
+      in: query
+      required: false
+      description: Upper bound of items in the page; the page may hold fewer.
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        maximum: 100
+        default: 20
+    PageToken:
+      name: pageToken
+      in: query
+      required: false
+      description: Opaque token from the previous page. Tied to the caller and valid for 60 minutes.
+      schema:
+        type: string
+        maxLength: 256
+        pattern: '^[A-Za-z0-9_-]+$'
+
+  headers:
+    Location:
+      description: URL of the created resource.
+      schema:
+        type: string
+        format: uri-reference
+        maxLength: 512
+    ETag:
+      description: Current revision of the resource.
+      schema:
+        type: string
+        maxLength: 64
+        pattern: '^(W/)?"[A-Za-z0-9._-]{1,60}"$'
+    SessionCookie:
+      description: The session cookie (see the sessionCookie security scheme).
+      schema:
+        type: string
+        maxLength: 4096
+        pattern: '^__Host-ToggleForge='
+    CacheControlNoStore:
+      description: The response holds a secret or personal data and must not be stored.
+      schema:
+        type: string
+        const: no-store
+    CacheControlPrivate:
+      description: Only the caller may cache the response, and must revalidate it with the ETag.
+      schema:
+        type: string
+        const: private, no-cache
+    RetryAfter:
+      description: Seconds to wait before retrying.
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        maximum: 3600
+
+  responses:
+    BadRequest:
+      description: The request is invalid; `errors` lists every problem.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: No valid session or credential, or wrong email or password on signIn.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: The caller is a member of the organization but their role does not allow the operation.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: The resource does not exist or belongs to an organization the caller is not a member of.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: The current state does not allow the operation; `type` says why.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    PreconditionFailed:
+      description: The resource changed since the ETag sent in If-Match; nothing was changed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    PreconditionRequired:
+      description: If-Match is missing.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooManyRequests:
+      description: Rate limit exceeded.
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    UnexpectedError:
+      description: Unexpected error. The body only carries an opaque reference for support.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/UnexpectedProblem'
+
+  schemas:
+    OrganizationId:
+      type: string
+      format: uuid
+      maxLength: 36
+      description: Server-generated UUID v4.
+    Key:
+      type: string
+      minLength: 1
+      maxLength: 64
+      pattern: '^[a-z0-9][a-z0-9._-]{0,63}$'
+      description: Immutable after creation; part of the rollout hash.
+      examples: [new-shop]
+    DisplayName:
+      type: string
+      minLength: 1
+      maxLength: 100
+      pattern: '^[^\u0000-\u001F\u007F]+$'
+      description: Free text without control characters.
+    Version:
+      type: integer
+      format: int64
+      minimum: 1
+      maximum: 9007199254740991
+      description: Publication number, starting at 1 in each environment.
+    Revision:
+      type: integer
+      format: int64
+      minimum: 1
+      maximum: 9007199254740991
+      description: Draft revision; increases with every change to the draft.
+    Role:
+      type: string
+      enum: [owner, editor, viewer]
+      description: The list may grow; clients must tolerate unknown values.
+    Email:
+      type: string
+      format: email
+      minLength: 3
+      maxLength: 254
+    RolloutBasisPoints:
+      type: integer
+      format: int32
+      minimum: 0
+      maximum: 10000
+      description: Share of players included, in basis points (100 = 1%).
+    Timestamp:
+      type: string
+      format: date-time
+      maxLength: 35
+      description: UTC, ISO 8601.
+
+    AntiforgeryToken:
+      type: object
+      additionalProperties: false
+      required: [token]
+      properties:
+        token:
+          type: string
+          maxLength: 512
+          pattern: '^[A-Za-z0-9_-]+$'
+
+    AccountCreation:
+      type: object
+      additionalProperties: false
+      required: [email, password, organizationName]
+      properties:
+        email:
+          $ref: '#/components/schemas/Email'
+        password:
+          type: string
+          minLength: 12
+          maxLength: 128
+          pattern: '^[^\u0000-\u001F\u007F]+$'
+          writeOnly: true
+          description: NIST 800-63B length rules; checked against a list of breached passwords.
+        organizationName:
+          $ref: '#/components/schemas/DisplayName'
+
+    Credentials:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email:
+          $ref: '#/components/schemas/Email'
+        password:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: '^[^\u0000-\u001F\u007F]+$'
+          writeOnly: true
+
+    Session:
+      type: object
+      additionalProperties: false
+      required: [member, organizations]
+      properties:
+        member:
+          $ref: '#/components/schemas/Member'
+        organizations:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/Membership'
+
+    Member:
+      type: object
+      additionalProperties: false
+      required: [id, email]
+      properties:
+        id:
+          type: string
+          format: uuid
+          maxLength: 36
+        email:
+          $ref: '#/components/schemas/Email'
+
+    Membership:
+      type: object
+      additionalProperties: false
+      required: [organizationId, name, role]
+      properties:
+        organizationId:
+          $ref: '#/components/schemas/OrganizationId'
+        name:
+          $ref: '#/components/schemas/DisplayName'
+        role:
+          $ref: '#/components/schemas/Role'
+
+    ProjectCreation:
+      type: object
+      additionalProperties: false
+      required: [key, name]
+      properties:
+        key:
+          $ref: '#/components/schemas/Key'
+        name:
+          $ref: '#/components/schemas/DisplayName'
+
+    Project:
+      type: object
+      additionalProperties: false
+      required: [key, name, environments]
+      properties:
+        key:
+          $ref: '#/components/schemas/Key'
+        name:
+          $ref: '#/components/schemas/DisplayName'
+        environments:
+          type: array
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/Environment'
+
+    ProjectList:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/Project'
+
+    EnvironmentCreation:
+      type: object
+      additionalProperties: false
+      required: [key, name]
+      properties:
+        key:
+          $ref: '#/components/schemas/Key'
+        name:
+          $ref: '#/components/schemas/DisplayName'
+
+    Environment:
+      type: object
+      additionalProperties: false
+      required: [key, name, currentVersion, draftRevision, hasUnpublishedChanges]
+      properties:
+        key:
+          $ref: '#/components/schemas/Key'
+        name:
+          $ref: '#/components/schemas/DisplayName'
+        currentVersion:
+          description: Null until the first publication.
+          oneOf:
+            - $ref: '#/components/schemas/Version'
+            - type: 'null'
+        draftRevision:
+          $ref: '#/components/schemas/Revision'
+        hasUnpublishedChanges:
+          type: boolean
+
+    FlagCreation:
+      type: object
+      additionalProperties: false
+      required: [key, enabled, onValue, offValue, rolloutBasisPoints]
+      properties:
+        key:
+          $ref: '#/components/schemas/Key'
+        enabled:
+          type: boolean
+        onValue:
+          type: boolean
+          description: Value for players included in the rollout.
+        offValue:
+          type: boolean
+          description: Value for excluded players and when the flag is disabled.
+        rolloutBasisPoints:
+          $ref: '#/components/schemas/RolloutBasisPoints'
+
+    FlagModification:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        enabled:
+          type: boolean
+        onValue:
+          type: boolean
+        offValue:
+          type: boolean
+        rolloutBasisPoints:
+          $ref: '#/components/schemas/RolloutBasisPoints'
+
+    Flag:
+      type: object
+      additionalProperties: false
+      required: [key, enabled, onValue, offValue, rolloutBasisPoints]
+      properties:
+        key:
+          $ref: '#/components/schemas/Key'
+        enabled:
+          type: boolean
+        onValue:
+          type: boolean
+        offValue:
+          type: boolean
+        rolloutBasisPoints:
+          $ref: '#/components/schemas/RolloutBasisPoints'
+
+    DraftChange:
+      type: object
+      additionalProperties: false
+      required: [flagKey, change]
+      properties:
+        flagKey:
+          $ref: '#/components/schemas/Key'
+        change:
+          type: string
+          enum: [added, modified, removed]
+
+    Draft:
+      type: object
+      additionalProperties: false
+      required: [revision, basedOnVersion, flags, changes]
+      properties:
+        revision:
+          $ref: '#/components/schemas/Revision'
+        basedOnVersion:
+          description: Current publication the changes are compared with; null before the first one.
+          oneOf:
+            - $ref: '#/components/schemas/Version'
+            - type: 'null'
+        flags:
+          type: array
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/Flag'
+        changes:
+          type: array
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/DraftChange'
+
+    SimulationRequest:
+      type: object
+      additionalProperties: false
+      required: [playerId, source]
+      properties:
+        playerId:
+          type: string
+          minLength: 1
+          maxLength: 256
+          pattern: '^[^\u0000-\u001F\u007F-\u009F]*[^\s\u0000-\u001F\u007F-\u009F][^\u0000-\u001F\u007F-\u009F]*$'
+          description: |
+            Same rules as the SDK player id (docs/rollout-algorithm.md). The pattern covers control
+            characters and blank values; unpaired surrogates are rejected by the server.
+        source:
+          type: string
+          enum: [draft, publication]
+        version:
+          $ref: '#/components/schemas/Version'
+      if:
+        properties:
+          source:
+            const: publication
+      then:
+        required: [version]
+      else:
+        not:
+          required: [version]
+
+    Simulation:
+      type: object
+      additionalProperties: false
+      required: [source, version, results]
+      properties:
+        source:
+          type: string
+          enum: [draft, publication]
+        version:
+          oneOf:
+            - $ref: '#/components/schemas/Version'
+            - type: 'null'
+        results:
+          type: array
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/SimulationResult'
+
+    SimulationResult:
+      type: object
+      additionalProperties: false
+      required: [flagKey, value, reason, bucket]
+      properties:
+        flagKey:
+          $ref: '#/components/schemas/Key'
+        value:
+          type: boolean
+        reason:
+          type: string
+          enum: [disabled, included, excluded]
+          description: The list may grow; clients must tolerate unknown values.
+        bucket:
+          description: Player bucket (0–9999); null when the result does not depend on the player.
+          oneOf:
+            - type: integer
+              format: int32
+              minimum: 0
+              maximum: 9999
+            - type: 'null'
+
+    PublicationRequest:
+      type: object
+      additionalProperties: false
+      required: [draftRevision]
+      properties:
+        draftRevision:
+          $ref: '#/components/schemas/Revision'
+        summary:
+          type: string
+          maxLength: 280
+          pattern: '^[^\u0000-\u001F\u007F]*$'
+
+    RollbackRequest:
+      type: object
+      additionalProperties: false
+      required: [targetVersion, expectedCurrentVersion]
+      properties:
+        targetVersion:
+          $ref: '#/components/schemas/Version'
+        expectedCurrentVersion:
+          $ref: '#/components/schemas/Version'
+        discardDraftChanges:
+          type: boolean
+          default: false
+
+    PublicationFields:
+      type: object
+      description: Fields shared by PublicationSummary and Publication; open so both can extend it.
+      required: [version, publishedAt, publishedBy, origin, restoredVersion]
+      properties:
+        version:
+          $ref: '#/components/schemas/Version'
+        publishedAt:
+          $ref: '#/components/schemas/Timestamp'
+        publishedBy:
+          $ref: '#/components/schemas/Member'
+        origin:
+          type: string
+          enum: [publication, rollback]
+        restoredVersion:
+          description: Version whose content a rollback restored; null for a regular publication.
+          oneOf:
+            - $ref: '#/components/schemas/Version'
+            - type: 'null'
+        summary:
+          type: string
+          maxLength: 280
+          pattern: '^[^\u0000-\u001F\u007F]*$'
+
+    PublicationSummary:
+      allOf:
+        - $ref: '#/components/schemas/PublicationFields'
+      unevaluatedProperties: false
+
+    Publication:
+      allOf:
+        - $ref: '#/components/schemas/PublicationFields'
+        - type: object
+          required: [flags]
+          properties:
+            flags:
+              type: array
+              maxItems: 200
+              items:
+                $ref: '#/components/schemas/Flag'
+      unevaluatedProperties: false
+
+    PublicationList:
+      type: object
+      additionalProperties: false
+      required: [data, metadata]
+      properties:
+        data:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/PublicationSummary'
+        metadata:
+          type: object
+          additionalProperties: false
+          properties:
+            nextPageToken:
+              type: string
+              maxLength: 256
+              pattern: '^[A-Za-z0-9_-]+$'
+
+    CredentialCreation:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          $ref: '#/components/schemas/DisplayName'
+
+    CredentialFields:
+      type: object
+      description: Fields shared by Credential and CreatedCredential; open so both can extend it.
+      required: [id, name, prefix, createdAt, lastUsedAt, revokedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+          maxLength: 36
+        name:
+          $ref: '#/components/schemas/DisplayName'
+        prefix:
+          type: string
+          maxLength: 16
+          pattern: '^tfsdk_[A-Za-z0-9_-]{4}$'
+          description: First characters of the secret, enough to recognize it in a build.
+          examples: [tfsdk_Xy3k]
+        createdAt:
+          $ref: '#/components/schemas/Timestamp'
+        lastUsedAt:
+          oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+        revokedAt:
+          oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+
+    Credential:
+      allOf:
+        - $ref: '#/components/schemas/CredentialFields'
+      unevaluatedProperties: false
+
+    CreatedCredential:
+      allOf:
+        - $ref: '#/components/schemas/CredentialFields'
+        - type: object
+          required: [secret]
+          properties:
+            secret:
+              type: string
+              pattern: '^tfsdk_[A-Za-z0-9_-]{43}$'
+              maxLength: 49
+              description: Shown only in this response.
+      unevaluatedProperties: false
+
+    CredentialList:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/Credential'
+
+    Snapshot:
+      type: object
+      additionalProperties: false
+      required: [algorithm, projectKey, environmentKey, version, publishedAt, flags]
+      description: Public by design; the credential that downloads it ships inside the game.
+      properties:
+        algorithm:
+          type: string
+          const: toggleforge.rollout.v1
+        projectKey:
+          $ref: '#/components/schemas/Key'
+        environmentKey:
+          $ref: '#/components/schemas/Key'
+        version:
+          $ref: '#/components/schemas/Version'
+        publishedAt:
+          $ref: '#/components/schemas/Timestamp'
+        flags:
+          type: array
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/SnapshotFlag'
+
+    SnapshotFlag:
+      type: object
+      additionalProperties: false
+      required: [key, enabled, onValue, offValue, rolloutBasisPoints, seed]
+      properties:
+        key:
+          $ref: '#/components/schemas/Key'
+        enabled:
+          type: boolean
+        onValue:
+          type: boolean
+        offValue:
+          type: boolean
+        rolloutBasisPoints:
+          $ref: '#/components/schemas/RolloutBasisPoints'
+        seed:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: '^[^\u0000-\u001F\u007F-\u009F]*[^\s\u0000-\u001F\u007F-\u009F][^\u0000-\u001F\u007F-\u009F]*$'
+
+    Problem:
+      type: object
+      additionalProperties: false
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri-reference
+          maxLength: 256
+          description: Stable identifier of the problem, such as `/problems/draft-changed`.
+        title:
+          type: string
+          maxLength: 256
+          pattern: '^[^\u0000-\u001F\u007F]*$'
+        status:
+          type: integer
+          format: int32
+          minimum: 400
+          maximum: 599
+        detail:
+          type: string
+          maxLength: 1024
+          pattern: '^[^\u0000-\u001F\u007F]*$'
+          description: How to fix the problem, in words meant for the console user.
+        instance:
+          type: string
+          format: uri-reference
+          maxLength: 256
+        errors:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/ProblemError'
+
+    ProblemError:
+      type: object
+      additionalProperties: false
+      required: [type, detail, source]
+      properties:
+        type:
+          type: string
+          maxLength: 64
+          pattern: '^[A-Z][A-Z_]*$'
+          examples: [INVALID_VALUE]
+        detail:
+          type: string
+          maxLength: 512
+          pattern: '^[^\u0000-\u001F\u007F]*$'
+        source:
+          type: object
+          additionalProperties: false
+          required: [location]
+          properties:
+            location:
+              type: string
+              enum: [body, query, path, header]
+            name:
+              type: string
+              maxLength: 64
+              pattern: '^[A-Za-z0-9._-]+$'
+            pointer:
+              type: string
+              maxLength: 256
+              pattern: '^(/[^/]*)*$'
+              description: JSON Pointer into the body.
+
+    UnexpectedProblem:
+      type: object
+      additionalProperties: false
+      required: [type, title, status, instance]
+      properties:
+        type:
+          type: string
+          const: /problems/unexpected
+        title:
+          type: string
+          const: Unexpected error
+        status:
+          type: integer
+          format: int32
+          minimum: 500
+          maximum: 500
+        instance:
+          type: string
+          pattern: '^/unexpected-errors/[0-9a-f]{32}$'
+          maxLength: 49

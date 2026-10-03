@@ -48,6 +48,25 @@ jobs:
       - name: Smoke test da demo
         run: dotnet run --project samples/ToggleForge.RolloutDemo --configuration Release --no-build
 
+  api-contract:
+    name: Lint do contrato da API
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: tools/api-lint/package-lock.json
+
+      - name: Instalar Spectral
+        run: npm ci --prefix tools/api-lint
+
+      - name: Spectral com o ruleset OWASP
+        run: npm run lint --prefix tools/api-lint
+
   secrets:
     name: Scan de segredos
     runs-on: ubuntu-latest

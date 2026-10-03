@@ -1,0 +1,12 @@
+{
+  "name": "toggleforge-api-lint",
+  "private": true,
+  "description": "Lints docs/api/openapi.yaml with Spectral and the OWASP API Security ruleset.",
+  "scripts": {
+    "lint": "spectral lint ../../docs/api/openapi.yaml --ruleset .spectral.yaml --fail-severity warn"
+  },
+  "devDependencies": {
+    "@stoplight/spectral-cli": "6.17.0",
+    "@stoplight/spectral-owasp-ruleset": "2.0.1"
+  }
+}
