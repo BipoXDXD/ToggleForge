@@ -25,6 +25,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 
     public LogCapture Logs { get; } = new();
 
+    public FakePwnedPasswords PwnedPasswords { get; } = new();
+
     /// <summary>Para os testes que sobem o binário da API fora do TestServer, como os comandos de manutenção.</summary>
     public string ConnectionString => _postgres.GetConnectionString();
 
@@ -64,6 +66,10 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("RateLimits:GameClientPerMinute", Unlimited);
         builder.UseSetting("RateLimits:AnonymousPerMinute", Unlimited);
         builder.ConfigureLogging(logging => logging.ClearProviders().AddProvider(Logs));
-        builder.ConfigureTestServices(services => services.AddSingleton<TimeProvider>(new HundredNanosecondClock()));
+        builder.ConfigureTestServices(services =>
+        {
+            services.AddSingleton<TimeProvider>(new HundredNanosecondClock());
+            services.ConfigureHttpClientDefaults(http => http.ConfigurePrimaryHttpMessageHandler(PwnedPasswords.CreateHandler));
+        });
     }
 }
