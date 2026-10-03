@@ -101,7 +101,7 @@ internal sealed record CredentialResponse(
 {
     /// <summary><c>lastUsedAt</c> fica nulo até o uso pelo SDK ser registrado.</summary>
     public static CredentialResponse Of(Credential credential) =>
-        new(credential.Id, credential.Name.Value, credential.Prefix, credential.CreatedAt, LastUsedAt: null, credential.RevokedAt);
+        new(credential.Id, credential.Name.Value, credential.Prefix, credential.CreatedAt, credential.LastUsedAt, credential.RevokedAt);
 }
 
 internal sealed record CredentialListResponse(IReadOnlyList<CredentialResponse> Data);
