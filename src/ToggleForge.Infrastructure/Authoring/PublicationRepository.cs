@@ -16,6 +16,32 @@ internal sealed class PublicationRepository(AuthoringDbContext context) : IPubli
         return row is null ? null : ToDomain(row);
     }
 
+    /// <summary>Keyset pela PK (environment_id, version): cada página é uma busca no índice, sem OFFSET.</summary>
+    public async Task<IReadOnlyList<PublicationHeader>> ListAsync(
+        Guid environmentId, long? beforeVersion, int limit, CancellationToken cancellationToken)
+    {
+        var query = context.Publications.AsNoTracking().Where(p => p.EnvironmentId == environmentId);
+        if (beforeVersion is { } before)
+        {
+            query = query.Where(p => p.Version < before);
+        }
+
+        var rows = await query
+            .OrderByDescending(p => p.Version)
+            .Take(limit)
+            .Select(p => new { p.Version, p.PublishedAt, p.PublishedBy, p.Origin, p.RestoredVersion, p.Summary })
+            .ToListAsync(cancellationToken);
+        return rows
+            .Select(row => new PublicationHeader(
+                row.Version,
+                row.PublishedAt,
+                row.PublishedBy,
+                OriginOf(row.Origin),
+                row.RestoredVersion,
+                SummaryOf(row.Summary)))
+            .ToList();
+    }
+
     public async Task<IReadOnlyDictionary<Guid, Publication>> FindCurrentByEnvironmentAsync(
         Guid projectId, CancellationToken cancellationToken)
     {
@@ -63,10 +89,15 @@ internal sealed class PublicationRepository(AuthoringDbContext context) : IPubli
             row.Version,
             row.PublishedAt,
             row.PublishedBy,
-            Enum.Parse<PublicationOrigin>(row.Origin, ignoreCase: true),
+            OriginOf(row.Origin),
             row.RestoredVersion,
-            row.Summary is null ? null : ValueConverters.ParseChangeSummary(row.Summary),
+            SummaryOf(row.Summary),
             row.Flags.OrderBy(flag => flag.Key, StringComparer.Ordinal).Select(ToDomain).ToList());
+
+    private static PublicationOrigin OriginOf(string origin) => Enum.Parse<PublicationOrigin>(origin, ignoreCase: true);
+
+    private static ChangeSummary? SummaryOf(string? summary) =>
+        summary is null ? null : ValueConverters.ParseChangeSummary(summary);
 
     private static PublishedFlag ToDomain(PublicationFlagRow row) =>
         new(

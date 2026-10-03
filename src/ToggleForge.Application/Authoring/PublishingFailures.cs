@@ -8,4 +8,7 @@ public static class PublishingFailures
         FailureKind.Conflict,
         "idempotency-key-reused",
         "This Idempotency-Key was already used with a different request. Generate a new key for a new request.");
+
+    public static Failure PublicationNotFound { get; } =
+        new(FailureKind.NotFound, "not-found", "The environment has no publication with this version.");
 }
