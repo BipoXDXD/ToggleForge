@@ -65,13 +65,15 @@ módulo, toda relação é FK e as regras dos value objects se repetem em CHECK 
 | Até 5 credenciais ativas por ambiente | `pg_advisory_xact_lock` no ambiente |
 | Rascunho alterado por vários editores ao mesmo tempo | `select ... for no key update` na linha do ambiente antes de ler o rascunho; `xmin` como row version continua valendo |
 | Publicação revisada sobre um rascunho que mudou | revisão revisada comparada sob o mesmo lock → 409 `draft-changed` |
+| Rollback decidido sobre uma versão que já mudou | versão atual vista comparada sob o mesmo lock → 409 `current-version-changed` |
 
 **Publicações imutáveis normalizadas:** `publications` + `publication_flags`, sem jsonb (AoP cap. 30). O
 domínio não conhece essas linhas: o mapeamento passa por `PublicationRow`.
 
 **Idempotência** (ADP cap. 26): `idempotency_records` com PK `(member_id, key)`, o SHA-256 do JSON
-canônico do pedido (organização, projeto, ambiente, revisão, resumo) e a versão criada, gravados na mesma
-transação da publicação. A repetição é conferida já com o ambiente travado, então duas requisições
+canônico do pedido (operação, organização, projeto, ambiente e o corpo) e a versão criada, gravados na
+mesma transação da publicação. Publicar e reverter dividem a tabela: a operação no fingerprint impede que
+uma chave sirva às duas. A repetição é conferida já com o ambiente travado, então duas requisições
 simultâneas com a mesma chave geram uma publicação e a mesma resposta. A mesma chave em dois ambientes ao
 mesmo tempo esbarra na PK; a perdedora lê o registro da outra e responde 409 `idempotency-key-reused`.
 
@@ -114,7 +116,9 @@ boot de instância.
   persistência de outro.
 - `LimitTests`: corridas pela última vaga de projeto e de credencial, pela mesma chave de projeto e por
   flags criadas ao mesmo tempo.
-- `PublishingTests`: repetição, reuso da chave com outro corpo, a mesma chave por outro membro, retries
-  simultâneos, revisão desatualizada e "nada a publicar".
+- `PublishingTests` e `RollbackTests`: repetição, reuso da chave com outro corpo ou noutra operação, a
+  mesma chave por outro membro, retries simultâneos, revisão ou versão desatualizada, "nada a publicar" e
+  "já em vigor".
 - Toda resposta dos testes da API é conferida contra `docs/api/openapi.yaml` (status declarado, corpo e
-  headers), e `DefaultDenyTests` confere que cada rota registrada é uma operação do contrato.
+  headers). `DefaultDenyTests` varre as rotas registradas: cada uma é uma operação do contrato, exige
+  autenticação fora da allowlist e, se for mutação, exige o token antiforgery.
