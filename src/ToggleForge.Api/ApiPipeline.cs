@@ -31,6 +31,7 @@ internal static class ApiPipeline
         environment.MapDraftEndpoints();
         environment.MapFlagEndpoints();
         environment.MapPublicationEndpoints();
+        environment.MapSimulationEndpoints();
         environment.MapCredentialEndpoints();
 
         var sdk = app.MapGroup("/sdk/v1").RequireAuthorization(ApiServices.SdkPolicy);

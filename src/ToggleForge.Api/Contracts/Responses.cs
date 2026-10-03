@@ -141,3 +141,34 @@ internal sealed record SnapshotResponse(
                 flag.Settings.Rollout.BasisPoints,
                 flag.Seed.Value)).ToList());
 }
+
+internal static class SimulationSources
+{
+    public const string Draft = "draft";
+    public const string Publication = "publication";
+}
+
+internal sealed record SimulationResultResponse(string FlagKey, bool Value, string Reason, int? Bucket)
+{
+    public static SimulationResultResponse Of(SimulationResultView view) =>
+        new(view.FlagKey.Value, view.Value, ReasonOf(view.Reason), view.Bucket);
+
+    /// <summary>A simulação sempre tem jogador e só avalia flags que existem: os outros motivos não ocorrem.</summary>
+    private static string ReasonOf(EvaluationReason reason) =>
+        reason switch
+        {
+            EvaluationReason.Disabled => "disabled",
+            EvaluationReason.Included => "included",
+            EvaluationReason.Excluded => "excluded",
+            _ => throw new InvalidOperationException($"A simulation cannot end with reason '{reason}'."),
+        };
+}
+
+internal sealed record SimulationResponse(string Source, long? Version, IReadOnlyList<SimulationResultResponse> Results)
+{
+    public static SimulationResponse Of(SimulationView view) =>
+        new(
+            view.Version is null ? SimulationSources.Draft : SimulationSources.Publication,
+            view.Version,
+            view.Results.Select(SimulationResultResponse.Of).ToList());
+}
