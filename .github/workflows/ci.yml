@@ -30,16 +30,24 @@ jobs:
           global-json-file: global.json
 
       - name: Restore
-        run: dotnet restore ToggleForge.sln
+        run: dotnet restore ToggleForge.slnx
 
       - name: Verificar formatação
-        run: dotnet format ToggleForge.sln --verify-no-changes --no-restore
+        run: dotnet format ToggleForge.slnx --verify-no-changes --no-restore
 
       - name: Build
-        run: dotnet build ToggleForge.sln --configuration Release --no-restore
+        run: dotnet build ToggleForge.slnx --configuration Release --no-restore
 
+      # global.json seleciona o Microsoft.Testing.Platform; nesse modo a solução vai em --solution.
       - name: Testes
-        run: dotnet test ToggleForge.sln --configuration Release --no-build
+        run: dotnet test --solution ToggleForge.slnx --configuration Release --no-build
+
+      # O oráculo Python e o JSON commitado precisam concordar; os testes C# conferem o mesmo JSON.
+      - name: Verificar vetores do rollout
+        run: python3 tools/rollout-vectors/generate.py --check
+
+      - name: Smoke test da demo
+        run: dotnet run --project samples/ToggleForge.RolloutDemo --configuration Release --no-build
 
   secrets:
     name: Scan de segredos
