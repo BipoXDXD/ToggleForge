@@ -133,6 +133,24 @@ Design da API HTTP (Marco 2 em diante), três livros lidos juntos:
   - Os capítulos conceituais vencem os exemplos do próprio livro: o login do cap. 8 omite PKCE e
     `state`, e o cap. 11 loga headers inteiros. Siga o cap. 7 e nunca logue `Authorization` nem `Cookie`.
 
+Implantação:
+
+- **Kubernetes in Action, 2ª ed.**, caps. 1–9, 11, 13–15 e 18: a referência de Kubernetes. O plano
+  começa em containers no Azure Container Apps, e o Kubernetes é uma etapa própria depois
+  (`ToggleForge.md`, seção 13). Os capítulos que valem desde já estão marcados abaixo.
+  - Containers, API e modelo de objetos (caps. 1–4).
+  - Pods, ciclo de vida e health probes, namespaces e labels (caps. 5–7). Desde já: liveness não
+    depende do banco, readiness sim, e o SIGTERM encerra as requisições em andamento antes de sair.
+  - ConfigMaps, Secrets e volumes (caps. 8–9): configuração e segredos por variável de ambiente ou
+    arquivo montado, nunca na imagem.
+  - Services e Gateway API (caps. 11 e 13). O Ingress (cap. 12) fica de fora: a API dele está
+    congelada e o Gateway API a substitui.
+  - ReplicaSets e Deployments com rolling update (caps. 14–15).
+  - Jobs e CronJobs (cap. 18): as migrations rodam num Job antes do rollout, e a limpeza dos
+    registros de idempotência roda num CronJob.
+  - PersistentVolumes, StatefulSets e DaemonSets (caps. 10, 16 e 17) ficam de fora: o Postgres é
+    gerenciado, fora do cluster.
+
 Padrões iniciais: Strategy, Adapter e Decorator, aplicados onde houver variação prevista ou borda real:
 
 - Strategy: `ITargetingRule` (rollout percentual hoje; segmentação no Marco 5).

@@ -195,16 +195,8 @@ public sealed class FlagEditingTests(ApiFactory api)
         Assert.Equal(2, (await editor.Client.GetDraftAsync("space-race")).Json["revision"]!.GetValue<long>());
     }
 
-    private async Task<string> SeedInSnapshotAsync(string secret)
-    {
-        using var game = api.CreateAnonymousClient();
-        using var request = new HttpRequestMessage(HttpMethod.Get, Paths.Snapshot);
-        request.Headers.Authorization = new("Bearer", secret);
-        using var response = await game.SendAsync(request, TestContext.Current.CancellationToken);
-        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        ApiContract.Verify("getSnapshot", response, body);
-        return System.Text.Json.Nodes.JsonNode.Parse(body)!["flags"]![0]!["seed"]!.GetValue<string>();
-    }
+    private async Task<string> SeedInSnapshotAsync(string secret) =>
+        (await GameClient.GetSnapshotAsync(api, secret)).Json["flags"]![0]!["seed"]!.GetValue<string>();
 
     private sealed record EditorDraft(ConsoleClient Client, string ETag) : IDisposable
     {

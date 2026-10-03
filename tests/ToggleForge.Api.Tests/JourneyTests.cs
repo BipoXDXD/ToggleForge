@@ -62,19 +62,12 @@ public sealed class JourneyTests(ApiFactory api)
         Assert.DoesNotContain(api.Logs.Entries, entry => entry.Contains(owner.SessionCookieValue()!, StringComparison.Ordinal));
     }
 
-    private async Task<ApiResponse> GetSnapshotAsync(string secret, string? etag = null)
-    {
-        using var game = api.CreateAnonymousClient();
-        using var request = new HttpRequestMessage(HttpMethod.Get, Paths.Snapshot);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", secret);
-        if (etag is not null)
+    private Task<ApiResponse> GetSnapshotAsync(string secret, string? etag = null) =>
+        GameClient.GetSnapshotAsync(api, secret, request =>
         {
-            request.Headers.IfNoneMatch.Add(EntityTagHeaderValue.Parse(etag));
-        }
-
-        var response = await game.SendAsync(request, TestContext.Current.CancellationToken);
-        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        ApiContract.Verify("getSnapshot", response, body);
-        return new ApiResponse(response.StatusCode, response, body);
-    }
+            if (etag is not null)
+            {
+                request.Headers.IfNoneMatch.Add(EntityTagHeaderValue.Parse(etag));
+            }
+        });
 }

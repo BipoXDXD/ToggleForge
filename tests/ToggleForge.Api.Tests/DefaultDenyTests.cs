@@ -1,13 +1,19 @@
 using System.Net;
+using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using ToggleForge.Api.Tests.Support;
 
 namespace ToggleForge.Api.Tests;
 
-/// <summary>STRIDE E3: toda rota registrada exige autenticação, exceto uma allowlist explícita.</summary>
+/// <summary>
+/// Varreduras sobre todas as rotas registradas, para uma rota nova não escapar das regras gerais. STRIDE E3:
+/// toda rota exige autenticação, exceto uma allowlist explícita. STRIDE S2: toda mutação exige o token
+/// antiforgery.
+/// </summary>
 public sealed partial class DefaultDenyTests(ApiFactory api)
 {
     private static readonly string[] _publicOperations = ["createAccount", "getAntiforgeryToken", "signIn"];
@@ -42,6 +48,24 @@ public sealed partial class DefaultDenyTests(ApiFactory api)
     }
 
     [Fact]
+    public async Task Every_mutation_rejects_a_session_without_the_antiforgery_token()
+    {
+        using var member = await ConsoleClient.SignUpAsync(api);
+        var mutations = Endpoints().Where(endpoint => Methods(endpoint) is [not "GET"]).ToList();
+
+        Assert.NotEmpty(mutations);
+        foreach (var endpoint in mutations)
+        {
+            var operationId = OperationId(endpoint);
+            var response = await member.SendWithoutAntiforgeryAsync(
+                operationId, new HttpMethod(Methods(endpoint)[0]), SamplePath(endpoint), EmptyBody(endpoint));
+
+            Assert.True(response.Status == HttpStatusCode.BadRequest, $"{operationId} answered {(int)response.Status}.");
+            Assert.Equal(["X-XSRF-TOKEN"], response.ErrorSources());
+        }
+    }
+
+    [Fact]
     public void Every_route_is_an_operation_of_the_contract()
     {
         var contract = ApiContract.Operations();
@@ -63,6 +87,12 @@ public sealed partial class DefaultDenyTests(ApiFactory api)
 
     private static IReadOnlyList<string> Methods(RouteEndpoint endpoint) =>
         endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods ?? [];
+
+    /// <summary>Um corpo que o binding aceita, para a requisição chegar até a checagem do token.</summary>
+    private static StringContent? EmptyBody(RouteEndpoint endpoint) =>
+        endpoint.Metadata.GetMetadata<IAcceptsMetadata>() is { ContentTypes: [var mediaType, ..] }
+            ? new StringContent("{}", Encoding.UTF8, mediaType)
+            : null;
 
     private static string SamplePath(RouteEndpoint endpoint) =>
         RouteParameter().Replace(

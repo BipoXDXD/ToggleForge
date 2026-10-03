@@ -76,19 +76,14 @@ public sealed class SdkTests(ApiFactory api)
         Assert.Equal(expected, response.Status);
     }
 
-    private async Task<ApiResponse> GetSnapshotAsync(string? authorization, Action<HttpRequestMessage>? configure = null)
-    {
-        using var game = api.CreateAnonymousClient();
-        using var request = new HttpRequestMessage(HttpMethod.Get, Paths.Snapshot);
-        if (authorization is not null)
+    private Task<ApiResponse> GetSnapshotAsync(string? authorization, Action<HttpRequestMessage>? configure = null) =>
+        GameClient.SendAsync(api, request =>
         {
-            request.Headers.Authorization = AuthenticationHeaderValue.Parse(authorization);
-        }
+            if (authorization is not null)
+            {
+                request.Headers.Authorization = AuthenticationHeaderValue.Parse(authorization);
+            }
 
-        configure?.Invoke(request);
-        var response = await game.SendAsync(request, TestContext.Current.CancellationToken);
-        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        ApiContract.Verify("getSnapshot", response, body);
-        return new ApiResponse(response.StatusCode, response, body);
-    }
+            configure?.Invoke(request);
+        });
 }

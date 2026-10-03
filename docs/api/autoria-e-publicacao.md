@@ -95,7 +95,8 @@ framework de autenticação escolhido.
 
 1. **Rollback e rascunho.** Reverter também substitui o rascunho pelo conteúdo restaurado. Se o rascunho
    tem mudanças não publicadas, a operação é recusada, a menos que o Editor confirme o descarte; assim a
-   próxima publicação não reaplica a mudança que motivou o rollback.
+   próxima publicação não reaplica a mudança que motivou o rollback. Reverter para um conteúdo igual ao
+   atual é recusado como "já em vigor", pelo mesmo motivo da decisão 2.
 2. **"Nada a publicar".** Publicar um rascunho idêntico à versão atual é recusado como conflito de
    estado, para o histórico não ganhar versões vazias.
 3. **Forma das ações.** Publicação e rollback têm vida própria (histórico, consulta), então viram
@@ -105,18 +106,18 @@ framework de autenticação escolhido.
 
 | # | Ameaça | Mitigação | Teste que prova |
 |---|---|---|---|
-| S1 | Credencial do SDK extraída do build | Só lê o snapshot publicado de um ambiente; snapshot sem dado sensível; revogação | `Credential_of_one_environment_cannot_read_another` e `Revoked_credential_is_rejected` |
-| S2 | Sessão do painel sequestrada | Cookie `HttpOnly`/`Secure`/`SameSite`, sessão nova no login, invalidada no logout, CSRF nas mutações | `Mutation_without_csrf_token_is_rejected` e `Old_session_is_rejected_after_logout` |
+| S1 | Credencial do SDK extraída do build | Só lê o snapshot publicado de um ambiente; snapshot sem dado sensível; revogação | `A_credential_reads_only_its_own_environment`; revogação pendente (`revokeCredential`) |
+| S2 | Sessão do painel sequestrada | Cookie `HttpOnly`/`Secure`/`SameSite`, sessão nova no login, invalidada no logout, CSRF nas mutações | `Every_mutation_rejects_a_session_without_the_antiforgery_token`, `The_session_cookie_is_host_only_secure_http_only_and_strict` e `The_old_session_cookie_is_rejected_after_signing_out` |
 | T1 | Usuário altera recurso de outra organização (BOLA) | Toda consulta filtra pela organização da sessão; recurso alheio responde como inexistente | Teste A×B em cada rota: 404, corpo sem dados de A, recurso de A intacto |
 | T2 | Cliente envia seed, versão, autor ou organização (mass assignment) | DTO de entrada estrito, campo desconhecido recusado; seed e versão gerados no servidor | `Unknown_fields_are_rejected_and_nothing_is_saved` |
-| T3 | Edição concorrente sobrescreve outra (lost update) | Revisão esperada em toda alteração e na publicação | `Second_update_with_stale_revision_conflicts_and_keeps_the_first` |
-| R1 | Ninguém sabe quem publicou ou reverteu | Auditoria com autor e data na mesma transação da publicação | `Publication_records_author_in_the_same_transaction` |
-| I1 | Segredo da credencial vaza por resposta ou log | Só o hash é guardado; segredo exibido uma vez; log com allowlist de headers | Canário semeado no segredo nunca aparece em resposta nem em log |
+| T3 | Edição concorrente sobrescreve outra (lost update) | Revisão esperada em toda alteração e na publicação; versão atual vista no rollback | `Second_update_with_stale_revision_conflicts_and_keeps_the_first` e `Simultaneous_rollbacks_from_the_same_version_apply_once` |
+| R1 | Ninguém sabe quem publicou ou reverteu | Autor e data gravados na própria linha da publicação, na mesma transação | `A_published_flag_reaches_the_game_through_the_environment_credential` e `Rolling_back_publishes_the_target_content_as_a_new_version` |
+| I1 | Segredo da credencial vaza por resposta ou log | Só o hash é guardado; segredo exibido uma vez; log com allowlist de headers | `The_credential_secret_never_reaches_the_logs` (canário) |
 | I2 | Enumeração de projetos de outras organizações | IDs imprevisíveis e a mesma resposta para "não existe" e "é de outro" | Coberto pelo teste A×B de T1 |
-| I3 | Erro expõe stack trace ou SQL | Problem Details genérico com referência opaca | `Unexpected_error_hides_internal_details` |
-| I4 | Cadastro revela se um e-mail já tem conta | **Aceito** até existir confirmação por e-mail; o rate limit por IP limita a enumeração | `Account_creation_over_the_limit_gets_429` |
+| I3 | Erro expõe stack trace ou SQL | Problem Details genérico com referência opaca | `An_unexpected_error_hides_its_details_and_logs_them_under_the_reference` |
+| I4 | Cadastro revela se um e-mail já tem conta | **Aceito** até existir confirmação por e-mail; o rate limit por IP limita a enumeração | Pendente com o rate limiter global |
 | D1 | Rascunho gigante ou corpo enorme | Limite de flags por ambiente, de ambientes por projeto e de tamanho do corpo | Testes on/off point em cada limite |
-| D2 | Polling agressivo do SDK | `ETag`/"não mudou", `Cache-Control`, rate limit por credencial com `Retry-After` | `Sdk_over_the_limit_gets_429_with_retry_after` |
+| D2 | Polling agressivo do SDK | `ETag`/"não mudou", `Cache-Control`, rate limit por credencial com `Retry-After` | `The_game_gets_304_while_the_snapshot_is_unchanged`; rate limit pendente |
 | E1 | Viewer publica ou Editor gerencia credenciais (BFLA) | Papel checado em cada operação, negado por padrão | Papel inferior em cada rota privilegiada → 403 |
-| E2 | Retry duplica uma publicação | Chave de idempotência por (usuário, chave) com fingerprint do conteúdo e reserva atômica | Mesma chave e conteúdo → mesma resposta; conteúdo diferente → conflito; duas simultâneas → uma versão |
-| E3 | Rota nova esquecida sem autenticação | Autenticação exigida por padrão, rotas públicas numa allowlist | Teste que enumera as rotas e exige 401 fora da allowlist |
+| E2 | Retry duplica uma publicação ou um rollback | Chave de idempotência por (usuário, chave) com fingerprint da operação e do pedido, conferida com o ambiente travado | `PublishingTests` e `RollbackTests`: mesma chave e pedido → mesma resposta; pedido diferente → conflito; simultâneas → uma versão |
+| E3 | Rota nova esquecida sem autenticação | Autenticação exigida por padrão, rotas públicas numa allowlist | `Only_the_allowlisted_operations_are_public` e `Every_other_route_answers_401_without_credentials` |

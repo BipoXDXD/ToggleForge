@@ -729,7 +729,8 @@ paths:
         A `targetVersion` that does not exist is a 400 on that field. Conflicts (409), told apart by `type`:
         - `current-version-changed`: another publication happened after `expectedCurrentVersion`.
         - `draft-has-pending-changes`: the draft has unpublished changes and `discardDraftChanges` is false.
-        - `already-current`: `targetVersion` is the current version.
+        - `already-current`: the current version already has the content of `targetVersion` (it may be
+          `targetVersion` itself, or an earlier rollback to it).
         - `idempotency-key-reused`: the key was used with a different body.
       parameters:
         - $ref: '#/components/parameters/Antiforgery'
