@@ -9,6 +9,7 @@ if (string.IsNullOrWhiteSpace(connectionString))
 }
 
 builder.Services.AddToggleForgeApi(connectionString);
+builder.AddToggleForgeDataProtection();
 var app = builder.Build();
 
 if (await MaintenanceCommands.TryRunAsync(app, args))
