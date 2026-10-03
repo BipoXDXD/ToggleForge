@@ -5,6 +5,12 @@ public sealed class Credential
 {
     public const int MaxActivePerEnvironment = 5;
 
+    /// <summary>
+    /// Precisão do último uso: o polling do SDK grava no máximo um uso por credencial a cada janela, em vez de
+    /// uma escrita por download.
+    /// </summary>
+    public static readonly TimeSpan UsePrecision = TimeSpan.FromMinutes(5);
+
     private Credential(
         Guid id,
         Guid environmentId,
@@ -37,7 +43,13 @@ public sealed class Credential
 
     public DateTimeOffset? RevokedAt { get; private set; }
 
+    /// <summary>Último download do snapshot gravado, com a precisão de <see cref="UsePrecision"/>; nulo se nunca usada.</summary>
+    public DateTimeOffset? LastUsedAt { get; private set; }
+
     public bool IsActive => RevokedAt is null;
+
+    /// <summary>Um uso em <paramref name="now"/> só é gravado se o último gravado já saiu da janela de precisão.</summary>
+    public bool IsUseWorthRecording(DateTimeOffset now) => LastUsedAt is null || LastUsedAt < now - UsePrecision;
 
     /// <summary>
     /// O segredo só existe neste retorno; a credencial guarda apenas o hash.
