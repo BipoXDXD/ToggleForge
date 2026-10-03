@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Http.Resilience;
 using Npgsql;
 using ToggleForge.Application.Access;
 using ToggleForge.Application.Authoring;
@@ -23,7 +24,14 @@ public static class InfrastructureServices
 
         services.AddIdentityCore<IdentityUser<Guid>>(ConfigureIdentity)
             .AddEntityFrameworkStores<AccessDbContext>()
-            .AddSignInManager();
+            .AddSignInManager()
+            .AddPasswordValidator<BreachedPasswordValidator>();
+        services.AddHttpClient<PwnedPasswordsClient>(client =>
+            {
+                client.BaseAddress = PwnedPasswordsClient.BaseAddress;
+                client.DefaultRequestHeaders.UserAgent.ParseAdd("ToggleForge");
+            })
+            .AddStandardResilienceHandler(ConfigurePwnedPasswordsResilience);
 
         services.AddScoped<IMembershipDirectory, MembershipDirectory>();
         services.AddScoped<IAccountRegistry, AccountRegistry>();
@@ -60,7 +68,16 @@ public static class InfrastructureServices
             .UseSnakeCaseNamingConvention();
     }
 
-    /// <summary>Regras de senha do NIST 800-63B: tamanho mínimo, sem exigência de composição.</summary>
+    /// <summary>O cadastro espera no máximo 2 segundos pelo Pwned Passwords; depois segue sem a checagem (ADR 0007).</summary>
+    private static void ConfigurePwnedPasswordsResilience(HttpStandardResilienceOptions options)
+    {
+        options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(2);
+        options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(1);
+        options.Retry.MaxRetryAttempts = 1;
+        options.Retry.Delay = TimeSpan.FromMilliseconds(200);
+    }
+
+    /// <summary>Regras de senha do NIST 800-63B: tamanho mínimo, sem exigência de composição, sem senha vazada.</summary>
     private static void ConfigureIdentity(IdentityOptions options)
     {
         options.Password.RequiredLength = 12;
