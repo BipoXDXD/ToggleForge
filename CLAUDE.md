@@ -13,6 +13,7 @@ dotnet format ToggleForge.slnx --verify-no-changes
 python3 tools/rollout-vectors/generate.py              # regenera os vetores do rollout
 python3 tools/rollout-vectors/generate.py --check      # confere o JSON commitado (roda no CI)
 dotnet run --project samples/ToggleForge.RolloutDemo
+npm ci --prefix tools/api-lint && npm run lint --prefix tools/api-lint   # Spectral + OWASP na spec
 ```
 
 ## Layout
@@ -22,6 +23,8 @@ dotnet run --project samples/ToggleForge.RolloutDemo
 - `tests/`: um projeto de teste por projeto de produção; asserts do próprio xUnit.
 - `samples/`: demonstrações executáveis.
 - `tools/rollout-vectors`: oráculo Python do algoritmo de rollout (ADR 0002).
+- `docs/api`: canvas de capacidades, ameaças e o contrato `openapi.yaml` (ADR 0004).
+- `tools/api-lint`: Spectral com o ruleset OWASP; cada regra desligada tem a justificativa ao lado.
 
 ## Referências de design
 

@@ -8,3 +8,6 @@ riderModule.iml
 .codex/
 .serena/
 .DS_Store
+
+# Node (tools/api-lint)
+node_modules/
