@@ -16,21 +16,9 @@ public sealed class CredentialService(
     public async Task<Result<IssuedCredential>> CreateAsync(
         Guid memberId, EnvironmentLocator locator, DisplayName name, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(locator);
-
-        if (!(await access.FindRoleAsync(memberId, locator.OrganizationId, cancellationToken)).TryGetValue(out var role, out var failure))
+        if (!(await FindAdministeredEnvironmentAsync(memberId, locator, cancellationToken)).TryGetValue(out var environmentId, out var failure))
         {
             return failure;
-        }
-
-        if (await environments.FindIdAsync(locator, cancellationToken) is not { } environmentId)
-        {
-            return AccessFailures.NotFound;
-        }
-
-        if (MemberAccess.Require(role, RolePermissions.CanAdminister) is { } forbidden)
-        {
-            return forbidden;
         }
 
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
@@ -45,5 +33,24 @@ public sealed class CredentialService(
         await unitOfWork.SaveOrFailAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return issued;
+    }
+
+    /// <summary>Credenciais são do Owner: 404 para quem não é da organização, 403 para os outros papéis.</summary>
+    private async Task<Result<Guid>> FindAdministeredEnvironmentAsync(
+        Guid memberId, EnvironmentLocator locator, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(locator);
+
+        if (!(await access.FindRoleAsync(memberId, locator.OrganizationId, cancellationToken)).TryGetValue(out var role, out var failure))
+        {
+            return failure;
+        }
+
+        if (await environments.FindIdAsync(locator, cancellationToken) is not { } environmentId)
+        {
+            return AccessFailures.NotFound;
+        }
+
+        return MemberAccess.Require(role, RolePermissions.CanAdminister) is { } forbidden ? forbidden : environmentId;
     }
 }
