@@ -5,6 +5,7 @@ namespace ToggleForge.Domain.Authoring;
 public sealed class Project
 {
     public const int MaxPerOrganization = 20;
+    public const int MaxEnvironments = 10;
 
     private Project(Guid id, Guid organizationId, ProjectKey key, DisplayName name)
     {
@@ -43,6 +44,30 @@ public sealed class Project
             ProjectEnvironment.Create(project.Id, EnvironmentKey.Parse("prod"), DefaultName("Production")),
         ];
         return new NewProject(project, environments);
+    }
+
+    /// <summary>
+    /// Ambiente novo, com o rascunho vazio e sem publicação. <paramref name="existingKeys"/> são as chaves
+    /// atuais do projeto, lidas sob lock.
+    /// </summary>
+    public Result<ProjectEnvironment> CreateEnvironment(
+        EnvironmentKey key, DisplayName name, IReadOnlyCollection<EnvironmentKey> existingKeys)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(existingKeys);
+
+        if (existingKeys.Contains(key))
+        {
+            return AuthoringFailures.EnvironmentKeyTaken;
+        }
+
+        if (existingKeys.Count >= MaxEnvironments)
+        {
+            return AuthoringFailures.EnvironmentLimitReached;
+        }
+
+        return ProjectEnvironment.Create(Id, key, name);
     }
 
     private static DisplayName DefaultName(string value) =>
