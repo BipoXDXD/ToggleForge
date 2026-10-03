@@ -13,6 +13,7 @@ public sealed class RoleTests(ApiFactory api)
         { "viewer", "updateFlag" },
         { "viewer", "deleteFlag" },
         { "viewer", "publishDraft" },
+        { "viewer", "rollBack" },
         { "viewer", "createCredential" },
         { "editor", "createProject" },
         { "editor", "createCredential" },
@@ -34,6 +35,7 @@ public sealed class RoleTests(ApiFactory api)
             "updateFlag" => await member.UpdateFlagAsync("space-race", "new-shop", $"\"{revision}\"", """{"enabled":false}""", owner.OrganizationId),
             "deleteFlag" => await member.DeleteFlagAsync("space-race", "new-shop", $"\"{revision}\"", owner.OrganizationId),
             "publishDraft" => await member.PublishAsync("space-race", revision, ConsoleClient.NewIdempotencyKey(), organizationId: owner.OrganizationId),
+            "rollBack" => await member.RollBackAsync("space-race", 1, 1, ConsoleClient.NewIdempotencyKey(), organizationId: owner.OrganizationId),
             "createCredential" => await member.CreateCredentialAsync("space-race", organizationId: owner.OrganizationId),
             _ => throw new ArgumentOutOfRangeException(nameof(operation), operation, "Unknown operation."),
         };

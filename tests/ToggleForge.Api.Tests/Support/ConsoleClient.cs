@@ -115,6 +115,22 @@ public sealed class ConsoleClient : IDisposable
             summary is null ? new { draftRevision } : new { draftRevision, summary },
             request => request.Headers.Add("Idempotency-Key", idempotencyKey));
 
+    public Task<ApiResponse> RollBackAsync(
+        string projectKey,
+        long targetVersion,
+        long expectedCurrentVersion,
+        string idempotencyKey,
+        bool? discardDraftChanges = null,
+        Guid? organizationId = null) =>
+        SendAsync(
+            "rollBack",
+            HttpMethod.Post,
+            $"{Paths.Environment(organizationId ?? OrganizationId, projectKey, "dev")}/rollbacks",
+            discardDraftChanges is null
+                ? new { targetVersion, expectedCurrentVersion }
+                : new { targetVersion, expectedCurrentVersion, discardDraftChanges },
+            request => request.Headers.Add("Idempotency-Key", idempotencyKey));
+
     public Task<ApiResponse> CreateCredentialAsync(string projectKey, string environmentKey = "dev", Guid? organizationId = null) =>
         SendAsync(
             "createCredential",
@@ -159,9 +175,12 @@ public sealed class ConsoleClient : IDisposable
         return await ReceiveAsync(operationId, await _http.SendAsync(request, TestContext.Current.CancellationToken));
     }
 
-    public async Task<ApiResponse> SendWithoutAntiforgeryAsync(string operationId, HttpMethod method, string path, object body)
+    public Task<ApiResponse> SendWithoutAntiforgeryAsync(string operationId, HttpMethod method, string path, object body) =>
+        SendWithoutAntiforgeryAsync(operationId, method, path, JsonContent.Create(body));
+
+    public async Task<ApiResponse> SendWithoutAntiforgeryAsync(string operationId, HttpMethod method, string path, HttpContent? content)
     {
-        using var request = new HttpRequestMessage(method, path) { Content = JsonContent.Create(body) };
+        using var request = new HttpRequestMessage(method, path) { Content = content };
         return await ReceiveAsync(operationId, await _http.SendAsync(request, TestContext.Current.CancellationToken));
     }
 

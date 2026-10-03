@@ -7,7 +7,7 @@ namespace ToggleForge.Api.Tests;
 public sealed class IsolationTests(ApiFactory api)
 {
     public static TheoryData<string> Operations =>
-        ["getProject", "createProject", "getDraft", "createFlag", "getFlag", "updateFlag", "deleteFlag", "publishDraft", "createCredential"];
+        ["getProject", "createProject", "getDraft", "createFlag", "getFlag", "updateFlag", "deleteFlag", "publishDraft", "rollBack", "createCredential"];
 
     [Theory]
     [MemberData(nameof(Operations))]
@@ -52,6 +52,7 @@ public sealed class IsolationTests(ApiFactory api)
             "updateFlag" => client.UpdateFlagAsync("space-race", "new-shop", $"\"{revision}\"", """{"enabled":false}""", organizationId),
             "deleteFlag" => client.DeleteFlagAsync("space-race", "new-shop", $"\"{revision}\"", organizationId),
             "publishDraft" => client.PublishAsync("space-race", revision, ConsoleClient.NewIdempotencyKey(), organizationId: organizationId),
+            "rollBack" => client.RollBackAsync("space-race", 1, 1, ConsoleClient.NewIdempotencyKey(), organizationId: organizationId),
             "createCredential" => client.CreateCredentialAsync("space-race", organizationId: organizationId),
             _ => throw new ArgumentOutOfRangeException(nameof(operation), operation, "Unknown operation."),
         };
