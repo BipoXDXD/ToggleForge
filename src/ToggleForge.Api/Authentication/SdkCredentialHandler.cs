@@ -36,6 +36,7 @@ internal sealed class SdkCredentialHandler(
             return AuthenticateResult.Fail("Invalid credential.");
         }
 
+        await snapshots.RecordUseAsync(credential, Context.RequestAborted);
         var identity = new ClaimsIdentity(
             [new Claim(EnvironmentClaim, credential.EnvironmentId.ToString()), new Claim(CredentialClaim, credential.Id.ToString())],
             SchemeName);

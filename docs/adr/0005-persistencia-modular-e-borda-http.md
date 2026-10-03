@@ -115,8 +115,14 @@ boot de instância. A limpeza da idempotência segue o mesmo modelo (`Maintenanc
   Apps), apaga os mais velhos num `DELETE` só. Entre o vencimento e a passagem do job, uma chave vencida
   ainda é lembrada; o contrato só garante o mínimo. A tabela não tem índice em `created_at`: com
   publicações feitas à mão, ela é pequena, e o índice espera uma medição.
-- `lastUsedAt` da credencial ainda não é atualizado; atualizar a cada download do SDK seria uma escrita
-  por requisição e pede um desenho próprio (amostragem ou buffer).
+- `lastUsedAt` da credencial tem precisão de 5 minutos, para o polling do SDK não virar uma escrita por
+  download. Foi a escolha do usuário, entre três opções: escrever a cada download, juntar num buffer
+  gravado de tempos em tempos ou o UPDATE condicional.
+  - A credencial carregada na autenticação diz se o último uso já saiu da janela; dentro dela, nem há
+    ida ao banco.
+  - Fora da janela, um `UPDATE ... where last_used_at is null or last_used_at < now - 5 min` repete a
+    regra, então réplicas que disputam a mesma janela gravam uma vez só.
+  - Nenhum uso se perde num crash, ao contrário do buffer.
 - O Data Protection guarda as chaves no perfil do usuário e não as compartilha entre instâncias. Antes do
   deploy, as chaves precisam de um repositório comum e protegido (banco ou blob com cofre), senão cookies e
   tokens de página emitidos por uma instância falham em outra ou depois de um restart.
@@ -135,6 +141,8 @@ boot de instância. A limpeza da idempotência segue o mesmo modelo (`Maintenanc
 - `PublishingTests` e `RollbackTests`: repetição, reuso da chave com outro corpo ou noutra operação, a
   mesma chave por outro membro, retries simultâneos, revisão ou versão desatualizada, "nada a publicar" e
   "já em vigor".
+- `CredentialUsageTests`: credencial nunca usada, primeiro download e a janela de 5 minutos (5:00 não
+  grava, 5:00 mais 1 µs grava).
 - `CredentialTests`: credencial revogada recusada na requisição seguinte, revogações simultâneas com o mesmo
   instante, vaga liberada pela revogação e o teto da lista (45 e 46 revogadas).
 - `PublicationHistoryTests`: páginas na fronteira do tamanho (4 e 5 versões em páginas de 2), token de outro

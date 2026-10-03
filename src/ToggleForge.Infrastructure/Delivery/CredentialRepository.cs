@@ -38,4 +38,12 @@ internal sealed class CredentialRepository(DeliveryDbContext context) : ICredent
         context.Credentials.SingleOrDefaultAsync(c => c.Id == credentialId && c.EnvironmentId == environmentId, cancellationToken);
 
     public void Add(Credential credential) => context.Credentials.Add(credential);
+
+    public Task RecordUseAsync(Guid credentialId, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        var windowStart = now - Credential.UsePrecision;
+        return context.Credentials
+            .Where(c => c.Id == credentialId && (c.LastUsedAt == null || c.LastUsedAt < windowStart))
+            .ExecuteUpdateAsync(update => update.SetProperty(c => c.LastUsedAt, now), cancellationToken);
+    }
 }

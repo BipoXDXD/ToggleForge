@@ -37,6 +37,10 @@ namespace ToggleForge.Infrastructure.Delivery.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("environment_id");
 
+                    b.Property<DateTimeOffset?>("LastUsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_used_at");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text")
@@ -68,6 +72,8 @@ namespace ToggleForge.Infrastructure.Delivery.Migrations
 
                     b.ToTable("credentials", "delivery", t =>
                         {
+                            t.HasCheckConstraint("ck_credentials_last_used_after_creation", "last_used_at >= created_at");
+
                             t.HasCheckConstraint("ck_credentials_name", "char_length(name) between 1 and 100");
 
                             t.HasCheckConstraint("ck_credentials_prefix", "prefix ~ '^tfsdk_[A-Za-z0-9_-]{4}$'");

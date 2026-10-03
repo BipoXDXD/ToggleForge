@@ -24,6 +24,7 @@ internal sealed class DeliveryDbContext(DbContextOptions<DeliveryDbContext> opti
                 table.HasCheckConstraint("ck_credentials_name", SqlChecks.DisplayName("name"));
                 table.HasCheckConstraint("ck_credentials_prefix", "prefix ~ '^tfsdk_[A-Za-z0-9_-]{4}$'");
                 table.HasCheckConstraint("ck_credentials_secret_hash", "secret_hash ~ '^[0-9a-f]{64}$'");
+                table.HasCheckConstraint("ck_credentials_last_used_after_creation", "last_used_at >= created_at");
             });
             credential.HasKey(c => c.Id);
             credential.Property(c => c.Id).ValueGeneratedNever();
@@ -33,6 +34,7 @@ internal sealed class DeliveryDbContext(DbContextOptions<DeliveryDbContext> opti
             credential.Property(c => c.SecretHash);
             credential.Property(c => c.CreatedAt);
             credential.Property(c => c.RevokedAt);
+            credential.Property(c => c.LastUsedAt);
             credential.HasIndex(c => c.SecretHash).IsUnique();
             credential.HasIndex(c => c.EnvironmentId);
         });
