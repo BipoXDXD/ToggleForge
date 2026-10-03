@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 
 namespace ToggleForge.Evaluation
 {
@@ -10,6 +11,10 @@ namespace ToggleForge.Evaluation
     public sealed record PlayerId
     {
         public const int MaxLength = 256;
+
+        private const string InvalidValueMessage =
+            "A player id must have 1 to 256 characters, not be blank "
+            + "and contain no control characters or unpaired surrogates.";
 
         private PlayerId(string value) => Value = value;
 
@@ -24,31 +29,42 @@ namespace ToggleForge.Evaluation
         public static PlayerId Parse(string value) =>
             TryParse(value, out var playerId)
                 ? playerId
-                : throw new ArgumentException(
-                    "A player id must have 1 to 256 characters, not be blank and contain no control characters.",
-                    nameof(value));
+                : throw new ArgumentException(InvalidValueMessage, nameof(value));
 
         public override string ToString() => Value;
 
-        private static bool IsValid([NotNullWhen(true)] string? value)
-        {
-            if (value is null || value.Length == 0 || value.Length > MaxLength)
-            {
-                return false;
-            }
+        private static bool IsValid([NotNullWhen(true)] string? value) =>
+            value is not null
+            && value.Length is > 0 and <= MaxLength
+            && !value.All(char.IsWhiteSpace)
+            && !value.Any(char.IsControl)
+            && IsWellFormedUtf16(value);
 
-            var hasVisibleCharacter = false;
-            foreach (var character in value)
+        /// <summary>
+        /// Surrogate solto não tem codificação UTF-8: viraria U+FFFD no hash e IDs diferentes colidiriam.
+        /// </summary>
+        private static bool IsWellFormedUtf16(string value)
+        {
+            for (var index = 0; index < value.Length; index++)
             {
-                if (char.IsControl(character))
+                if (char.IsLowSurrogate(value[index]))
                 {
                     return false;
                 }
 
-                hasVisibleCharacter |= !char.IsWhiteSpace(character);
+                if (char.IsHighSurrogate(value[index]))
+                {
+                    var hasLowSurrogate = index + 1 < value.Length && char.IsLowSurrogate(value[index + 1]);
+                    if (!hasLowSurrogate)
+                    {
+                        return false;
+                    }
+
+                    index++;
+                }
             }
 
-            return hasVisibleCharacter;
+            return true;
         }
     }
 }

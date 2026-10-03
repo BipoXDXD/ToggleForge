@@ -40,6 +40,16 @@ public sealed class PlayerIdTests
         Assert.Null(playerId);
     }
 
+    // Fora de [InlineData]: atributos guardam strings em UTF-8, o que trocaria o surrogate por U+FFFD.
+    public static TheoryData<string> UnpairedSurrogates => new() { "player\uD800", "\uDC00player", "player\uDE00\uD83C" };
+
+    [Theory]
+    [MemberData(nameof(UnpairedSurrogates))]
+    public void TryParse_rejects_unpaired_surrogates_because_they_have_no_UTF8_encoding(string value)
+    {
+        Assert.False(PlayerId.TryParse(value, out _));
+    }
+
     [Fact]
     public void Parse_throws_ArgumentException_for_invalid_identifier()
     {

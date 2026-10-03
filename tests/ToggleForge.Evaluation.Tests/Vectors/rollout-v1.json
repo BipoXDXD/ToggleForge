@@ -1,0 +1,214 @@
+{
+  "algorithm": "toggleforge.rollout.v1",
+  "bucketCount": 10000,
+  "vectors": [
+    {
+      "projectKey": "studio-game",
+      "environmentKey": "prod",
+      "flagKey": "new-shop",
+      "seed": "seed-1",
+      "playerId": "player-1",
+      "bucket": 7370
+    },
+    {
+      "projectKey": "studio-game",
+      "environmentKey": "prod",
+      "flagKey": "new-shop",
+      "seed": "seed-1",
+      "playerId": "player-2",
+      "bucket": 1738
+    },
+    {
+      "projectKey": "studio-game",
+      "environmentKey": "prod",
+      "flagKey": "new-shop",
+      "seed": "seed-1",
+      "playerId": "player-3",
+      "bucket": 142
+    },
+    {
+      "projectKey": "studio-game",
+      "environmentKey": "prod",
+      "flagKey": "new-shop",
+      "seed": "seed-1",
+      "playerId": "player-4",
+      "bucket": 497
+    },
+    {
+      "projectKey": "studio-game",
+      "environmentKey": "prod",
+      "flagKey": "new-shop",
+      "seed": "seed-1",
+      "playerId": "player-5",
+      "bucket": 467
+    },
+    {
+      "projectKey": "studio-game",
+      "environmentKey": "prod",
+      "flagKey": "new-shop",
+      "seed": "seed-1",
+      "playerId": "player-6",
+      "bucket": 6330
+    },
+    {
+      "projectKey": "studio-game",
+      "environmentKey": "prod",
+      "flagKey": "new-shop",
+      "seed": "seed-1",
+      "playerId": "player-7",
+      "bucket": 4428
+    },
+    {
+      "projectKey": "studio-game",
+      "environmentKey": "prod",
+      "flagKey": "new-shop",
+      "seed": "seed-1",
+      "playerId": "player-8",
+      "bucket": 2256
+    },
+    {
+      "projectKey": "studio-game",
+      "environmentKey": "prod",
+      "flagKey": "new-shop",
+      "seed": "seed-1",
+      "playerId": "player-9",
+      "bucket": 4127
+    },
+    {
+      "projectKey": "studio-game",
+      "environmentKey": "prod",
+      "flagKey": "new-shop",
+      "seed": "seed-1",
+      "playerId": "player-10",
+      "bucket": 2378
+    },
+    {
+      "projectKey": "studio-game",
+      "environmentKey": "staging",
+      "flagKey": "new-shop",
+      "seed": "seed-1",
+      "playerId": "player-1",
+      "bucket": 4421
+    },
+    {
+      "projectKey": "studio-game",
+      "environmentKey": "prod",
+      "flagKey": "new-shop",
+      "seed": "seed-2",
+      "playerId": "player-1",
+      "bucket": 3952
+    },
+    {
+      "projectKey": "studio-game",
+      "environmentKey": "prod",
+      "flagKey": "battle.pass_v2",
+      "seed": "seed-1",
+      "playerId": "player-1",
+      "bucket": 6685
+    },
+    {
+      "projectKey": "other-game",
+      "environmentKey": "prod",
+      "flagKey": "new-shop",
+      "seed": "seed-1",
+      "playerId": "player-1",
+      "bucket": 9017
+    },
+    {
+      "projectKey": "ab",
+      "environmentKey": "c",
+      "flagKey": "flag",
+      "seed": "seed",
+      "playerId": "player",
+      "bucket": 3395
+    },
+    {
+      "projectKey": "a",
+      "environmentKey": "bc",
+      "flagKey": "flag",
+      "seed": "seed",
+      "playerId": "player",
+      "bucket": 8377
+    },
+    {
+      "projectKey": "studio-game",
+      "environmentKey": "prod",
+      "flagKey": "new-shop",
+      "seed": "seed-1",
+      "playerId": "Jogador Ação",
+      "bucket": 5594
+    },
+    {
+      "projectKey": "studio-game",
+      "environmentKey": "prod",
+      "flagKey": "new-shop",
+      "seed": "seed-1",
+      "playerId": "Jogador Ação",
+      "bucket": 6906
+    },
+    {
+      "projectKey": "studio-game",
+      "environmentKey": "prod",
+      "flagKey": "new-shop",
+      "seed": "seed-1",
+      "playerId": "プレイヤー",
+      "bucket": 8954
+    },
+    {
+      "projectKey": "studio-game",
+      "environmentKey": "prod",
+      "flagKey": "new-shop",
+      "seed": "seed-1",
+      "playerId": "gamer 🎮",
+      "bucket": 1072
+    },
+    {
+      "projectKey": "studio-game",
+      "environmentKey": "prod",
+      "flagKey": "new-shop",
+      "seed": "seed-1",
+      "playerId": "  padded  ",
+      "bucket": 9904
+    },
+    {
+      "projectKey": "studio-game",
+      "environmentKey": "prod",
+      "flagKey": "new-shop",
+      "seed": "seed-1",
+      "playerId": "550e8400-e29b-41d4-a716-446655440000",
+      "bucket": 967
+    },
+    {
+      "projectKey": "studio-game",
+      "environmentKey": "prod",
+      "flagKey": "new-shop",
+      "seed": "seed-1",
+      "playerId": "PLAYER-1",
+      "bucket": 9736
+    },
+    {
+      "projectKey": "a",
+      "environmentKey": "b",
+      "flagKey": "c",
+      "seed": "d",
+      "playerId": "e",
+      "bucket": 8547
+    },
+    {
+      "projectKey": "kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk",
+      "environmentKey": "kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk",
+      "flagKey": "kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk",
+      "seed": "seed-1",
+      "playerId": "pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp",
+      "bucket": 7749
+    },
+    {
+      "projectKey": "studio-game",
+      "environmentKey": "prod",
+      "flagKey": "new-shop",
+      "seed": "ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss",
+      "playerId": "player-1",
+      "bucket": 9110
+    }
+  ]
+}
