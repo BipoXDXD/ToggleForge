@@ -14,13 +14,28 @@ python3 tools/rollout-vectors/generate.py              # regenera os vetores do 
 python3 tools/rollout-vectors/generate.py --check      # confere o JSON commitado (roda no CI)
 dotnet run --project samples/ToggleForge.RolloutDemo
 npm ci --prefix tools/api-lint && npm run lint --prefix tools/api-lint   # Spectral + OWASP na spec
+dotnet run --project src/ToggleForge.Api -- --migrate  # aplica as migrations; precisa de ConnectionStrings:ToggleForge
+dotnet run --project src/ToggleForge.Api               # sobe a API
+dotnet tool restore && dotnet ef migrations add <Nome> --context <Módulo>DbContext \
+  --project src/ToggleForge.Infrastructure --startup-project src/ToggleForge.Api --output-dir <Módulo>/Migrations
 ```
+
+Os testes da API sobem um Postgres com Testcontainers: o Docker precisa estar rodando. A connection string
+local vai em User Secrets (`dotnet user-secrets set ConnectionStrings:ToggleForge "..." --project
+src/ToggleForge.Api`), nunca no repositório.
 
 ## Layout
 
 - `src/ToggleForge.Evaluation`: núcleo de avaliação. netstandard2.1 com C# 9 (compatível com Unity),
   sem `PackageReference` nem `ProjectReference` (ADR 0001).
-- `tests/`: um projeto de teste por projeto de produção; asserts do próprio xUnit.
+- `src/ToggleForge.Domain`, `Application`, `Infrastructure` e `Api`: a API do Marco 2, em camadas, com os
+  módulos Access, Authoring e Delivery como namespaces; cada módulo tem o próprio `DbContext` e schema
+  (ADR 0005). Migrations em `Infrastructure/<Módulo>/Migrations`, geradas e nunca editadas à mão.
+- `tests/`: asserts do próprio xUnit.
+  - `Evaluation.Tests` e `Domain.Tests`: regras de negócio, sem banco nem mock.
+  - `Api.Tests`: integração ponta a ponta com Postgres real, cobrindo `Application`, `Infrastructure` e
+    `Api`. Toda resposta é conferida contra `docs/api/openapi.yaml`, e os testes de arquitetura guardam as
+    fronteiras entre módulos. Cada teste cria as próprias contas e organizações, sem dados compartilhados.
 - `samples/`: demonstrações executáveis.
 - `tools/rollout-vectors`: oráculo Python do algoritmo de rollout (ADR 0002).
 - `docs/api`: canvas de capacidades, ameaças e o contrato `openapi.yaml` (ADR 0004).

@@ -14,7 +14,7 @@ O plano de produto está em [`ToggleForge.md`](ToggleForge.md), e as decisões d
 | Marco | Entrega | Situação |
 |---|---|---|
 | 1 — Núcleo | Avaliação booleana, contexto, rollout percentual e fallback | ✅ Concluído |
-| 2 — API persistente | Rascunho, publicação, rollback, autenticação e isolamento | Próximo |
+| 2 — API persistente | Rascunho, publicação, rollback, autenticação e isolamento | 🚧 Tracer bullet pronto |
 | 3 — Console | Editor, simulador, publicação e histórico (Blazor + Tailwind) | Planejado |
 | 4 — SDK e configurações | Sincronização, cache, JSON e app demonstrativo | Planejado |
 | 5 — Unity e segmentação | Adaptador, jogo simples e regras por atributos | Planejado |
@@ -55,9 +55,24 @@ v2      20%         19.954     19,95%  0
 v3      50%         50.250     50,25%  0
 ```
 
+## API (Marco 2)
+
+O contrato é [`docs/api/openapi.yaml`](docs/api/openapi.yaml) (OpenAPI 3.1), escrito antes do código. O
+tracer bullet cobre o caminho inteiro: criar conta, criar projeto, criar flag no rascunho, publicar com
+`Idempotency-Key`, emitir a credencial do ambiente e baixar o snapshot no jogo, com `ETag` e 304. O
+console usa cookie de sessão com token antiforgery; o jogo, `Authorization: Bearer tfsdk_...`.
+
+```bash
+dotnet user-secrets set ConnectionStrings:ToggleForge "Host=localhost;Database=toggleforge;Username=..." \
+  --project src/ToggleForge.Api
+dotnet run --project src/ToggleForge.Api -- --migrate
+dotnet run --project src/ToggleForge.Api
+```
+
 ## Desenvolvimento
 
-Requisitos: .NET SDK 10.0.400 e Python 3.9+ (só para o oráculo de vetores).
+Requisitos: .NET SDK 10.0.400, Docker (os testes da API sobem um Postgres com Testcontainers) e
+Python 3.9+ (só para o oráculo de vetores).
 
 ```bash
 dotnet build ToggleForge.slnx -c Release
@@ -69,10 +84,17 @@ python3 tools/rollout-vectors/generate.py --check
 | Pasta | Conteúdo |
 |---|---|
 | `src/ToggleForge.Evaluation` | Núcleo de avaliação: netstandard2.1, C# 9, sem dependências (compatível com Unity) |
+| `src/ToggleForge.Domain` | Regras de Access, Authoring e Delivery, sem framework |
+| `src/ToggleForge.Application` | Casos de uso e portas de persistência |
+| `src/ToggleForge.Infrastructure` | EF Core e Npgsql, um `DbContext` e um schema por módulo, Identity |
+| `src/ToggleForge.Api` | Minimal APIs, autenticação e Problem Details |
 | `tests/ToggleForge.Evaluation.Tests` | xUnit v3 no Microsoft.Testing.Platform, com vetores de referência |
+| `tests/ToggleForge.Domain.Tests` | Regras de negócio, sem banco |
+| `tests/ToggleForge.Api.Tests` | Integração com Postgres real, contrato, segurança e arquitetura |
 | `samples/ToggleForge.RolloutDemo` | Simulação de rollout em etapas |
 | `tools/rollout-vectors` | Implementação de referência do algoritmo em Python |
-| `docs/` | ADRs e especificação do rollout |
+| `docs/` | ADRs, especificação do rollout, contrato e ameaças da API |
+| `tools/api-lint` | Spectral com o ruleset OWASP sobre o contrato |
 
-O CI roda formatação, build com avisos tratados como erro, testes, checagem dos vetores, smoke test da
-demo e scan de segredos (gitleaks).
+O CI roda formatação, build com avisos tratados como erro, testes (inclusive os da API, com Postgres em
+container), checagem dos vetores, smoke test da demo, lint do contrato e scan de segredos (gitleaks).
