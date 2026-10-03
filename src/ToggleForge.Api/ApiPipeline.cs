@@ -20,6 +20,7 @@ internal static class ApiPipeline
         app.UseStatusCodePages(context => EmptyErrorAsProblem(context.HttpContext));
         app.UseAuthentication();
         app.UseAuthorization();
+        app.UseRateLimiter();
 
         var api = app.MapGroup("/api/v1");
         api.MapSessionEndpoints();
