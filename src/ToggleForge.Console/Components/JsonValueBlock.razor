@@ -4,7 +4,7 @@
 *@
 @inject IJSRuntime JS
 
-<details class="group">
+<details class="group" open="@Open">
     <summary class="cursor-pointer list-none rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 [&::-webkit-details-marker]:hidden">
         <span class="inline-block text-slate-500 transition-transform group-open:rotate-90" aria-hidden="true">▶</span>
         <ValuePreview Value="Value" TextSize="text-sm" />
@@ -37,6 +37,10 @@
 
     [Parameter, EditorRequired]
     public FlagValue Value { get; set; } = FlagValue.Null;
+
+    /// <summary>Começa aberto: na leitura de uma flag o valor é o assunto da página, não um detalhe da tabela.</summary>
+    [Parameter]
+    public bool Open { get; set; }
 
     private string CopyMessage => _copy switch
     {

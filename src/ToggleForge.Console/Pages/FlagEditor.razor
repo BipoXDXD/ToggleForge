@@ -21,11 +21,6 @@
         <FlagTypeBadge Type="@shown.Value.Type" />
     }
 </div>
-@if (_flag is { Value.IsJson: true })
-{
-    <p data-testid="type-fixed" class="mt-1 text-sm text-slate-600">The type is fixed: games already read this flag as JSON.</p>
-}
-
 @if (_gone is not null)
 {
     <p class="mt-6 text-sm text-slate-600">@_gone</p>
@@ -53,18 +48,24 @@ else if (!CanEdit(_flag.Value))
         </p>
     }
     <dl class="mt-6 grid max-w-4xl grid-cols-[auto_1fr] gap-x-6 gap-y-3 text-sm">
+        <dt class="text-slate-500">Type</dt>
+        <dd><FlagTypeBadge Type="@_flag.Value.Type" /></dd>
         <dt class="text-slate-500">State</dt>
         <dd>@(_flag.Value.Enabled ? "Enabled" : "Disabled")</dd>
         <dt class="text-slate-500">Rollout</dt>
         <dd>@RolloutShare.Format(_flag.Value.RolloutBasisPoints)</dd>
         <dt class="text-slate-500">Value for included players</dt>
-        <dd class="min-w-0">@if (_flag.Value.Type == FlagTypes.Boolean){<span class="font-mono">@_flag.Value.OnValue.Text</span>}else{<pre class="@ValueBlock">@_flag.Value.OnValue.Indented()</pre>}</dd>
+        <dd class="min-w-0">@if (_flag.Value.Type == FlagTypes.Boolean){<span class="font-mono">@_flag.Value.OnValue.Text</span>}else{<JsonValueBlock Value="_flag.Value.OnValue" Open="true" />}</dd>
         <dt class="text-slate-500">Value for everyone else</dt>
-        <dd class="min-w-0">@if (_flag.Value.Type == FlagTypes.Boolean){<span class="font-mono">@_flag.Value.OffValue.Text</span>}else{<pre class="@ValueBlock">@_flag.Value.OffValue.Indented()</pre>}</dd>
+        <dd class="min-w-0">@if (_flag.Value.Type == FlagTypes.Boolean){<span class="font-mono">@_flag.Value.OffValue.Text</span>}else{<JsonValueBlock Value="_flag.Value.OffValue" Open="true" />}</dd>
     </dl>
 }
 else
 {
+    @if (_flag.Value.IsJson)
+    {
+        <p data-testid="type-fixed" class="mt-1 text-sm text-slate-600">The type is fixed: games already read this flag as JSON.</p>
+    }
     <form class="@(_flag.Value.IsJson ? "max-w-4xl" : "max-w-lg") mt-6 space-y-4" @onsubmit="SaveAsync" @onsubmit:preventDefault>
         <label class="flex items-center gap-2">
             <input type="checkbox" @bind="_edit.Enabled" class="h-4 w-4 rounded border-slate-500" />
@@ -147,10 +148,6 @@ else
 
 @code {
     private const string JsonBudgetReached = "/problems/json-budget-reached";
-
-    // Na leitura, o valor que não é booleano vai indentado num bloco que rola de lado; o booleano, como o JSON o escreve.
-    private const string ValueBlock =
-        "overflow-x-auto rounded-md border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-[13px] leading-5 text-slate-800";
 
     private static readonly Problem _nothingToSave = new(
         "/problems/nothing-to-save", "Nothing to save", 400, "Nothing to save: these are already the values in the draft.");

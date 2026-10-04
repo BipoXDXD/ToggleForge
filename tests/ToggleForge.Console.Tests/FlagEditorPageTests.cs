@@ -160,8 +160,9 @@ public sealed class FlagEditorPageTests
         var page = RenderEditor(console);
 
         Assert.Empty(page.FindAll("form"));
-        Assert.Equal(["Enabled", "10%", "true", "false"], page.FindAll("dd").Select(value => value.TextContent));
-        Assert.Empty(page.FindAll("dd pre"));
+        Assert.Equal(["Type", "State", "Rollout", "Value for included players", "Value for everyone else"], page.FindAll("dt").Select(term => term.TextContent));
+        Assert.Equal(["boolean", "Enabled", "10%", "true", "false"], page.FindAll("dd").Select(value => value.TextContent));
+        Assert.Empty(page.FindAll("dd details"));
     }
 
     [Fact]
@@ -175,6 +176,7 @@ public sealed class FlagEditorPageTests
 
         page.WaitForAssertion(() => Assert.Contains("This flag is not in the draft.", page.Markup, StringComparison.Ordinal));
         Assert.Empty(page.FindAll("form"));
+        Assert.Empty(page.FindAll("[data-testid=type-fixed]"));
     }
 
     [Fact]
@@ -640,7 +642,10 @@ public sealed class FlagEditorPageTests
 
         Assert.Empty(page.FindAll("form"));
         Assert.Empty(page.FindAll("textarea"));
-        Assert.Equal(["Enabled", "100%", IndentedOnValue, "{\n  \"discount\": 0\n}"], page.FindAll("dd").Select(value => value.TextContent));
+        Assert.Equal(["JSON", "Enabled"], page.FindAll("dd").Take(2).Select(value => value.TextContent));
+        Assert.Equal([IndentedOnValue, "{\n  \"discount\": 0\n}"], page.FindAll("dd details[open] pre").Select(value => value.TextContent));
+        Assert.Equal(2, page.FindAll("dd details button").Count(button => button.TextContent.Trim() == "Copy"));
+        Assert.Empty(page.FindAll("[data-testid=type-fixed]"));
     }
 
     [Fact]
@@ -686,7 +691,8 @@ public sealed class FlagEditorPageTests
         Assert.Empty(page.FindAll("form"));
         Assert.Equal("remote-config", page.Find("[data-testid=flag-type]").TextContent);
         Assert.Equal("This console cannot edit flags of type \"remote-config\" yet.", page.Find("[data-testid=unknown-type]").TextContent);
-        Assert.Equal(["Enabled", "100%", "{\n  \"a\": 1\n}", "{\n  \"a\": 0\n}"], page.FindAll("dd").Select(value => value.TextContent));
+        Assert.Equal("remote-config", page.Find("dd [data-testid=flag-type]").TextContent);
+        Assert.Equal(["{\n  \"a\": 1\n}", "{\n  \"a\": 0\n}"], page.FindAll("dd details pre").Select(value => value.TextContent));
     }
 
     [Fact]
