@@ -13,6 +13,9 @@
     <a href="@HistoryPath" class="hover:text-slate-700 hover:underline">History</a>
 </nav>
 
+@* Fora do carregamento: o FocusOnNavigate só acha o h1 que existe no primeiro render. *@
+<h1 class="mt-2 text-2xl font-semibold tracking-tight">Version @Version</h1>
+
 @if (_loadProblem is not null)
 {
     <div class="mt-6"><ProblemMessage Problem="_loadProblem" /></div>
@@ -23,7 +26,6 @@ else if (_environment is null || _publication is null)
 }
 else
 {
-    <h1 class="mt-2 text-2xl font-semibold tracking-tight">Version @_publication.Version</h1>
     <p class="mt-1 text-sm text-slate-600">
         @PublicationText.Origin(_publication.Origin, _publication.RestoredVersion) by @_publication.PublishedBy.Email,
         @PublicationText.When(_publication.PublishedAt)

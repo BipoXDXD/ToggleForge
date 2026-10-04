@@ -10,6 +10,8 @@
     <a href="@DraftPath" class="hover:text-slate-700 hover:underline">@ProjectKey · @EnvironmentKey</a>
 </nav>
 
+<h1 class="mt-2 text-2xl font-semibold tracking-tight">Simulate a player in @EnvironmentText.Title(_environment, EnvironmentKey)</h1>
+
 @if (_loadProblem is not null)
 {
     <div class="mt-6"><ProblemMessage Problem="_loadProblem" /></div>
@@ -20,7 +22,6 @@ else if (_environment is null)
 }
 else
 {
-    <h1 class="mt-2 text-2xl font-semibold tracking-tight">Simulate a player in @_environment.Name (@EnvironmentKey)</h1>
     <p class="mt-1 text-sm text-slate-600">
         Evaluates every flag for one player with the same code the SDK runs. Nothing is saved.
     </p>

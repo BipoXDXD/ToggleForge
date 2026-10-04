@@ -11,6 +11,9 @@
     <span class="text-slate-700">@(_project?.Name ?? ProjectKey)</span>
 </nav>
 
+@* Fora do carregamento: o FocusOnNavigate só acha o h1 que existe no primeiro render. *@
+<h1 class="mt-2 text-2xl font-semibold tracking-tight">@(_project?.Name ?? ProjectKey)</h1>
+
 @if (_loadProblem is not null)
 {
     <div class="mt-6"><ProblemMessage Problem="_loadProblem" /></div>
@@ -21,8 +24,6 @@ else if (_project is null || _draft is null)
 }
 else
 {
-    <h1 class="mt-2 text-2xl font-semibold tracking-tight">@_project.Name</h1>
-
     <div class="mt-6 flex gap-2 border-b border-slate-200" role="tablist" aria-label="Environments">
         @foreach (var environment in _project.Environments)
         {

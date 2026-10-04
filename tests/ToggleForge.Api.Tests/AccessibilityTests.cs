@@ -37,6 +37,8 @@ public sealed class AccessibilityTests(ApiFactory api, Browser browser) : IClass
 
     public static TheoryData<string> JourneyPages => ["sign-in", "projects", "draft", "publish", "history", "version", "simulator"];
 
+    public static TheoryData<string> PagesReachedByClicking => ["draft", "publish", "history", "version", "simulator"];
+
     public ValueTask InitializeAsync()
     {
         _host = new BrowserHost(api);
@@ -70,6 +72,20 @@ public sealed class AccessibilityTests(ApiFactory api, Browser browser) : IClass
         var result = await page.RunAxe(PinnedRules());
 
         Assert.True(result.Violations.Length == 0, Describe(result.Violations));
+    }
+
+    [Theory]
+    [MemberData(nameof(PagesReachedByClicking))]
+    public async Task Navigating_to_a_page_moves_focus_to_its_heading(string journeyPage)
+    {
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        await PrepareJourneyDataAsync(owner);
+        await using var context = await browser.NewContextAsync(Host.Address);
+        var page = await context.NewPageAsync();
+
+        await ClickThroughToAsync(page, owner, journeyPage);
+
+        await Expect(page.Locator("h1")).ToBeFocusedAsync();
     }
 
     public async ValueTask DisposeAsync()
@@ -130,6 +146,43 @@ public sealed class AccessibilityTests(ApiFactory api, Browser browser) : IClass
             await page.GetByLabel("Player ID").FillAsync("player-42");
             await page.GetByRole(AriaRole.Button, new() { Name = "Simulate" }).ClickAsync();
             await Expect(page.Locator("#simulation-results")).ToBeVisibleAsync();
+        }
+    }
+
+    /// <summary>Chega à página pelos links do console, como quem navega, e não pelo endereço.</summary>
+    private static async Task ClickThroughToAsync(IPage page, ConsoleClient owner, string journeyPage)
+    {
+        if (journeyPage == "draft")
+        {
+            await page.GotoAsync($"/organizations/{owner.OrganizationId}/projects");
+            await ConsolePages.SignInAsync(page, owner.Email, ConsoleClient.Password);
+            await page.GetByRole(AriaRole.Link, new() { Name = "Project space-race" }).ClickAsync();
+            await Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Draft flags" })).ToBeVisibleAsync();
+            return;
+        }
+
+        await ConsolePages.OpenDraftAsync(page, owner);
+        switch (journeyPage)
+        {
+            case "publish":
+                await page.GetByRole(AriaRole.Link, new() { Name = "Review and publish" }).ClickAsync();
+                await Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Publish to Development (dev)" })).ToBeVisibleAsync();
+                break;
+            case "history":
+                await page.GetByRole(AriaRole.Link, new() { Name = "History" }).ClickAsync();
+                await Expect(page.GetByRole(AriaRole.Heading, new() { Name = "History of Development (dev)" })).ToBeVisibleAsync();
+                break;
+            case "version":
+                await page.GetByRole(AriaRole.Link, new() { Name = "History" }).ClickAsync();
+                await page.GetByRole(AriaRole.Link, new() { Name = "Version 1" }).ClickAsync();
+                await Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Version 1", Exact = true })).ToBeVisibleAsync();
+                break;
+            case "simulator":
+                await page.GetByRole(AriaRole.Link, new() { Name = "Simulate" }).ClickAsync();
+                await Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Simulate a player in Development (dev)" })).ToBeVisibleAsync();
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(journeyPage), journeyPage, "Unknown journey page.");
         }
     }
 }
