@@ -2488,6 +2488,13 @@ workspace do plano. Este adendo **prevalece** sobre o texto acima quando os dois
 - **M13:** `A_patch_that_only_reformats_a_json_value_keeps_the_etag`: PATCH com `{ "a" : 1 }` numa flag com `{"a":1}`
   → 200, mesma ETag e `hasUnpublishedChanges` igual.
 
+- **Tipo próprio para o teto JSON (decisão do coordenador, a partir do estudo de design da Fatia 6):** o 409 dos
+  128 KiB passa a ter `type` `/problems/json-budget-reached` (código de `AuthoringFailures.JsonBudgetReached`), e o
+  das 200 flags continua `limit-reached`. A mudança é aditiva, e o console explica o erro sem precisar adivinhar.
+  - Atualize as descrições de `createFlag`/`updateFlag` no `openapi.yaml`, a ADR 0011 (seção "Contrato") e o canvas
+    (decisão 4).
+  - Os testes 14, 15 e o de corrida em `LimitTests` passam a afirmar `/problems/json-budget-reached`.
+
 ### Tarefa 10: revisão final e PR da Fatia 4
 
 - [ ] Rebase sobre o `main`, suíte inteira (`dotnet test --solution ToggleForge.slnx -c Release`) e lint da spec.
