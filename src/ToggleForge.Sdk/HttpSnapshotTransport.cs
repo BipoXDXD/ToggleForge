@@ -12,11 +12,16 @@ namespace ToggleForge.Sdk
     /// <summary>O transporte do .NET, com um <see cref="HttpClient"/> que aponta para a API do ToggleForge.</summary>
     public sealed class HttpSnapshotTransport : ISnapshotTransport
     {
-        // Um snapshot tem no máximo 200 flags de poucas centenas de bytes cada; o teto barra uma resposta que
-        // não é snapshot (um proxy no caminho, por exemplo) antes de ela ocupar a memória do jogo.
+        // Um snapshot tem no máximo 200 flags, e os valores JSON de um ambiente somam no máximo 128 KiB (ADR 0011):
+        // um snapshot de verdade fica bem abaixo de 1 MiB. O teto barra uma resposta que não é snapshot (um proxy
+        // no caminho, por exemplo) antes de ela ocupar a memória do jogo.
         internal const int MaxSnapshotBytes = 1024 * 1024;
 
         private const string SnapshotPath = "sdk/v1/snapshot";
+
+        private const int ReadChunkBytes = 16 * 1024;
+
+        private static readonly TimeSpan _defaultTimeout = TimeSpan.FromSeconds(10);
 
         private readonly HttpClient _http;
         private readonly SdkCredential _credential;
@@ -31,7 +36,7 @@ namespace ToggleForge.Sdk
         {
             _http = http ?? throw new ArgumentNullException(nameof(http));
             _credential = credential ?? throw new ArgumentNullException(nameof(credential));
-            _timeout = timeout ?? TimeSpan.FromSeconds(10);
+            _timeout = timeout ?? _defaultTimeout;
         }
 
         public async Task<SnapshotResponse> GetAsync(string? eTag, CancellationToken cancellationToken)
@@ -91,7 +96,7 @@ namespace ToggleForge.Sdk
 
             using var stream = await content.ReadAsStreamAsync().ConfigureAwait(false);
             using var buffer = new MemoryStream();
-            var chunk = new byte[16 * 1024];
+            var chunk = new byte[ReadChunkBytes];
             int read;
             while ((read = await stream.ReadAsync(chunk.AsMemory(), cancellationToken).ConfigureAwait(false)) > 0)
             {
