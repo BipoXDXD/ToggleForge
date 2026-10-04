@@ -23,8 +23,9 @@ namespace ToggleForge.Evaluation
         /// Avalia a flag fora de um snapshot, como a simulação do rascunho; o resultado sai sem versão.
         /// </summary>
         /// <param name="parse">
-        /// Converte o texto JSON escolhido. Não é chamado quando o resultado é o valor padrão; se lançar exceção,
-        /// volta <paramref name="defaultValue"/> com <see cref="EvaluationReason.InvalidValue"/>.
+        /// Converte o texto JSON escolhido. Não é chamado quando falta o ID do jogador num rollout parcial; se lançar
+        /// exceção, volta <paramref name="defaultValue"/> com <see cref="EvaluationReason.InvalidValue"/>. Roda a cada
+        /// avaliação: guarde o resultado em vez de avaliar a cada frame.
         /// </param>
         public EvaluationResult<T> Evaluate<T>(
             ProjectKey projectKey, EnvironmentKey environmentKey, EvaluationContext context, T defaultValue, Func<string, T> parse)
