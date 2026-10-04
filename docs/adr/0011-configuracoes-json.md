@@ -117,14 +117,22 @@ O que já existe e pesa na escolha:
   quebrou (`DuplicateKey`, e não um erro genérico de leitura).
 - `FlagSettings` troca `OnValue`/`OffValue` por um par fechado, `BooleanValues` ou `JsonValues`. O tipo
   deriva do par. Um `FlagChange` com valor de outro tipo é uma falha de domínio, não uma exceção.
-- `ProjectEnvironment` impõe os 128 KiB na criação e na edição, como já impõe as 200 flags. A concorrência
-  continua protegida pela revisão do rascunho.
+- `ProjectEnvironment` impõe os 128 KiB na criação e na edição, como já impõe as 200 flags. Quem impede dois
+  editores de passarem juntos do teto é a trava do ambiente na edição (`FOR NO KEY UPDATE`, em
+  `FindForUpdateAsync`), não a revisão do rascunho: a ETag é por flag, e duas edições em flags diferentes não
+  conflitam por ela.
 - **Banco:** `type text not null` com CHECK `in ('boolean', 'json')`, `on_value`/`off_value` do tipo `json` (com
   `true`/`false` nas flags booleanas) e um CHECK de que uma flag `boolean` só guarda `true`/`false`. O Postgres não
   converte `boolean` em `json` sem `USING`, e as migrations são geradas, nunca editadas à mão: por escolha do
   usuário, a migration `Initial` do módulo Authoring foi **regenerada**, e todo banco de desenvolvimento existente
   é recriado (`drop` e `--migrate`). Só é aceitável porque ainda não há produção; depois do Marco 6, mudanças de
   esquema seguem expand/contract.
+- **Tamanho no banco:** um CHECK `octet_length(... ::text) <= 4096` em `on_value` e `off_value`, nas duas tabelas,
+  repete o limite de `JsonFlagValue.MaxBytes`. Sem ele, um valor gravado por fora e maior que o limite faria toda
+  leitura do ambiente falhar, inclusive o snapshot. Pelo mesmo motivo, **apertar um limite do valor depois** (bytes,
+  níveis, regras de número) exige migrar os dados antes, em expand/contract: corrigir ou recusar os valores
+  gravados e só então apertar a regra no domínio e no CHECK. A mensagem de erro de um valor gravado inválido
+  nunca traz o valor, só o tipo e o tamanho, porque vai para o log.
 
 ### Contrato
 
