@@ -13,7 +13,6 @@ internal static class ApiPipeline
     {
         // Antes de tudo: o rate limit, os cookies e os logs precisam do IP e do esquema do cliente, não do proxy.
         app.UseForwardedHeaders();
-        app.UseToggleForgeStrictTransportSecurity();
         app.UseToggleForgeSecurityHeaders();
         app.UseExceptionHandler(new ExceptionHandlerOptions
         {

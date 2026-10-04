@@ -1,8 +1,10 @@
+using System.Net;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using ToggleForge.Api.Tests.Support;
+using ToggleForge.Application.Access;
 
 namespace ToggleForge.Api.Tests;
 
@@ -57,6 +59,23 @@ public sealed class StrictTransportSecurityTests(ApiFactory api)
         Assert.False(response.Headers.Contains("Strict-Transport-Security"));
     }
 
+    /// <summary>O exception handler limpa os headers antes do 500; o HSTS sai mesmo assim.</summary>
+    [Fact]
+    public async Task An_unexpected_error_still_pins_https()
+    {
+        using var member = await ConsoleClient.SignUpAsync(api);
+        await using var broken = Production(builder => builder.ConfigureTestServices(
+            services => services.AddScoped<IMembershipDirectory, BrokenMembershipDirectory>()));
+        using var client = broken.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = _publicAddress, HandleCookies = false });
+        using var request = new HttpRequestMessage(HttpMethod.Get, Paths.Session);
+        request.Headers.Add("Cookie", $"{ConsoleClient.SessionCookie}={member.SessionCookieValue()}");
+
+        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        Assert.Equal("max-age=31536000", Assert.Single(response.Headers.GetValues("Strict-Transport-Security")));
+    }
+
     private async Task<HttpResponseMessage> ForwardedHttpsAsync(string sender)
     {
         await using var production = Production(builder => builder.ConfigureTestServices(
@@ -76,4 +95,16 @@ public sealed class StrictTransportSecurityTests(ApiFactory api)
             builder.UseSetting("ForwardedHeaders:KnownNetworks:0", IngressNetwork);
             configure?.Invoke(builder);
         });
+
+    private sealed class BrokenMembershipDirectory : IMembershipDirectory
+    {
+        public Task<Domain.Access.Role?> FindRoleAsync(Guid memberId, Guid organizationId, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("Broken on purpose.");
+
+        public Task<IReadOnlyList<MembershipView>> ListAsync(Guid memberId, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("Broken on purpose.");
+
+        public Task<IReadOnlyDictionary<Guid, string>> FindEmailsAsync(IReadOnlyCollection<Guid> memberIds, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("Broken on purpose.");
+    }
 }

@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.HttpsPolicy;
+using Microsoft.Extensions.Options;
 using Microsoft.Net.Http.Headers;
 
 namespace ToggleForge.Api;
@@ -24,35 +26,36 @@ internal static class ApiSecurityHeaders
         services.AddHsts(options => options.MaxAge = _strictTransportSecurityMaxAge);
 
     /// <summary>
-    /// HSTS só fora do desenvolvimento: o navegador guarda a política, e o localhost a herdaria. Depende do esquema
-    /// repassado pelo ingress, então roda depois dos forwarded headers.
+    /// Escreve os headers quando a resposta começa, não quando a requisição chega: o exception handler limpa os
+    /// headers antes do 500, e o endpoint do console já terá posto a própria CSP. Roda depois dos forwarded
+    /// headers, porque o HSTS depende do esquema repassado pelo ingress.
     /// </summary>
-    public static WebApplication UseToggleForgeStrictTransportSecurity(this WebApplication app)
+    public static WebApplication UseToggleForgeSecurityHeaders(this WebApplication app)
     {
         ArgumentNullException.ThrowIfNull(app);
 
-        if (!app.Environment.IsDevelopment())
-        {
-            app.UseHsts();
-        }
-
-        return app;
-    }
-
-    /// <summary>
-    /// Escreve os headers quando a resposta começa, não quando a requisição chega: o exception handler limpa os
-    /// headers antes do 500, e o endpoint do console já terá posto a própria CSP.
-    /// </summary>
-    public static IApplicationBuilder UseToggleForgeSecurityHeaders(this IApplicationBuilder app) =>
+        // HSTS só fora do desenvolvimento: o navegador guarda a política, e o localhost a herdaria.
+        var hsts = app.Environment.IsDevelopment() ? null : app.Services.GetRequiredService<IOptions<HstsOptions>>().Value;
         app.Use((context, next) =>
         {
             context.Response.OnStarting(() =>
             {
                 AddTo(context.Response.Headers);
+                if (hsts is not null && PinsHttps(context.Request, hsts))
+                {
+                    context.Response.Headers.StrictTransportSecurity = $"max-age={(long)hsts.MaxAge.TotalSeconds}";
+                }
+
                 return Task.CompletedTask;
             });
             return next(context);
         });
+        return app;
+    }
+
+    /// <summary>Como o <c>HstsMiddleware</c>: só em HTTPS e nunca para os hosts excluídos (loopback, por padrão).</summary>
+    private static bool PinsHttps(HttpRequest request, HstsOptions hsts) =>
+        request.IsHttps && !hsts.ExcludedHosts.Contains(request.Host.Host, StringComparer.OrdinalIgnoreCase);
 
     private static void AddTo(IHeaderDictionary headers)
     {
