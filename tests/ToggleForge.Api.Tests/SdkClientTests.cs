@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Net;
+using Microsoft.Extensions.Time.Testing;
 using ToggleForge.Api.Tests.Support;
 using ToggleForge.Evaluation;
 using ToggleForge.Sdk;
@@ -11,6 +12,9 @@ public sealed class SdkClientTests(ApiFactory api) : IDisposable
 {
     private readonly List<HttpClient> _games = [];
 
+    // O relógio do SDK: avançar o piso entre sincronizações deixa o teste pedir uma atrás da outra.
+    private readonly FakeTimeProvider _time = new();
+
     [Fact]
     public async Task The_sdk_evaluates_each_player_like_the_simulation_of_the_live_version()
     {
@@ -18,7 +22,7 @@ public sealed class SdkClientTests(ApiFactory api) : IDisposable
         await owner.PublishedProjectAsync("space-race");
         var client = await ClientForAsync(owner);
 
-        Assert.Equal(SyncOutcome.Updated, await client.RefreshAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(SyncOutcome.Updated, await RefreshLaterAsync(client));
 
         foreach (var playerId in Enumerable.Range(1, 20).Select(number => $"player-{number.ToString(CultureInfo.InvariantCulture)}"))
         {
@@ -38,22 +42,35 @@ public sealed class SdkClientTests(ApiFactory api) : IDisposable
         using var owner = await ConsoleClient.SignUpAsync(api);
         await owner.PublishedProjectAsync("space-race");
         var client = await ClientForAsync(owner);
-        await client.RefreshAsync(TestContext.Current.CancellationToken);
+        await RefreshLaterAsync(client);
         var atTenPercent = client.EvaluateBoolean("new-shop", player, defaultValue: false);
 
-        Assert.Equal(SyncOutcome.NotModified, await client.RefreshAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(SyncOutcome.NotModified, await RefreshLaterAsync(client));
 
         var read = await owner.GetFlagAsync("space-race", "new-shop");
         var widened = await owner.UpdateFlagAsync("space-race", "new-shop", read.Header("ETag"), """{"rolloutBasisPoints":10000}""");
         Assert.Equal(HttpStatusCode.Created, (await owner.PublishAsync("space-race", ConsoleClient.Revision(widened), ConsoleClient.NewIdempotencyKey())).Status);
-        Assert.Equal(SyncOutcome.Updated, await client.RefreshAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(SyncOutcome.Updated, await RefreshLaterAsync(client));
         var everyone = client.EvaluateBoolean("new-shop", player, defaultValue: false);
         Assert.Equal((true, EvaluationReason.Included, (long?)2), (everyone.Value, everyone.Reason, everyone.SnapshotVersion));
 
         Assert.Equal(HttpStatusCode.Created, (await owner.RollBackAsync("space-race", targetVersion: 1, expectedCurrentVersion: 2, ConsoleClient.NewIdempotencyKey())).Status);
-        Assert.Equal(SyncOutcome.Updated, await client.RefreshAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(SyncOutcome.Updated, await RefreshLaterAsync(client));
         var rolledBack = client.EvaluateBoolean("new-shop", player, defaultValue: false);
         Assert.Equal((atTenPercent.Value, atTenPercent.Bucket, (long?)3), (rolledBack.Value, rolledBack.Bucket, rolledBack.SnapshotVersion));
+    }
+
+    [Fact]
+    public async Task Starting_the_sdk_puts_the_live_version_in_use_before_the_game_goes_on()
+    {
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        await owner.PublishedProjectAsync("space-race");
+        await using var client = await ClientForAsync(owner);
+
+        await client.StartAsync(TestContext.Current.CancellationToken);
+
+        var result = client.EvaluateBoolean("new-shop", EvaluationContext.ForPlayer(PlayerId.Parse("player-42")), defaultValue: false);
+        Assert.Equal((SnapshotSource.Server, (long?)1), (result.Source, result.SnapshotVersion));
     }
 
     [Fact]
@@ -63,7 +80,7 @@ public sealed class SdkClientTests(ApiFactory api) : IDisposable
         Assert.Equal(HttpStatusCode.Created, (await owner.CreateProjectAsync("space-race")).Status);
         var client = await ClientForAsync(owner);
 
-        Assert.Equal(SyncOutcome.Failed, await client.RefreshAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(SyncOutcome.Failed, await RefreshLaterAsync(client));
         var result = client.EvaluateBoolean("new-shop", EvaluationContext.Anonymous, defaultValue: true);
         Assert.Equal((true, SnapshotSource.None), (result.Value, result.Source));
     }
@@ -75,11 +92,11 @@ public sealed class SdkClientTests(ApiFactory api) : IDisposable
         await owner.PublishedProjectAsync("space-race");
         var created = await owner.CreateCredentialAsync("space-race");
         var client = ClientWith(created.Json["secret"]!.GetValue<string>());
-        await client.RefreshAsync(TestContext.Current.CancellationToken);
+        await RefreshLaterAsync(client);
 
         Assert.Equal(HttpStatusCode.OK, (await owner.RevokeCredentialAsync("space-race", created.Json["id"]!.GetValue<string>())).Status);
 
-        Assert.Equal(SyncOutcome.Failed, await client.RefreshAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(SyncOutcome.Failed, await RefreshLaterAsync(client));
         Assert.Equal((long?)1, client.EvaluateBoolean("new-shop", EvaluationContext.Anonymous, defaultValue: false).SnapshotVersion);
     }
 
@@ -95,6 +112,13 @@ public sealed class SdkClientTests(ApiFactory api) : IDisposable
     {
         var game = api.CreateDefaultClient(ApiFactory.BaseAddress, new SnapshotContractCheck());
         _games.Add(game);
-        return new ToggleForgeClient(new HttpSnapshotTransport(game, SdkCredential.Parse(secret)));
+        return new ToggleForgeClient(new HttpSnapshotTransport(game, SdkCredential.Parse(secret)), options: null, _time);
+    }
+
+    /// <summary>Sincroniza depois do piso do intervalo, como o laço faria.</summary>
+    private async Task<SyncOutcome> RefreshLaterAsync(ToggleForgeClient client)
+    {
+        _time.Advance(ToggleForgeOptions.MinSyncInterval);
+        return await client.RefreshAsync(TestContext.Current.CancellationToken);
     }
 }
