@@ -43,22 +43,25 @@ internal static class ValueConverters
     public static ChangeSummary ParseChangeSummary(string value) =>
         Domain.Authoring.ChangeSummary.TryParse(value, out var summary) ? summary : throw Corrupted(nameof(ChangeSummary), value);
 
+    public static PublicationOrigin ParsePublicationOrigin(string value) =>
+        Enum.TryParse<PublicationOrigin>(value, ignoreCase: true, out var origin) ? origin : throw Corrupted(nameof(PublicationOrigin), value);
+
+    public static FlagKey ParseFlagKey(string value) =>
+        Evaluation.FlagKey.TryParse(value, out var key) ? key : throw Corrupted(nameof(FlagKey), value);
+
+    public static RolloutSeed ParseRolloutSeed(string value) =>
+        Evaluation.RolloutSeed.TryParse(value, out var seed) ? seed : throw Corrupted(nameof(RolloutSeed), value);
+
+    public static RolloutPercentage ParseRolloutPercentage(int value) =>
+        Evaluation.RolloutPercentage.TryFromBasisPoints(value, out var percentage)
+            ? percentage
+            : throw new InvalidDataException($"Stored {nameof(RolloutPercentage)} is out of range.");
+
     private static ProjectKey ParseProjectKey(string value) =>
         Evaluation.ProjectKey.TryParse(value, out var key) ? key : throw Corrupted(nameof(ProjectKey), value);
 
     private static EnvironmentKey ParseEnvironmentKey(string value) =>
         Evaluation.EnvironmentKey.TryParse(value, out var key) ? key : throw Corrupted(nameof(EnvironmentKey), value);
-
-    private static FlagKey ParseFlagKey(string value) =>
-        Evaluation.FlagKey.TryParse(value, out var key) ? key : throw Corrupted(nameof(FlagKey), value);
-
-    private static RolloutSeed ParseRolloutSeed(string value) =>
-        Evaluation.RolloutSeed.TryParse(value, out var seed) ? seed : throw Corrupted(nameof(RolloutSeed), value);
-
-    private static RolloutPercentage ParseRolloutPercentage(int value) =>
-        Evaluation.RolloutPercentage.TryFromBasisPoints(value, out var percentage)
-            ? percentage
-            : throw new InvalidDataException($"Stored {nameof(RolloutPercentage)} is out of range.");
 
     private static DisplayName ParseDisplayName(string value) =>
         Domain.DisplayName.TryParse(value, out var name) ? name : throw Corrupted(nameof(DisplayName), value);
@@ -80,7 +83,7 @@ internal static class ValueConverters
     private static JsonFlagValue ParseJsonFlagValue(string text) =>
         Domain.Authoring.JsonFlagValue.TryParse(text, out var value, out _) ? value : throw Corrupted(nameof(JsonFlagValue), text);
 
-    /// <summary>Só o tipo e o tamanho: o valor gravado fica fora da mensagem (ADR 0011, I7).</summary>
+    /// <summary>Só o tipo e o tamanho: o valor gravado fica fora da mensagem (ADR 0011, I8).</summary>
     private static InvalidDataException Corrupted(string type, string value) =>
         new($"Stored {type} is invalid ({Encoding.UTF8.GetByteCount(value)} bytes in UTF-8).");
 }

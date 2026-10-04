@@ -36,7 +36,7 @@ internal sealed class PublicationRepository(AuthoringDbContext context) : IPubli
                 row.Version,
                 row.PublishedAt,
                 row.PublishedBy,
-                OriginOf(row.Origin),
+                ValueConverters.ParsePublicationOrigin(row.Origin),
                 row.RestoredVersion,
                 SummaryOf(row.Summary)))
             .ToList();
@@ -90,22 +90,20 @@ internal sealed class PublicationRepository(AuthoringDbContext context) : IPubli
             row.Version,
             row.PublishedAt,
             row.PublishedBy,
-            OriginOf(row.Origin),
+            ValueConverters.ParsePublicationOrigin(row.Origin),
             row.RestoredVersion,
             SummaryOf(row.Summary),
             row.Flags.OrderBy(flag => flag.Key, StringComparer.Ordinal).Select(ToDomain).ToList());
-
-    private static PublicationOrigin OriginOf(string origin) => Enum.Parse<PublicationOrigin>(origin, ignoreCase: true);
 
     private static ChangeSummary? SummaryOf(string? summary) =>
         summary is null ? null : ValueConverters.ParseChangeSummary(summary);
 
     private static PublishedFlag ToDomain(PublicationFlagRow row) =>
         new(
-            FlagKey.Parse(row.Key),
+            ValueConverters.ParseFlagKey(row.Key),
             new FlagSettings(
                 row.IsEnabled,
                 FlagValues.Restore(row.Type, row.OnValue, row.OffValue),
-                RolloutPercentage.FromBasisPoints(row.RolloutBasisPoints)),
-            RolloutSeed.Parse(row.Seed));
+                ValueConverters.ParseRolloutPercentage(row.RolloutBasisPoints)),
+            ValueConverters.ParseRolloutSeed(row.Seed));
 }
