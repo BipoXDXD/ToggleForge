@@ -54,6 +54,8 @@ public sealed class FileSnapshotStoreTests : IDisposable
     [InlineData("""{"format":1,"eTag":null,"confirmedAt":"yesterday","snapshot":"{}"}""")]
     [InlineData("""{"format":1,"eTag":null,"confirmedAt":"2026-10-04T12:00:00.0000000+00:00"}""")]
     [InlineData("""{"format":1,"eTag":null,"snapshot":"{}"}""")]
+    [InlineData("""{"format":1,"eTag":"v1","confirmedAt":"2026-10-04T12:00:00.0000000+00:00","snapshot":"{}"}""")]
+    [InlineData("""{"format":1,"eTag":"\"v 1\"","confirmedAt":"2026-10-04T12:00:00.0000000+00:00","snapshot":"{}"}""")]
     public async Task A_file_this_sdk_did_not_write_loads_as_nothing(string content)
     {
         var store = Store(Snapshots.Credential);
@@ -62,6 +64,42 @@ public sealed class FileSnapshotStoreTests : IDisposable
         await File.WriteAllTextAsync(Assert.Single(Directory.GetFiles(_directory)), content, TestContext.Current.CancellationToken);
 
         Assert.Null(await store.LoadAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task A_weak_etag_from_the_api_comes_back_as_it_was()
+    {
+        var store = Store(Snapshots.Credential);
+
+        await store.SaveAsync(new StoredSnapshot(Snapshots.Json(), "W/\"v1\"", _confirmedAt), TestContext.Current.CancellationToken);
+
+        Assert.Equal("W/\"v1\"", (await store.LoadAsync(TestContext.Current.CancellationToken))?.ETag);
+    }
+
+    [Fact]
+    public async Task A_file_far_bigger_than_any_snapshot_is_not_read()
+    {
+        var store = Store(Snapshots.Credential);
+        await store.SaveAsync(new StoredSnapshot(Snapshots.Json(), "\"v1\"", _confirmedAt), TestContext.Current.CancellationToken);
+        var file = Assert.Single(Directory.GetFiles(_directory));
+
+        await File.AppendAllTextAsync(file, new string(' ', (4 * HttpSnapshotTransport.MaxSnapshotBytes) + 1), TestContext.Current.CancellationToken);
+
+        Assert.Null(await store.LoadAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task Two_clients_of_the_same_credential_saving_at_once_leave_a_readable_file()
+    {
+        var first = Store(Snapshots.Credential);
+        var second = Store(Snapshots.Credential);
+
+        await Task.WhenAll(Enumerable.Range(1, 40).Select(version =>
+            Task.Run(() => (version % 2 == 0 ? first : second).SaveAsync(
+                new StoredSnapshot(Snapshots.Json(version), $"\"v{version}\"", _confirmedAt), TestContext.Current.CancellationToken), TestContext.Current.CancellationToken)));
+
+        Assert.NotNull(await first.LoadAsync(TestContext.Current.CancellationToken));
+        Assert.Single(Directory.GetFiles(_directory));
     }
 
     [Fact]

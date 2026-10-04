@@ -12,14 +12,19 @@ namespace ToggleForge.Sdk
     /// </summary>
     public sealed class ToggleForgeClient : IAsyncDisposable, IDisposable
     {
-        // Gravar o snapshot a cada 304 seria uma escrita por minuto no disco do celular; a confirmação guardada
-        // pode atrasar até isso, bem menos que a idade máxima.
-        private static readonly TimeSpan _persistConfirmationEvery = TimeSpan.FromHours(1);
+        // Gravar o snapshot a cada 304 seria uma escrita por minuto no disco do celular. A confirmação guardada
+        // pode atrasar até esse ritmo, que encolhe com idades máximas curtas para nunca passar de um quarto delas.
+        private static readonly TimeSpan _slowestPersistRhythm = TimeSpan.FromHours(1);
+
+        // Uma confirmação no futuro só existe se o relógio voltou depois dela; aceitá-la esticaria a idade máxima.
+        // A folga cobre os acertos pequenos que o próprio sistema faz no relógio.
+        private static readonly TimeSpan _clockTolerance = TimeSpan.FromMinutes(5);
 
         private readonly ISnapshotTransport _transport;
         private readonly ISnapshotStore? _store;
         private readonly FlagEvaluator _evaluator = new();
         private readonly TimeSpan _maxCacheAge;
+        private readonly TimeSpan _persistConfirmationEvery;
         private readonly SyncSchedule _schedule;
         private readonly TimeProvider _timeProvider;
         private readonly Func<TimeSpan, CancellationToken, Task> _wait;
@@ -35,8 +40,10 @@ namespace ToggleForge.Sdk
         // Imutável e trocado inteiro: quem avalia vê o snapshot antigo ou o novo, nunca uma mistura.
         private SyncedSnapshot? _current;
 
-        // O último estado gravado no armazenamento; só quem segura _persisting o lê ou escreve.
+        // O último estado gravado no armazenamento e quando, no relógio monotônico, esta execução o gravou (nulo
+        // se veio do disco); só quem segura _persisting os lê ou escreve.
         private SyncedSnapshot? _persisted;
+        private long? _persistedAt;
 
         private Task? _loop;
         private int _started;
@@ -77,6 +84,8 @@ namespace ToggleForge.Sdk
             }
 
             _maxCacheAge = options.MaxCacheAge;
+            var quarterOfMaxAge = TimeSpan.FromTicks(options.MaxCacheAge.Ticks / 4);
+            _persistConfirmationEvery = quarterOfMaxAge < _slowestPersistRhythm ? quarterOfMaxAge : _slowestPersistRhythm;
             var interval = options.SyncInterval;
             if (interval < ToggleForgeOptions.MinSyncInterval || interval > ToggleForgeOptions.MaxSyncInterval)
             {
@@ -227,7 +236,11 @@ namespace ToggleForge.Sdk
             }
         }
 
-        private bool IsExpired(SyncedSnapshot snapshot) => _timeProvider.GetUtcNow() - snapshot.ConfirmedAt > _maxCacheAge;
+        private bool IsExpired(SyncedSnapshot snapshot)
+        {
+            var age = _timeProvider.GetUtcNow() - snapshot.ConfirmedAt;
+            return age > _maxCacheAge || age < -_clockTolerance;
+        }
 
         /// <summary>
         /// O cache só entra se ainda não há snapshot: nunca passa por cima do que veio do servidor. Mesmo expirado,
@@ -257,9 +270,17 @@ namespace ToggleForge.Sdk
             }
 
             var adopted = new SyncedSnapshot(snapshot, stored.Body, stored.ETag, SnapshotSource.Cache, stored.ConfirmedAt);
-            if (Interlocked.CompareExchange(ref _current, adopted, null) is null)
+            await _persisting.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
             {
-                _persisted = adopted;
+                if (Interlocked.CompareExchange(ref _current, adopted, null) is null)
+                {
+                    (_persisted, _persistedAt) = (adopted, null);
+                }
+            }
+            finally
+            {
+                _persisting.Release();
             }
         }
 
@@ -298,6 +319,11 @@ namespace ToggleForge.Sdk
             };
         }
 
+        /// <summary>
+        /// Só um snapshot mais novo entra, mesmo com sincronizações simultâneas: se outra trocou o estado entre a
+        /// comparação e a troca, compara de novo com o que ela deixou. Um 200 com a versão em uso vale como
+        /// confirmação, como um 304: acontece quando um proxy tira a ETag do caminho.
+        /// </summary>
         private SyncOutcome Accept(string body, string? eTag)
         {
             if (SnapshotReader.Read(body) is not { } snapshot)
@@ -305,8 +331,24 @@ namespace ToggleForge.Sdk
                 return SyncOutcome.Invalid;
             }
 
-            var received = new SyncedSnapshot(snapshot, body, eTag, SnapshotSource.Server, _timeProvider.GetUtcNow());
-            return TryAdvance(received) ? SyncOutcome.Updated : SyncOutcome.OutOfOrder;
+            var now = _timeProvider.GetUtcNow();
+            var received = new SyncedSnapshot(snapshot, body, eTag, SnapshotSource.Server, now);
+            while (true)
+            {
+                var current = Volatile.Read(ref _current);
+                var (replacement, outcome) = current switch
+                {
+                    null => (received, SyncOutcome.Updated),
+                    _ when received.IsSameVersionAs(current) => (current.ConfirmedAgainAt(now, eTag ?? current.ETag), SyncOutcome.NotModified),
+                    _ when received.Supersedes(current) => (received, SyncOutcome.Updated),
+                    _ => (current, SyncOutcome.OutOfOrder),
+                };
+                if (ReferenceEquals(replacement, current)
+                    || Interlocked.CompareExchange(ref _current, replacement, current) == current)
+                {
+                    return outcome;
+                }
+            }
         }
 
         /// <summary>
@@ -317,7 +359,7 @@ namespace ToggleForge.Sdk
         {
             if (asked is not null)
             {
-                Interlocked.CompareExchange(ref _current, asked.ConfirmedAgainAt(_timeProvider.GetUtcNow()), asked);
+                Interlocked.CompareExchange(ref _current, asked.ConfirmedAgainAt(_timeProvider.GetUtcNow(), asked.ETag), asked);
             }
 
             return SyncOutcome.NotModified;
@@ -344,7 +386,7 @@ namespace ToggleForge.Sdk
                 }
 
                 await _store.SaveAsync(new StoredSnapshot(current.Body, current.ETag, current.ConfirmedAt), cancellationToken).ConfigureAwait(false);
-                _persisted = current;
+                (_persisted, _persistedAt) = (current, _timeProvider.GetTimestamp());
             }
             catch (Exception exception) when (!(exception is OperationCanceledException && cancellationToken.IsCancellationRequested))
             {
@@ -356,30 +398,21 @@ namespace ToggleForge.Sdk
             }
         }
 
-        private bool NeedsPersisting(SyncedSnapshot current) =>
-            _persisted is not { } persisted
-            || !ReferenceEquals(persisted.Snapshot, current.Snapshot)
-            || current.ConfirmedAt - persisted.ConfirmedAt >= _persistConfirmationEvery;
-
         /// <summary>
-        /// Só um snapshot mais novo entra, mesmo com sincronizações simultâneas: se outra trocou o estado entre a
-        /// comparação e a troca, compara de novo com o que ela deixou.
+        /// Versão ou ETag nova vai já para o disco. Uma confirmação nova vai no ritmo de gravação, medido no relógio
+        /// monotônico: com o de parede, um relógio que voltou no tempo nunca mais deixaria gravar.
         /// </summary>
-        private bool TryAdvance(SyncedSnapshot candidate)
+        private bool NeedsPersisting(SyncedSnapshot current)
         {
-            while (true)
+            if (_persisted is not { } persisted
+                || !ReferenceEquals(persisted.Snapshot, current.Snapshot)
+                || persisted.ETag != current.ETag)
             {
-                var current = Volatile.Read(ref _current);
-                if (current is not null && !candidate.Supersedes(current))
-                {
-                    return false;
-                }
-
-                if (Interlocked.CompareExchange(ref _current, candidate, current) == current)
-                {
-                    return true;
-                }
+                return true;
             }
+
+            return current.ConfirmedAt != persisted.ConfirmedAt
+                && (_persistedAt is not { } savedAt || _timeProvider.GetElapsedTime(savedAt) >= _persistConfirmationEvery);
         }
 
         private sealed class SyncedSnapshot
@@ -405,7 +438,12 @@ namespace ToggleForge.Sdk
             /// <summary>A última confirmação do servidor; dela se conta a idade máxima.</summary>
             public DateTimeOffset ConfirmedAt { get; }
 
-            public SyncedSnapshot ConfirmedAgainAt(DateTimeOffset instant) => new(Snapshot, Body, ETag, SnapshotSource.Server, instant);
+            public SyncedSnapshot ConfirmedAgainAt(DateTimeOffset instant, string? eTag) => new(Snapshot, Body, eTag, SnapshotSource.Server, instant);
+
+            public bool IsSameVersionAs(SyncedSnapshot other) =>
+                Snapshot.ProjectKey == other.Snapshot.ProjectKey
+                && Snapshot.EnvironmentKey == other.Snapshot.EnvironmentKey
+                && Snapshot.Version == other.Snapshot.Version;
 
             /// <summary>
             /// A ordem vem da versão da publicação, nunca do relógio. Snapshot de outro projeto ou ambiente

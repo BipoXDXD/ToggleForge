@@ -100,9 +100,12 @@ public sealed class SdkClientTests(ApiFactory api) : IDisposable
             Assert.Equal((online, SnapshotSource.Cache, (long?)1), (offline.Value, offline.Source, offline.SnapshotVersion));
         }
 
-        await using var backOnline = new ToggleForgeClient(Transport(credential), store, timeProvider: _time);
+        var network = new SnapshotContractCheck();
+        await using var backOnline = new ToggleForgeClient(Transport(credential, network), store, timeProvider: _time);
         await backOnline.StartAsync(TestContext.Current.CancellationToken);
         Assert.Equal((SnapshotSource.Server, (long?)1), Origin(backOnline.EvaluateBoolean("new-shop", player, defaultValue: false)));
+        var (ifNoneMatch, status) = Assert.Single(network.Exchanges);
+        Assert.Equal((HttpStatusCode.NotModified, true), (status, ifNoneMatch is not null));
     }
 
     [Fact]
@@ -146,9 +149,9 @@ public sealed class SdkClientTests(ApiFactory api) : IDisposable
 
     private static (SnapshotSource Source, long? Version) Origin(FlagResult<bool> result) => (result.Source, result.SnapshotVersion);
 
-    private HttpSnapshotTransport Transport(SdkCredential credential)
+    private HttpSnapshotTransport Transport(SdkCredential credential, SnapshotContractCheck? network = null)
     {
-        var game = api.CreateDefaultClient(ApiFactory.BaseAddress, new SnapshotContractCheck());
+        var game = api.CreateDefaultClient(ApiFactory.BaseAddress, network ?? new SnapshotContractCheck());
         _games.Add(game);
         return new HttpSnapshotTransport(game, credential);
     }

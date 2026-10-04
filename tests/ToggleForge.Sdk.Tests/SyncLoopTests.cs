@@ -126,7 +126,8 @@ public sealed class SyncLoopTests
         await client.StartAsync(TestContext.Current.CancellationToken);
         await waits.NextAsync();
 
-        await client.DisposeAsync();
+        // Com prazo: um laço que não para viraria uma suíte travada em vez de um teste falhando.
+        await client.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         Assert.False(waits.IsWaiting);
         Assert.Single(transport.SentETags);
@@ -203,6 +204,133 @@ public sealed class SyncLoopTests
         Assert.Equal(1, client.EvaluateBoolean("new-shop", _player, defaultValue: false).SnapshotVersion);
     }
 
+    [Fact]
+    public async Task A_failure_after_a_success_starts_the_backoff_over()
+    {
+        var transport = new StubTransport()
+            .Then(SnapshotResponse.Failed(statusCode: 503))
+            .Then(SnapshotResponse.Fetched(Snapshots.Json(version: 1), "\"v1\""))
+            .Then(SnapshotResponse.Failed(statusCode: 503))
+            .Then(SnapshotResponse.Failed(statusCode: 503));
+        var waits = new ManualWaits();
+        await using var client = Client(transport, waits);
+        await client.StartAsync(TestContext.Current.CancellationToken);
+
+        var delays = new List<TimeSpan>();
+        for (var sync = 0; sync < 4; sync++)
+        {
+            delays.Add(await waits.NextAsync());
+            waits.Elapse();
+        }
+
+        Assert.Equal([TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(120)], delays);
+    }
+
+    [Theory]
+    [InlineData(401)]
+    [InlineData(403)]
+    public async Task A_refused_credential_makes_the_loop_wait_the_longest_backoff(int status)
+    {
+        var waits = new ManualWaits();
+        await using var client = Client(new StubTransport().Then(SnapshotResponse.Failed(status)), waits);
+
+        await client.StartAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(TimeSpan.FromMinutes(10), await waits.NextAsync());
+    }
+
+    [Fact]
+    public async Task An_environment_never_published_keeps_the_loop_at_the_normal_pace()
+    {
+        var waits = new ManualWaits();
+        await using var client = Client(new StubTransport().Then(SnapshotResponse.Failed(404)).Then(SnapshotResponse.Failed(404)), waits);
+        await client.StartAsync(TestContext.Current.CancellationToken);
+
+        var first = await waits.NextAsync();
+        waits.Elapse();
+        var second = await waits.NextAsync();
+
+        Assert.Equal((TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(60)), (first, second));
+    }
+
+    [Fact]
+    public async Task Disposing_again_in_either_way_is_harmless()
+    {
+        var client = Client(new StubTransport().Then(SnapshotResponse.NotModified), new ManualWaits());
+        await client.StartAsync(TestContext.Current.CancellationToken);
+        await client.DisposeAsync();
+
+        var again = await Record.ExceptionAsync(async () =>
+        {
+            client.Dispose();
+            await client.DisposeAsync();
+        });
+
+        Assert.Null(again);
+    }
+
+    [Fact]
+    public async Task Disposing_waits_for_a_sync_in_flight_to_end()
+    {
+        var transport = new SecondSyncInFlight(honoursCancellation: false);
+        var waits = new ManualWaits();
+        var client = Client(transport, waits);
+        await client.StartAsync(TestContext.Current.CancellationToken);
+        await waits.NextAsync();
+        waits.Elapse();
+        await transport.Started.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
+        var disposing = client.DisposeAsync().AsTask();
+        var endedBeforeTheSync = disposing.IsCompleted;
+        transport.Finish();
+        await disposing;
+
+        Assert.False(endedBeforeTheSync);
+    }
+
+    [Fact]
+    public async Task Disposing_cancels_a_sync_in_flight()
+    {
+        var transport = new SecondSyncInFlight(honoursCancellation: true);
+        var waits = new ManualWaits();
+        var client = Client(transport, waits);
+        await client.StartAsync(TestContext.Current.CancellationToken);
+        await waits.NextAsync();
+        waits.Elapse();
+        await transport.Started.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
+        await client.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
+        Assert.False(waits.IsWaiting);
+    }
+
     private static ToggleForgeClient Client(ISnapshotTransport transport, ManualWaits waits, ToggleForgeOptions? options = null) =>
         new(transport, store: null, options, new FakeTimeProvider(), waits.WaitAsync, () => NoJitter);
+
+    /// <summary>
+    /// A primeira sincronização responde na hora; a segunda fica em andamento até o teste mandar terminar, ou até o
+    /// cancelamento, se o adaptador o atende.
+    /// </summary>
+    private sealed class SecondSyncInFlight(bool honoursCancellation) : ISnapshotTransport
+    {
+        private readonly TaskCompletionSource _started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _finish = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _calls;
+
+        public Task Started => _started.Task;
+
+        public void Finish() => _finish.SetResult();
+
+        public async Task<SnapshotResponse> GetAsync(string? eTag, CancellationToken cancellationToken)
+        {
+            if (Interlocked.Increment(ref _calls) == 1)
+            {
+                return SnapshotResponse.NotModified;
+            }
+
+            _started.SetResult();
+            await _finish.Task.WaitAsync(honoursCancellation ? cancellationToken : CancellationToken.None);
+            return SnapshotResponse.NotModified;
+        }
+    }
 }

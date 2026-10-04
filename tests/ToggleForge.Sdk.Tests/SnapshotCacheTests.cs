@@ -40,6 +40,107 @@ public sealed class SnapshotCacheTests
     }
 
     [Fact]
+    public async Task The_first_confirmation_of_a_stored_snapshot_is_saved_at_once()
+    {
+        var store = StoredAtVersion(3, confirmedAgo: TimeSpan.FromHours(5));
+        await using var client = Client(new StubTransport().Then(SnapshotResponse.NotModified), store);
+
+        await client.StartAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(_time.GetUtcNow(), Assert.Single(store.Saves).ConfirmedAt);
+    }
+
+    [Fact]
+    public async Task The_version_in_use_sent_again_without_etag_still_confirms_the_stored_snapshot()
+    {
+        var store = StoredAtVersion(3, confirmedAgo: TimeSpan.FromDays(6));
+        await using var client = Client(new StubTransport().Then(SnapshotResponse.Fetched(Snapshots.Json(version: 3), eTag: null)), store);
+
+        await client.StartAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal((SnapshotSource.Server, (long?)3), Origin(client));
+        Assert.Equal(("\"v3\"", _time.GetUtcNow()), (Assert.Single(store.Saves).ETag, store.Saves[0].ConfirmedAt));
+    }
+
+    [Theory]
+    [InlineData(5, true)]
+    [InlineData(6, false)]
+    public async Task A_confirmation_dated_in_the_future_counts_as_expired_beyond_five_minutes(int minutesAhead, bool valid)
+    {
+        await using var client = Client(new StubTransport().Then(SnapshotResponse.Failed(statusCode: null)), StoredAtVersion(3, confirmedAgo: TimeSpan.FromMinutes(-minutesAhead)));
+
+        await client.StartAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(valid, client.EvaluateBoolean("new-shop", _player, defaultValue: false).Reason != EvaluationReason.SnapshotExpired);
+    }
+
+    [Fact]
+    public async Task Turning_the_clock_back_cannot_stretch_the_max_age()
+    {
+        var clock = new AdjustableClock();
+        var store = new MemoryStore();
+        var transport = new StubTransport()
+            .Then(SnapshotResponse.Fetched(Snapshots.Json(version: 1), "\"v1\""))
+            .Then(SnapshotResponse.NotModified)
+            .Then(SnapshotResponse.NotModified);
+        var waits = new ManualWaits();
+        await using var client = new ToggleForgeClient(transport, store, options: null, clock, waits.WaitAsync, () => 0.5);
+        var realNow = clock.GetUtcNow();
+        clock.SetWallClock(realNow.AddDays(30));
+        await client.StartAsync(TestContext.Current.CancellationToken);
+
+        clock.SetWallClock(realNow);
+        Assert.Equal(EvaluationReason.SnapshotExpired, client.EvaluateBoolean("new-shop", _player, defaultValue: false).Reason);
+        for (var sync = 0; sync < 2; sync++)
+        {
+            await waits.NextAsync();
+            clock.Advance(TimeSpan.FromHours(1));
+            waits.Elapse();
+        }
+
+        await waits.NextAsync();
+        Assert.Equal(EvaluationReason.Included, client.EvaluateBoolean("new-shop", _player, defaultValue: false).Reason);
+        Assert.Equal(clock.GetUtcNow(), store.Saves[^1].ConfirmedAt);
+    }
+
+    [Fact]
+    public async Task A_short_max_age_saves_confirmations_four_times_within_it()
+    {
+        var store = new MemoryStore();
+        var transport = new StubTransport()
+            .Then(SnapshotResponse.Fetched(Snapshots.Json(version: 1), "\"v1\""))
+            .Then(SnapshotResponse.NotModified)
+            .Then(SnapshotResponse.NotModified);
+        await using var client = Client(transport, store, new ToggleForgeOptions { MaxCacheAge = TimeSpan.FromHours(1) });
+        await client.StartAsync(TestContext.Current.CancellationToken);
+
+        await SyncAfterAsync(TimeSpan.FromMinutes(14));
+        Assert.Single(store.Saves);
+
+        await SyncAfterAsync(TimeSpan.FromMinutes(1));
+        Assert.Equal(2, store.Saves.Count);
+    }
+
+    [Fact]
+    public async Task Overlapping_syncs_always_leave_the_newest_version_on_disk()
+    {
+        var store = new GatedStore();
+        var transport = new ScriptedTransport();
+        await using var client = Client(transport, store);
+        transport.Next(SnapshotResponse.Fetched(Snapshots.Json(version: 3), "\"v3\""));
+        var first = client.RefreshAsync(TestContext.Current.CancellationToken);
+        await store.FirstSaveStarted;
+        transport.Next(SnapshotResponse.Fetched(Snapshots.Disabled(version: 4), "\"v4\""));
+        _time.Advance(ToggleForgeOptions.MinSyncInterval);
+        var second = client.RefreshAsync(TestContext.Current.CancellationToken);
+
+        store.ReleaseFirstSave();
+        await Task.WhenAll(first, second);
+
+        Assert.Equal("\"v4\"", store.Saves[^1].ETag);
+    }
+
+    [Fact]
     public async Task Without_the_server_the_game_keeps_playing_on_the_stored_snapshot()
     {
         await using var client = Client(new StubTransport().Then(SnapshotResponse.Failed(statusCode: null)), StoredAtVersion(3, confirmedAgo: TimeSpan.FromDays(2)));
@@ -72,7 +173,9 @@ public sealed class SnapshotCacheTests
         await client.StartAsync(TestContext.Current.CancellationToken);
 
         var result = client.EvaluateBoolean("new-shop", _player, defaultValue: false);
-        Assert.Equal(valid, result.Reason != EvaluationReason.SnapshotExpired);
+        Assert.Equal(
+            valid ? (EvaluationReason.Included, SnapshotSource.Cache) : (EvaluationReason.SnapshotExpired, SnapshotSource.None),
+            (result.Reason, result.Source));
     }
 
     [Fact]
