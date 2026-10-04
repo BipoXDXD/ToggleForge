@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -6,15 +7,20 @@ using ToggleForge.Infrastructure.Persistence;
 
 namespace ToggleForge.Infrastructure.Access;
 
-/// <summary>Só usuários do Identity: papéis são por organização (<see cref="Membership"/>), não globais.</summary>
+/// <summary>
+/// Só usuários do Identity: papéis são por organização (<see cref="Membership"/>), não globais. Guarda também
+/// as chaves do Data Protection, que protegem a sessão (ADR 0008).
+/// </summary>
 internal sealed class AccessDbContext(DbContextOptions<AccessDbContext> options)
-    : IdentityUserContext<IdentityUser<Guid>, Guid>(options)
+    : IdentityUserContext<IdentityUser<Guid>, Guid>(options), IDataProtectionKeyContext
 {
     public const string Schema = "access";
 
     public DbSet<Organization> Organizations => Set<Organization>();
 
     public DbSet<Membership> Memberships => Set<Membership>();
+
+    public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

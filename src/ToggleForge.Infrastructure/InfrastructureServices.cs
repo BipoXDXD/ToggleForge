@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -49,6 +50,10 @@ public static class InfrastructureServices
         services.AddScoped<ICredentialRepository, CredentialRepository>();
         return services;
     }
+
+    /// <summary>Chaves do Data Protection na tabela do módulo Access, compartilhadas por todas as instâncias (ADR 0008).</summary>
+    public static IDataProtectionBuilder PersistKeysToToggleForgeDatabase(this IDataProtectionBuilder builder) =>
+        builder.PersistKeysToDbContext<AccessDbContext>();
 
     /// <summary>Aplica as migrations dos três módulos, na ordem das dependências.</summary>
     public static async Task MigrateToggleForgeDatabaseAsync(this IServiceProvider services, CancellationToken cancellationToken)

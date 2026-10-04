@@ -40,6 +40,22 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = BaseAddress, AllowAutoRedirect = false, HandleCookies = false });
 
     /// <summary>Atalho de teste para o que ainda não tem operação na API: convite de membros fica para depois do Marco 2.</summary>
+    /// <summary>O XML de cada chave do Data Protection, como está gravado no banco.</summary>
+    public async Task<List<string>> DataProtectionKeyXmlAsync()
+    {
+        await using var connection = new NpgsqlConnection(_postgres.GetConnectionString());
+        await connection.OpenAsync(TestContext.Current.CancellationToken);
+        await using var command = new NpgsqlCommand("select xml from access.data_protection_keys", connection);
+        await using var reader = await command.ExecuteReaderAsync(TestContext.Current.CancellationToken);
+        var keys = new List<string>();
+        while (await reader.ReadAsync(TestContext.Current.CancellationToken))
+        {
+            keys.Add(reader.GetString(0));
+        }
+
+        return keys;
+    }
+
     public async Task AddMembershipAsync(Guid organizationId, Guid memberId, string role)
     {
         await using var connection = new NpgsqlConnection(_postgres.GetConnectionString());
@@ -65,6 +81,10 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("RateLimits:MemberPerMinute", Unlimited);
         builder.UseSetting("RateLimits:GameClientPerMinute", Unlimited);
         builder.UseSetting("RateLimits:AnonymousPerMinute", Unlimited);
+        builder.UseSetting("DataProtection:CertificatePath", TestCertificates.Current.CertificatePath);
+        builder.UseSetting("DataProtection:KeyPath", TestCertificates.Current.KeyPath);
+        builder.UseSetting("DataProtection:PreviousCertificatePath", TestCertificates.Next.CertificatePath);
+        builder.UseSetting("DataProtection:PreviousKeyPath", TestCertificates.Next.KeyPath);
         builder.ConfigureLogging(logging => logging.ClearProviders().AddProvider(Logs));
         builder.ConfigureTestServices(services =>
         {
