@@ -445,6 +445,7 @@ public sealed class NewFlagFormTests
 
         form.WaitForAssertion(() => Assert.Equal("The value nests deeper than 8 levels.", MessageOf(form.Find("#off-value-error"))));
         Assert.Equal(FixMarkedFields, Assert.Single(form.FindAll("[role=alert]")).TextContent.Trim());
+        AssertKeepsWhatWasTyped(form, "shop-config", "1", "[[[[[[[[[1]]]]]]]]]");
         AssertFocused(console, others);
     }
 
@@ -592,6 +593,15 @@ public sealed class NewFlagFormTests
         form.WaitForAssertion(() => Assert.Equal(
             "This change is too big to send (over 32 KiB), so nothing was saved. Each value can have at most 4 KiB once compacted.",
             form.Find("[data-testid=values-too-large]").TextContent));
+        AssertKeepsWhatWasTyped(form, "shop-config", "1", "0");
+    }
+
+    // Nada foi gravado: a chave, o tipo e os dois textos ficam como o membro os deixou, para ele corrigir.
+    private static void AssertKeepsWhatWasTyped(IRenderedComponent<NewFlagForm> form, string key, string onValue, string offValue)
+    {
+        Assert.Equal(key, form.Find("#flag-key").GetAttribute("value"));
+        Assert.True(form.Find("#flag-type-json").HasAttribute("checked"));
+        Assert.Equal([onValue, offValue], [TextOf(form.Find("#on-value")), TextOf(form.Find("#off-value"))]);
     }
 
     [Fact]
