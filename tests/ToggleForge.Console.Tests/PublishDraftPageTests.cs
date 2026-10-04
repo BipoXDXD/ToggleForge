@@ -97,6 +97,27 @@ public sealed class PublishDraftPageTests
         Assert.True(PublishButton(page).HasAttribute("disabled"));
     }
 
+    // Uma chave já publicada guarda o tipo (ADR 0011): o texto da API diz qual chave e qual tipo, e reenviar daria a
+    // mesma recusa, então a tentativa acaba aqui e o rascunho não é relido.
+    [Fact]
+    public void A_key_published_with_another_type_refuses_the_publication_with_the_api_detail()
+    {
+        const string Detail = "The key 'new-shop' was already published in this environment as a boolean flag, and a published key keeps its type.";
+        var api = TwoChangesSinceVersionThree().Answer(HttpMethod.Post, Publications, HttpStatusCode.Conflict,
+            $$"""{"type":"/problems/flag-type-locked","title":"Flag type locked","status":409,"detail":"{{Detail}}"}""",
+            "application/problem+json");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderPublish(console);
+
+        Publish(page);
+
+        page.WaitForAssertion(() => Assert.Equal(Detail, page.Find("[role=alert]").TextContent.Trim()));
+        Assert.Equal("Publish 2 changes to prod", PublishButton(page).TextContent.Trim());
+        Assert.False(page.Find("input[maxlength='280']").HasAttribute("disabled"));
+        Assert.Single(api.RequestsTo(HttpMethod.Get, Draft));
+        Assert.Single(api.RequestsTo(HttpMethod.Post, Publications));
+    }
+
     [Fact]
     public void A_viewer_is_told_that_only_owners_and_editors_publish()
     {
