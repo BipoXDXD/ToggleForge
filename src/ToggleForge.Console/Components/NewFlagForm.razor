@@ -46,7 +46,7 @@
     private async Task CreateFlagAsync()
     {
         _createProblem = null;
-        if (!_newFlag.TryGetCreation(out var creation))
+        if (!_newFlag.TryGetCreation(out var creation, out _))
         {
             _createProblem = _invalidRollout;
             return;
