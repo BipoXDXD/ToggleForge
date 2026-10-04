@@ -5,12 +5,6 @@ namespace ToggleForge.Evaluation
         /// <summary>Ainda não há configuração válida (por exemplo, primeira execução sem rede).</summary>
         SnapshotMissing,
 
-        /// <summary>
-        /// Só o SDK produz este motivo: o snapshot guardado passou da idade máxima sem o servidor confirmá-lo
-        /// (ADR 0010).
-        /// </summary>
-        SnapshotExpired,
-
         InvalidFlagKey,
 
         FlagNotFound,
@@ -23,5 +17,11 @@ namespace ToggleForge.Evaluation
         Included,
 
         Excluded,
+
+        /// <summary>
+        /// Só o SDK produz este motivo: o snapshot guardado passou da idade máxima sem o servidor confirmá-lo
+        /// (ADR 0010). Fica no fim para não mudar o número dos motivos anteriores.
+        /// </summary>
+        SnapshotExpired,
     }
 }

@@ -63,12 +63,49 @@ public sealed class ToggleForgeClientTests
     }
 
     [Fact]
-    public async Task The_same_version_again_is_not_swapped_in()
+    public async Task The_version_in_use_sent_again_counts_as_a_confirmation_and_keeps_its_content()
     {
         var client = await SyncedAtVersionThree(SnapshotResponse.Fetched(Snapshots.Disabled(version: 3), "\"other\""));
 
-        Assert.Equal(SyncOutcome.OutOfOrder, await client.RefreshAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(SyncOutcome.NotModified, await client.RefreshAsync(TestContext.Current.CancellationToken));
         AssertStillAtVersionThree(client);
+    }
+
+    [Fact]
+    public async Task A_confirmation_without_etag_keeps_the_one_in_use()
+    {
+        var transport = new StubTransport()
+            .Then(SnapshotResponse.Fetched(Snapshots.Json(version: 3), "\"v3\""))
+            .Then(SnapshotResponse.Fetched(Snapshots.Json(version: 3), eTag: null))
+            .Then(SnapshotResponse.NotModified);
+        var client = Client(transport);
+        await client.RefreshAsync(TestContext.Current.CancellationToken);
+        _time.Advance(ToggleForgeOptions.MinSyncInterval);
+        await client.RefreshAsync(TestContext.Current.CancellationToken);
+        _time.Advance(ToggleForgeOptions.MinSyncInterval);
+
+        await client.RefreshAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal([null, "\"v3\"", "\"v3\""], transport.SentETags);
+    }
+
+    [Fact]
+    public async Task A_late_confirmation_of_an_older_version_does_not_bring_it_back()
+    {
+        var transport = new ScriptedTransport();
+        var client = Client(transport);
+        transport.Next(SnapshotResponse.Fetched(Snapshots.Json(version: 3), "\"v3\""));
+        await client.RefreshAsync(TestContext.Current.CancellationToken);
+        _time.Advance(ToggleForgeOptions.MinSyncInterval);
+        var lateConfirmation = transport.Hold();
+        var slow = client.RefreshAsync(TestContext.Current.CancellationToken);
+        transport.Next(SnapshotResponse.Fetched(Snapshots.Disabled(version: 4), "\"v4\""));
+
+        Assert.Equal(SyncOutcome.Updated, await client.RefreshAsync(TestContext.Current.CancellationToken));
+        lateConfirmation.SetResult(SnapshotResponse.NotModified);
+        await slow;
+
+        Assert.Equal(4, client.EvaluateBoolean("new-shop", _player, defaultValue: true).SnapshotVersion);
     }
 
     [Fact]

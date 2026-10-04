@@ -3,6 +3,7 @@ using System.Globalization;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
@@ -22,6 +23,12 @@ namespace ToggleForge.Sdk
         // O formato "O" guarda o deslocamento e lê de volta exatamente o mesmo instante.
         private const string InstantFormat = "O";
 
+        // O corpo vai escapado dentro do JSON do arquivo e pode crescer; acima disso, não é um arquivo nosso.
+        private const long MaxFileBytes = 4L * HttpSnapshotTransport.MaxSnapshotBytes;
+
+        // A forma que a API aceita em If-None-Match: uma ETag corrompida no disco travaria toda sincronização em 400.
+        private static readonly Regex _eTagShape = new(@"^(W/)?""[A-Za-z0-9._-]{1,60}""$", RegexOptions.CultureInvariant);
+
         private readonly string _directory;
         private readonly string _path;
 
@@ -38,7 +45,8 @@ namespace ToggleForge.Sdk
 
         public async Task<StoredSnapshot?> LoadAsync(CancellationToken cancellationToken)
         {
-            if (!File.Exists(_path))
+            var file = new FileInfo(_path);
+            if (!file.Exists || file.Length > MaxFileBytes)
             {
                 return null;
             }
@@ -55,17 +63,40 @@ namespace ToggleForge.Sdk
             }
 
             Directory.CreateDirectory(_directory);
-            var temporary = _path + ".tmp";
-            await File.WriteAllTextAsync(temporary, Serialize(snapshot), new UTF8Encoding(false), cancellationToken).ConfigureAwait(false);
 
-            // A troca é atômica no mesmo diretório: quem lê vê o arquivo antigo ou o novo, nunca a metade.
+            // Um temporário por gravação: dois clientes da mesma credencial (duas instâncias do jogo, um cliente que
+            // sobrou no Editor da Unity) nunca escrevem no mesmo arquivo pela metade.
+            var temporary = $"{_path}.{Guid.NewGuid():N}.tmp";
+            try
+            {
+                await File.WriteAllTextAsync(temporary, Serialize(snapshot), new UTF8Encoding(false), cancellationToken).ConfigureAwait(false);
+                MoveIntoPlace(temporary);
+            }
+            finally
+            {
+                File.Delete(temporary);
+            }
+        }
+
+        /// <summary>
+        /// A troca é atômica no mesmo diretório: quem lê vê o arquivo antigo ou o novo, nunca a metade. Se outro
+        /// cliente criar o arquivo entre a checagem e o <c>Move</c>, a troca vira <c>Replace</c>.
+        /// </summary>
+        private void MoveIntoPlace(string temporary)
+        {
             if (File.Exists(_path))
             {
                 File.Replace(temporary, _path, destinationBackupFileName: null);
+                return;
             }
-            else
+
+            try
             {
                 File.Move(temporary, _path);
+            }
+            catch (IOException) when (File.Exists(_path))
+            {
+                File.Replace(temporary, _path, destinationBackupFileName: null);
             }
         }
 
@@ -112,7 +143,17 @@ namespace ToggleForge.Sdk
                 return null;
             }
 
-            var eTag = stored["eTag"] is JValue { Type: JTokenType.String, Value: string storedETag } ? storedETag : null;
+            string? eTag = null;
+            if (stored["eTag"] is JValue { Type: JTokenType.String, Value: string storedETag })
+            {
+                if (!_eTagShape.IsMatch(storedETag))
+                {
+                    return null;
+                }
+
+                eTag = storedETag;
+            }
+
             return new StoredSnapshot(body, eTag, instant);
         }
     }
