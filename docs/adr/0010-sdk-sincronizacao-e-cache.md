@@ -147,24 +147,39 @@ O que já existe e pesa na escolha:
   deixado por um build anterior, nunca é lido por engano, e a credencial não vai para o disco. Trocar a
   credencial descarta o cache, o que é aceitável.
 - O arquivo guarda o corpo recebido, a ETag e o instante da última confirmação.
-- A gravação é atômica (arquivo temporário e troca). Um arquivo corrompido é ignorado, como se não existisse.
+- A gravação é atômica: um arquivo temporário com nome único por gravação e depois a troca. Dois clientes da
+  mesma credencial (duas instâncias do jogo, um cliente que sobrou no Editor da Unity) nunca escrevem no mesmo
+  temporário. Um arquivo corrompido, maior que 4 MiB ou com ETag fora da forma que a API aceita é ignorado,
+  como se não existisse; uma ETag ruim travaria toda sincronização em 400.
 - **Adoção:** `StartAsync` lê o cache antes da primeira sincronização e o adota só se ainda não houver snapshot
   em uso. O cache nunca passa por cima do que veio do servidor. Mesmo expirado, ele é adotado, porque a ETag
   dele ainda pode render um 304 que o confirma de novo.
 - **Confirmação:** um 304 confirma o snapshot em uso (origem `Server`) só se ele ainda for o snapshot cuja
-  ETag foi enviada.
-- **Gravação:** sempre que entra uma versão nova. A confirmação de um 304 só é gravada se a última confirmação
-  gravada tiver mais de 1 h; gravar a cada minuto gastaria o disco do celular, e a idade guardada atrasa no
-  máximo isso.
+  ETag foi enviada. Um 200 com a versão em uso também confirma, como um 304: acontece quando um proxy tira a
+  ETag do caminho. Sem ETag nova, a anterior continua.
+- **Gravação:** sempre que entra uma versão ou ETag nova, e na primeira confirmação de um cache adotado. As
+  confirmações seguintes são gravadas no ritmo de 1 h, ou de um quarto da idade máxima se ela for menor;
+  gravar a cada minuto gastaria o disco do celular. O ritmo é medido no relógio monotônico, porque um relógio
+  de parede que voltou no tempo nunca mais deixaria gravar. As gravações são uma por vez, sempre do estado mais
+  recente, então uma sincronização atrasada nunca grava uma versão antiga por cima de uma nova.
 - **Falhas de disco** (cheio, sem permissão) não chegam ao jogo: ele segue com o snapshot em memória, e a
   próxima sincronização tenta gravar de novo.
 - **Idade máxima:** é contada desde a última confirmação do servidor (200 ou 304), não desde a publicação.
   Ela atravessa reinícios do jogo, por isso usa o relógio de parede em UTC. Vale também para o snapshot em
   memória: um jogo aberto e sem rede por mais de 7 dias também cai no fallback.
+- **Relógio atrasado:** uma confirmação datada mais de 5 min no futuro conta como expirada. Ela só existe se o
+  relógio voltou depois dela (um jogador que adiantou o relógio para pular um timer e depois voltou), e
+  aceitá-la esticaria a idade máxima. A folga cobre os acertos pequenos que o sistema faz no relógio. Com rede,
+  a próxima sincronização confirma o snapshot de novo no horário certo.
 - **Expirado:** a avaliação devolve o `defaultValue` com o motivo `SnapshotExpired`, e a origem `None`. O
-  motivo fica no enum do núcleo, para o jogo ter um só vocabulário de motivos, mas só o SDK o produz.
-- **Integridade:** o jogador pode editar o arquivo num aparelho com root. Isso não muda nada, porque o
-  snapshot já é público por desenho, e decisões sensíveis ficam no backend do jogo (`ToggleForge.md`, seção 11).
+  motivo fica no enum do núcleo, para o jogo ter um só vocabulário de motivos, mas só o SDK o produz. Ele e a
+  origem `Cache` entraram no fim dos enums, para não mudar o número dos valores anteriores.
+- **Integridade (ameaça aceita):** o jogador pode editar o arquivo num aparelho com root, inclusive mantendo a
+  ETag para um 304 "confirmar" o conteúdo editado. Isso não muda nada, porque o snapshot já é público por
+  desenho, e decisões sensíveis ficam no backend do jogo (`ToggleForge.md`, seção 11).
+- **Para o adaptador da Unity (Marco 5):** no iOS, `persistentDataPath` entra no backup do iCloud, e dado que
+  se baixa de novo deve ficar fora dele; e arquivos de credenciais trocadas ficam órfãos, então o adaptador
+  planeja a limpeza deles.
 
 ### Resultado da avaliação
 
