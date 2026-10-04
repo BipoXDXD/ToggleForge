@@ -5,8 +5,6 @@ namespace ToggleForge.Api.Tests;
 
 public sealed class PublishingTests(ApiFactory api)
 {
-    private const int Racers = 4;
-
     [Fact]
     public async Task Repeating_a_publication_with_the_same_key_and_body_returns_the_original()
     {
@@ -80,25 +78,30 @@ public sealed class PublishingTests(ApiFactory api)
         var devRevision = ConsoleClient.Revision(await editor.CreateFlagAsync("space-race", "new-shop", environmentKey: "dev"));
         var prodRevision = ConsoleClient.Revision(await editor.CreateFlagAsync("space-race", "new-shop", environmentKey: "prod"));
         var key = ConsoleClient.NewIdempotencyKey();
-        await editor.PublishAsync("space-race", devRevision, key, environmentKey: "dev");
+        var original = await editor.PublishAsync("space-race", devRevision, key, environmentKey: "dev");
+        Assert.Equal(HttpStatusCode.Created, original.Status);
 
         var reused = await editor.PublishAsync("space-race", prodRevision, key, environmentKey: "prod");
 
         Assert.Equal(HttpStatusCode.Conflict, reused.Status);
         Assert.Equal("/problems/idempotency-key-reused", reused.ProblemType);
         Assert.Null(await CurrentVersionAsync(editor, "prod"));
+        Assert.Equal(1, await CurrentVersionAsync(editor, "dev"));
     }
 
     /// <summary>
-    /// O lock é por ambiente, então as requisições não se esperam: todas passam pelo replay sem achar a chave e
-    /// disputam a primary key do registro de idempotência. As perdedoras abortam e respondem pelo registro da
-    /// vencedora, que tem outro ambiente no fingerprint.
+    /// O lock é por ambiente, então as requisições não se esperam: em geral todas passam pelo replay sem achar a
+    /// chave e disputam a primary key do registro de idempotência, e as perdedoras abortam e respondem pelo registro
+    /// da vencedora. Uma requisição que chegue depois do commit cai no replay comum; nos dois caminhos a resposta é
+    /// 409, porque o fingerprint da vencedora tem outro ambiente.
     /// </summary>
     [Fact]
     public async Task The_same_key_racing_in_several_environments_publishes_once_and_conflicts_for_the_rest()
     {
+        const int Racers = 4;
         using var editor = await ConsoleClient.SignUpAsync(api);
         await editor.CreateProjectAsync("space-race");
+        // Todo projeto nasce com dev e prod; os outros corredores são ambientes criados aqui.
         string[] created = [.. Enumerable.Range(1, Racers - 2).Select(racer => $"racer-{racer}")];
         foreach (var environment in created)
         {
@@ -118,16 +121,43 @@ public sealed class PublishingTests(ApiFactory api)
         var responses = await Task.WhenAll(environments.Select(environment =>
             editor.PublishAsync("space-race", revisions[environment], key, environmentKey: environment)));
 
-        Assert.Single(responses, response => response.Status == HttpStatusCode.Created);
+        var outcomes = environments.Zip(responses, (environment, response) => (Environment: environment, Response: response)).ToList();
+        var winner = Assert.Single(outcomes, outcome => outcome.Response.Status == HttpStatusCode.Created).Environment;
         Assert.All(
-            responses.Where(response => response.Status != HttpStatusCode.Created),
-            response =>
+            outcomes.Where(outcome => outcome.Environment != winner),
+            outcome =>
             {
-                Assert.Equal(HttpStatusCode.Conflict, response.Status);
-                Assert.Equal("/problems/idempotency-key-reused", response.ProblemType);
+                Assert.Equal(HttpStatusCode.Conflict, outcome.Response.Status);
+                Assert.Equal("/problems/idempotency-key-reused", outcome.Response.ProblemType);
             });
-        var versions = await Task.WhenAll(environments.Select(environment => CurrentVersionAsync(editor, environment)));
-        Assert.Equal([1L], versions.OfType<long>());
+        foreach (var environment in environments)
+        {
+            Assert.Equal(environment == winner ? 1 : null, await CurrentVersionAsync(editor, environment));
+        }
+    }
+
+    /// <summary>
+    /// Mesma organização, ambiente, chave e corpo: só o membro diferencia os pedidos. O colega não recebe a
+    /// publicação do dono como replay; o pedido dele é avaliado do zero e esbarra no rascunho já publicado.
+    /// </summary>
+    [Fact]
+    public async Task A_colleague_reusing_a_members_key_and_body_is_not_served_their_publication()
+    {
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        using var colleague = await ConsoleClient.SignUpAsync(api);
+        await api.AddMembershipAsync(owner.OrganizationId, colleague.MemberId, "editor");
+        await owner.CreateProjectAsync("space-race");
+        var revision = ConsoleClient.Revision(await owner.CreateFlagAsync("space-race", "new-shop"));
+        var key = ConsoleClient.NewIdempotencyKey();
+        var original = await owner.PublishAsync("space-race", revision, key, summary: "First release");
+        Assert.Equal(HttpStatusCode.Created, original.Status);
+
+        var response = await colleague.PublishAsync(
+            "space-race", revision, key, summary: "First release", organizationId: owner.OrganizationId);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.Status);
+        Assert.Equal("/problems/nothing-to-publish", response.ProblemType);
+        Assert.Equal(1, await CurrentVersionAsync(owner));
     }
 
     [Fact]
