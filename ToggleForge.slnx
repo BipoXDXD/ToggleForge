@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/samples/">
     <Project Path="samples/ToggleForge.RolloutDemo/ToggleForge.RolloutDemo.csproj" />
+    <Project Path="samples/ToggleForge.SdkDemo/ToggleForge.SdkDemo.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/ToggleForge.Api/ToggleForge.Api.csproj" />
