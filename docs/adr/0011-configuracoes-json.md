@@ -113,8 +113,10 @@ O que já existe e pesa na escolha:
 ### Domínio e banco
 
 - `JsonFlagValue` é um value object que nasce válido, lido com o System.Text.Json do .NET, sem pacote de
-  terceiro. A leitura aceita chaves repetidas e a varredura seguinte as recusa, para a recusa dizer qual regra
-  quebrou (`DuplicateKey`, e não um erro genérico de leitura).
+  terceiro. A leitura própria aceita chaves repetidas e a varredura seguinte as recusa com `DuplicateKey`. Pela
+  API, quem recusa primeiro é o binding (`AllowDuplicateProperties = false`), com o 400 genérico `INVALID_BODY`
+  no campo; o `DuplicateKey` só aparece no uso direto do domínio e na reidratação do banco, como defesa em
+  profundidade.
 - `FlagSettings` troca `OnValue`/`OffValue` por um par fechado, `BooleanValues` ou `JsonValues`. O tipo
   deriva do par. Um `FlagChange` com valor de outro tipo é uma falha de domínio, não uma exceção.
 - `ProjectEnvironment` impõe os 128 KiB na criação e na edição, como já impõe as 200 flags. Quem impede dois
@@ -144,6 +146,8 @@ O que já existe e pesa na escolha:
 - **Erros:** valor inválido ou fora dos limites → 400 no campo. Passar dos 128 KiB do ambiente → 409
   `json-budget-reached`, um tipo próprio (mudança aditiva), para o console explicar o erro sem adivinhar; as 200
   flags continuam `limit-reached`. Corpo acima de 32 KiB → 413 `payload-too-large`.
+  - Numa flag booleana com os dois valores errados, só `/onValue` é apontado: o domínio para na primeira falha, e
+    o `/offValue` aparece na tentativa seguinte.
   - O limite de corpo é o nativo do servidor (`RequestSizeLimit` nas duas rotas), aplicado pelo Kestrel na leitura
     do binding. O 413 chega vazio ao `UseStatusCodePages` e vira Problem Details lá. O TestServer não aplica o
     limite, então os testes de 413 rodam num Kestrel.
@@ -151,8 +155,8 @@ O que já existe e pesa na escolha:
     da Tarefa 9 viu 413 com 32.767 bytes), então o cliente que chega perto do teto deve mandar `Content-Length`.
   - `null` no PATCH é recusado no campo, porque no merge patch ele apagaria o valor; uma flag JSON só recebe o JSON
     `null` na criação.
-  - Um corpo que o binding recusa aponta só o campo de topo (`/onValue`), sem as chaves escolhidas pelo cliente
-    dentro do valor.
+  - Um corpo que o binding recusa aponta só o campo de topo (`/onValue`), na criação e no patch, sem as chaves
+    escolhidas pelo cliente dentro do valor.
 - **Saída:** o valor sai como o `JsonElement` do texto compacto. Acentos não são reescapados, então o download
   fica no tamanho contado; o que a compactação escapa (fora do BMP, U+2028/U+2029) já pesa no limite.
 - O `openapi.yaml` muda na fatia da API, como primeiro commit dela e antes do código, porque os testes de
@@ -199,6 +203,12 @@ O que já existe e pesa na escolha:
   publicação, rollback nem expiração até a próxima avaliação. Um sinal de mudança (evento ou a versão em uso) é
   candidato aditivo futuro, para quando um estúdio precisar reagir sem reavaliar.
 - Um tipo futuro (por exemplo, número) passa por builds antigos sem derrubá-los: eles só não o enxergam.
+- **Risco residual aceito:** o tipo é fixo enquanto a flag existe, mas a chave não fica presa a ele. Apagar uma
+  chave publicada e recriá-la com o outro tipo, ou fazer rollback para uma versão em que ela tinha o outro tipo,
+  continua permitido. Um build antigo que lê a chave com a classe de antes recebe `TypeMismatch` e fica no próprio
+  `defaultValue`: falha segura, nunca um valor do tipo errado. Travar a chave exigiria guardar o tipo de toda chave
+  já publicada e recusar o rollback, custo que não se paga enquanto a falha é segura
+  (`Recreating_a_published_key_with_another_type_is_accepted`).
 
 ## Compliance
 

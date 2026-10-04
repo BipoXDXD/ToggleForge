@@ -8,8 +8,10 @@ namespace ToggleForge.Api.Http;
 internal static class FlagInput
 {
     /// <summary>
-    /// Teto do corpo de <c>createFlag</c> e <c>updateFlag</c> (canvas D3): dois valores de 4 KiB cabem com folga, mesmo
-    /// escritos com espaços e escapes. Quem aplica é o servidor (Kestrel), antes do binding.
+    /// Teto do corpo de <c>createFlag</c> e <c>updateFlag</c> (canvas D3). Dois valores de 4 KiB compactados somam 8 KiB e
+    /// deixam 24 KiB para os espaços e escapes comuns. Não cabe qualquer escrita: cada <c>\uXXXX</c> ocupa 6 bytes, então
+    /// um valor todo escapado chega a 6 vezes o compactado (24 KiB) e dois deles (48 KiB) passam do teto. Quem aplica é
+    /// o servidor (Kestrel), antes do binding.
     /// </summary>
     public const int BodyLimitBytes = 32 * 1024;
 
