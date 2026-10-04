@@ -12,11 +12,17 @@ namespace ToggleForge.Sdk
     /// <summary>O transporte do .NET, com um <see cref="HttpClient"/> que aponta para a API do ToggleForge.</summary>
     public sealed class HttpSnapshotTransport : ISnapshotTransport
     {
-        // Um snapshot tem no máximo 200 flags de poucas centenas de bytes cada; o teto barra uma resposta que
-        // não é snapshot (um proxy no caminho, por exemplo) antes de ela ocupar a memória do jogo.
+        // Um snapshot tem no máximo 200 flags, e os valores JSON de um ambiente somam no máximo 128 KiB (ADR 0011):
+        // um snapshot de verdade fica bem abaixo de 1 MiB. O teto barra uma resposta que não é snapshot (um proxy
+        // no caminho, por exemplo) antes de ela ocupar a memória do jogo.
         internal const int MaxSnapshotBytes = 1024 * 1024;
 
         private const string SnapshotPath = "sdk/v1/snapshot";
+
+        private const int ReadChunkBytes = 16 * 1024;
+
+        // O XML doc do construtor repete este valor: mude os dois juntos.
+        private static readonly TimeSpan _defaultTimeout = TimeSpan.FromSeconds(10);
 
         private readonly HttpClient _http;
         private readonly SdkCredential _credential;
@@ -24,14 +30,14 @@ namespace ToggleForge.Sdk
 
         /// <param name="http">Com <c>BaseAddress</c> na raiz da API. O transporte não o descarta.</param>
         /// <param name="timeout">
-        /// O tempo de uma tentativa inteira, do envio ao fim do corpo; 10 s quando nulo (ADR 0010). O
+        /// O tempo de uma tentativa inteira, do envio ao fim do corpo; quando nulo, o padrão de 10 s (ADR 0010). O
         /// <c>Timeout</c> do <see cref="HttpClient"/> não serve: ele para de contar quando chegam os headers.
         /// </param>
         public HttpSnapshotTransport(HttpClient http, SdkCredential credential, TimeSpan? timeout = null)
         {
             _http = http ?? throw new ArgumentNullException(nameof(http));
             _credential = credential ?? throw new ArgumentNullException(nameof(credential));
-            _timeout = timeout ?? TimeSpan.FromSeconds(10);
+            _timeout = timeout ?? _defaultTimeout;
         }
 
         public async Task<SnapshotResponse> GetAsync(string? eTag, CancellationToken cancellationToken)
@@ -91,7 +97,7 @@ namespace ToggleForge.Sdk
 
             using var stream = await content.ReadAsStreamAsync().ConfigureAwait(false);
             using var buffer = new MemoryStream();
-            var chunk = new byte[16 * 1024];
+            var chunk = new byte[ReadChunkBytes];
             int read;
             while ((read = await stream.ReadAsync(chunk.AsMemory(), cancellationToken).ConfigureAwait(false)) > 0)
             {

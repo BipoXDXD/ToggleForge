@@ -292,7 +292,7 @@ namespace ToggleForge.Sdk
                 await PersistAsync(cancellationToken).ConfigureAwait(false);
             }
 
-            var pause = SyncSchedule.PauseBeforeRefresh(attempt);
+            var pause = _schedule.PauseBeforeRefresh(attempt);
             Volatile.Write(ref _refreshNotBefore, _timeProvider.GetTimestamp() + (long)(pause.TotalSeconds * _timeProvider.TimestampFrequency));
             return attempt;
         }

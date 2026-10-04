@@ -246,6 +246,22 @@ public sealed class ToggleForgeClientTests
         Assert.Equal(SyncOutcome.NotModified, await client.RefreshAsync(TestContext.Current.CancellationToken));
     }
 
+    [Theory]
+    [InlineData(401)]
+    [InlineData(403)]
+    public async Task A_refresh_after_a_refused_credential_waits_as_long_as_the_loop(int status)
+    {
+        var transport = new StubTransport().Then(SnapshotResponse.Failed(status)).Then(SnapshotResponse.NotModified);
+        var client = new ToggleForgeClient(transport, options: new ToggleForgeOptions { SyncInterval = TimeSpan.FromHours(1) }, timeProvider: _time);
+        await client.RefreshAsync(TestContext.Current.CancellationToken);
+        _time.Advance(TimeSpan.FromSeconds(3599));
+
+        Assert.Equal(SyncOutcome.Skipped, await client.RefreshAsync(TestContext.Current.CancellationToken));
+
+        _time.Advance(TimeSpan.FromSeconds(1));
+        Assert.Equal(SyncOutcome.NotModified, await client.RefreshAsync(TestContext.Current.CancellationToken));
+    }
+
     [Fact]
     public async Task The_first_refresh_goes_out_at_once() =>
         Assert.Equal(SyncOutcome.NotModified, await Client(new StubTransport().Then(SnapshotResponse.NotModified)).RefreshAsync(TestContext.Current.CancellationToken));

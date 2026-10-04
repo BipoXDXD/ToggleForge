@@ -119,42 +119,48 @@ namespace ToggleForge.Sdk
         /// <returns>Nulo quando o arquivo não é um cache que esta versão do SDK escreveu.</returns>
         private static StoredSnapshot? Parse(string text)
         {
-            JObject stored;
+            var stored = ReadObject(text);
+            if (stored is null
+                || stored["format"] is not JValue { Type: JTokenType.Integer, Value: long format } || format != Format
+                || stored["snapshot"] is not JValue { Type: JTokenType.String, Value: string body }
+                || !TryReadInstant(stored["confirmedAt"], out var confirmedAt)
+                || !TryReadOptionalETag(stored["eTag"], out var eTag))
+            {
+                return null;
+            }
+
+            return new StoredSnapshot(body, eTag, confirmedAt);
+        }
+
+        /// <returns>Nulo quando o texto não é JSON ou não é um objeto.</returns>
+        private static JObject? ReadObject(string text)
+        {
             try
             {
                 using var reader = new JsonTextReader(new StringReader(text)) { DateParseHandling = DateParseHandling.None };
-                if (JToken.ReadFrom(reader) is not JObject root)
-                {
-                    return null;
-                }
-
-                stored = root;
+                return JToken.ReadFrom(reader) as JObject;
             }
             catch (JsonReaderException)
             {
                 return null;
             }
+        }
 
-            if (stored["format"] is not JValue { Type: JTokenType.Integer, Value: long format } || format != Format
-                || stored["snapshot"] is not JValue { Type: JTokenType.String, Value: string body }
-                || stored["confirmedAt"] is not JValue { Type: JTokenType.String, Value: string confirmedAt }
-                || !DateTimeOffset.TryParseExact(confirmedAt, InstantFormat, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var instant))
-            {
-                return null;
-            }
+        private static bool TryReadInstant(JToken? token, out DateTimeOffset instant)
+        {
+            instant = default;
+            return token is JValue { Type: JTokenType.String, Value: string text }
+                && DateTimeOffset.TryParseExact(text, InstantFormat, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out instant);
+        }
 
-            string? eTag = null;
-            if (stored["eTag"] is JValue { Type: JTokenType.String, Value: string storedETag })
-            {
-                if (!_eTagShape.IsMatch(storedETag))
-                {
-                    return null;
-                }
-
-                eTag = storedETag;
-            }
-
-            return new StoredSnapshot(body, eTag, instant);
+        /// <returns>
+        /// Falso só quando há uma ETag em texto fora da forma que a API aceita. Ausente ou de outro tipo, ela fica
+        /// nula e o snapshot vale sem ela.
+        /// </returns>
+        private static bool TryReadOptionalETag(JToken? token, out string? eTag)
+        {
+            eTag = token is JValue { Type: JTokenType.String, Value: string text } ? text : null;
+            return eTag is null || _eTagShape.IsMatch(eTag);
         }
     }
 }
