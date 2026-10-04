@@ -6,12 +6,17 @@ namespace ToggleForge.Sdk
     public sealed class FlagResult<T>
     {
         internal FlagResult(EvaluationResult<T> evaluation, SnapshotSource source)
+            : this(evaluation.Value, evaluation.Reason, evaluation.SnapshotVersion, evaluation.Bucket, evaluation.IsFallback, source)
         {
-            Value = evaluation.Value;
-            Reason = evaluation.Reason;
-            SnapshotVersion = evaluation.SnapshotVersion;
-            Bucket = evaluation.Bucket;
-            IsFallback = evaluation.IsFallback;
+        }
+
+        private FlagResult(T value, EvaluationReason reason, long? snapshotVersion, int? bucket, bool isFallback, SnapshotSource source)
+        {
+            Value = value;
+            Reason = reason;
+            SnapshotVersion = snapshotVersion;
+            Bucket = bucket;
+            IsFallback = isFallback;
             Source = source;
         }
 
@@ -29,5 +34,9 @@ namespace ToggleForge.Sdk
         public bool IsFallback { get; }
 
         public SnapshotSource Source { get; }
+
+        /// <summary>O snapshot passou da idade máxima: o jogo recebe o próprio valor padrão (ADR 0010).</summary>
+        internal static FlagResult<T> Expired(T defaultValue) =>
+            new(defaultValue, EvaluationReason.SnapshotExpired, snapshotVersion: null, bucket: null, isFallback: true, SnapshotSource.None);
     }
 }

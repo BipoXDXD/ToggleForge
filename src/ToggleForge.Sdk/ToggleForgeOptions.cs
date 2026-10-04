@@ -13,5 +13,11 @@ namespace ToggleForge.Sdk
 
         /// <summary>O intervalo entre sincronizações bem-sucedidas, antes da variação de ±10%; 60 s por padrão.</summary>
         public TimeSpan SyncInterval { get; set; } = TimeSpan.FromSeconds(60);
+
+        /// <summary>
+        /// Quanto tempo depois da última confirmação do servidor o snapshot ainda vale; 7 dias por padrão (ADR 0010).
+        /// Passado isso, o jogo recebe os próprios valores padrão até a próxima sincronização.
+        /// </summary>
+        public TimeSpan MaxCacheAge { get; set; } = TimeSpan.FromDays(7);
     }
 }

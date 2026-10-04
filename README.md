@@ -103,7 +103,7 @@ só pela interface e confere que, depois do rollback, o mesmo jogador volta ao m
 
 O jogo usa o `ToggleForgeClient` com a credencial do ambiente. O SDK baixa o snapshot em
 `GET /sdk/v1/snapshot` com `If-None-Match` e avalia as flags localmente, sem esperar rede nem disco. Cada
-resultado traz o valor, o motivo, a versão e a origem dos dados (`Server` ou `None`). Uma versão igual ou
+resultado traz o valor, o motivo, a versão e a origem dos dados (`Server`, `Cache` ou `None`). Uma versão igual ou
 anterior à que está em uso é descartada, porque a ordem vem da versão da publicação e nunca do relógio. Um
 snapshot inválido ou de algoritmo desconhecido mantém o anterior. O SDK é netstandard2.1 com C# 9 e lê o JSON
 com Newtonsoft.Json mapeado à mão, sem reflection, para rodar no IL2CPP da Unity (ADR 0010).
@@ -115,14 +115,21 @@ desistir de esperar a primeira sincronização sem pará-la. `RefreshAsync` sinc
 o jogo volta do segundo plano, mas devolve `Skipped` sem chamar o servidor se vier antes de 15 s da última
 tentativa ou do prazo que o servidor pediu.
 
+Com um `FileSnapshotStore`, o snapshot sobrevive a um reinício do jogo, num arquivo por credencial. Sem rede,
+o jogo continua com o snapshot guardado (origem `Cache`) até o servidor confirmá-lo. Passados 7 dias da última
+confirmação (configurável), o snapshot expira e o jogo recebe os próprios valores padrão com o motivo
+`SnapshotExpired`. Uma jornada contra a API real reinicia o jogo sem rede e prova esse caminho.
+
 ```csharp
 using var http = new HttpClient { BaseAddress = new Uri("https://api.toggleforge.example/") };
-await using var client = new ToggleForgeClient(new HttpSnapshotTransport(http, SdkCredential.Parse(credential)));
+var credential = SdkCredential.Parse(secret);
+await using var client = new ToggleForgeClient(
+    new HttpSnapshotTransport(http, credential), new FileSnapshotStore(cacheDirectory, credential));
 await client.StartAsync();
 var newShop = client.EvaluateBoolean("new-shop", EvaluationContext.ForPlayer(PlayerId.Parse(playerId)), defaultValue: false);
 ```
 
-O cache em disco com idade máxima de 7 dias e o app demonstrativo entram nas próximas fatias.
+O app demonstrativo e as configurações JSON entram nas próximas fatias.
 
 ## Desenvolvimento
 

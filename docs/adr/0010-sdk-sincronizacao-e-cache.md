@@ -143,11 +143,28 @@ O que já existe e pesa na escolha:
 
 - O armazenamento é uma porta. O adaptador .NET grava um arquivo no diretório escolhido pelo jogo, e o da
   Unity, em `Application.persistentDataPath`.
+- **Um arquivo por credencial:** o nome vem de um hash SHA-256 da credencial. Um cache de outro ambiente,
+  deixado por um build anterior, nunca é lido por engano, e a credencial não vai para o disco. Trocar a
+  credencial descarta o cache, o que é aceitável.
 - O arquivo guarda o corpo recebido, a ETag e o instante da última confirmação.
 - A gravação é atômica (arquivo temporário e troca). Um arquivo corrompido é ignorado, como se não existisse.
+- **Adoção:** `StartAsync` lê o cache antes da primeira sincronização e o adota só se ainda não houver snapshot
+  em uso. O cache nunca passa por cima do que veio do servidor. Mesmo expirado, ele é adotado, porque a ETag
+  dele ainda pode render um 304 que o confirma de novo.
+- **Confirmação:** um 304 confirma o snapshot em uso (origem `Server`) só se ele ainda for o snapshot cuja
+  ETag foi enviada.
+- **Gravação:** sempre que entra uma versão nova. A confirmação de um 304 só é gravada se a última confirmação
+  gravada tiver mais de 1 h; gravar a cada minuto gastaria o disco do celular, e a idade guardada atrasa no
+  máximo isso.
+- **Falhas de disco** (cheio, sem permissão) não chegam ao jogo: ele segue com o snapshot em memória, e a
+  próxima sincronização tenta gravar de novo.
 - **Idade máxima:** é contada desde a última confirmação do servidor (200 ou 304), não desde a publicação.
-  Ela atravessa reinícios do jogo, por isso usa o relógio de parede em UTC.
-- **Expirado:** a avaliação devolve o `defaultValue` com o motivo `SnapshotExpired`.
+  Ela atravessa reinícios do jogo, por isso usa o relógio de parede em UTC. Vale também para o snapshot em
+  memória: um jogo aberto e sem rede por mais de 7 dias também cai no fallback.
+- **Expirado:** a avaliação devolve o `defaultValue` com o motivo `SnapshotExpired`, e a origem `None`. O
+  motivo fica no enum do núcleo, para o jogo ter um só vocabulário de motivos, mas só o SDK o produz.
+- **Integridade:** o jogador pode editar o arquivo num aparelho com root. Isso não muda nada, porque o
+  snapshot já é público por desenho, e decisões sensíveis ficam no backend do jogo (`ToggleForge.md`, seção 11).
 
 ### Resultado da avaliação
 

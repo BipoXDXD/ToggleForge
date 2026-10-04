@@ -213,7 +213,7 @@ public sealed class ToggleForgeClientTests
     public async Task The_first_refresh_goes_out_at_once() =>
         Assert.Equal(SyncOutcome.NotModified, await Client(new StubTransport().Then(SnapshotResponse.NotModified)).RefreshAsync(TestContext.Current.CancellationToken));
 
-    private ToggleForgeClient Client(ISnapshotTransport transport) => new(transport, options: null, _time);
+    private ToggleForgeClient Client(ISnapshotTransport transport) => new(transport, timeProvider: _time);
 
     private async Task<ToggleForgeClient> SyncedAtVersionThree(SnapshotResponse next)
     {

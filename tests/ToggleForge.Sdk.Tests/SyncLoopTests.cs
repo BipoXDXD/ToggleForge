@@ -71,7 +71,7 @@ public sealed class SyncLoopTests
     {
         var transport = new StubTransport().Then(SnapshotResponse.Failed(429, TimeSpan.FromMinutes(5)));
         var waits = new ManualWaits();
-        await using var client = new ToggleForgeClient(transport, options: null, new FakeTimeProvider(), waits.WaitAsync, () => 0.0);
+        await using var client = new ToggleForgeClient(transport, store: null, options: null, new FakeTimeProvider(), waits.WaitAsync, () => 0.0);
 
         await client.StartAsync(TestContext.Current.CancellationToken);
 
@@ -83,7 +83,7 @@ public sealed class SyncLoopTests
     {
         var transport = new StubTransport().Then(SnapshotResponse.NotModified);
         var waits = new ManualWaits();
-        await using var client = new ToggleForgeClient(transport, options: null, new FakeTimeProvider(), waits.WaitAsync, () => 0.0);
+        await using var client = new ToggleForgeClient(transport, store: null, options: null, new FakeTimeProvider(), waits.WaitAsync, () => 0.0);
 
         await client.StartAsync(TestContext.Current.CancellationToken);
 
@@ -111,7 +111,7 @@ public sealed class SyncLoopTests
     {
         var options = new ToggleForgeOptions { SyncInterval = TimeSpan.FromSeconds(seconds) };
 
-        var creation = Record.Exception(() => new ToggleForgeClient(new StubTransport(), options));
+        var creation = Record.Exception(() => new ToggleForgeClient(new StubTransport(), options: options));
 
         Assert.Equal(accepted, creation is null);
         Assert.True(accepted || creation is ArgumentOutOfRangeException);
@@ -204,29 +204,5 @@ public sealed class SyncLoopTests
     }
 
     private static ToggleForgeClient Client(ISnapshotTransport transport, ManualWaits waits, ToggleForgeOptions? options = null) =>
-        new(transport, options, new FakeTimeProvider(), waits.WaitAsync, () => NoJitter);
-
-    /// <summary>Uma sincronização que só termina quando o teste responde ou quando é cancelada.</summary>
-    private sealed class HangingTransport : ISnapshotTransport
-    {
-        private readonly TaskCompletionSource _arrived = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        private readonly TaskCompletionSource<SnapshotResponse> _answer = new(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        public Task Arrived => _arrived.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
-
-        public bool WasCancelled { get; private set; }
-
-        public void Answer(SnapshotResponse response) => _answer.SetResult(response);
-
-        public async Task<SnapshotResponse> GetAsync(string? eTag, CancellationToken cancellationToken)
-        {
-            using var registration = cancellationToken.Register(() =>
-            {
-                WasCancelled = true;
-                _answer.TrySetCanceled(cancellationToken);
-            });
-            _arrived.TrySetResult();
-            return await _answer.Task;
-        }
-    }
+        new(transport, store: null, options, new FakeTimeProvider(), waits.WaitAsync, () => NoJitter);
 }
