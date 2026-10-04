@@ -529,6 +529,35 @@ public sealed class NewFlagFormTests
         Assert.Equal("shop-config", form.Find("#flag-key").GetAttribute("value"));
     }
 
+    [Theory]
+    [InlineData(true, "This key was published as a Boolean flag in this environment, and a published key keeps its type. Use a new key for a JSON flag.")]
+    [InlineData(false, "This key was published as a JSON flag in this environment, and a published key keeps its type. Use a new key for a Boolean flag.")]
+    public void A_key_published_with_the_other_type_is_marked_on_its_field_and_focused(bool sendJson, string expected)
+    {
+        var api = Editor(new StubApi().Answer(HttpMethod.Post, Flags, HttpStatusCode.Conflict,
+            """{"type":"/problems/flag-type-locked","title":"Flag type locked","status":409,"detail":"The key 'shop-config' was already published in this environment as another flag."}""",
+            "application/problem+json"));
+        using var console = ConsoleRendering.Create(api);
+        var form = RenderForm(console);
+        var key = ReferenceOf(form.Find("#flag-key"));
+
+        form.Find("#flag-key").Change("shop-config");
+        if (sendJson)
+        {
+            form.Find("#flag-type-json").Change(true);
+            form.Find("#on-value").Input("1");
+            form.Find("#off-value").Input("0");
+        }
+
+        form.Find("form").Submit();
+
+        form.WaitForAssertion(() => Assert.Equal(expected, MessageOf(form.Find("#flag-key-error"))));
+        Assert.Equal("true", form.Find("#flag-key").GetAttribute("aria-invalid"));
+        Assert.Equal(FixMarkedFields, Assert.Single(form.FindAll("[role=alert]")).TextContent.Trim());
+        Assert.Equal("shop-config", form.Find("#flag-key").GetAttribute("value"));
+        form.WaitForAssertion(() => AssertFocused(console, key));
+    }
+
     [Fact]
     public void A_boolean_body_too_large_shows_the_api_detail()
     {

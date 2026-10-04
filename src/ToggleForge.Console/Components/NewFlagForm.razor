@@ -127,7 +127,7 @@
             return;
         }
 
-        Explain(flag.Problem, FlagTypes.IsJson(creation.Type));
+        Explain(flag.Problem, creation.Type);
         _focusAfterRender ??= AddButton;
     }
 
@@ -153,13 +153,14 @@
 
     /// <summary>
     /// Nada foi gravado, e o formulário fica como o membro o deixou, para ele corrigir. Erro de campo vai para o
-    /// campo; corpo grande demais, para os valores, que são o que cresce; o teto JSON do rascunho ganha o texto do
-    /// console; o resto (chave já usada no rascunho, <c>key-taken</c>, e o teto de 200 flags) vai para a mensagem geral
-    /// com o texto da API.
+    /// campo; corpo grande demais, para os valores, que são o que cresce; o teto JSON do rascunho e a chave já
+    /// publicada com outro tipo (esta, na chave) ganham o texto do console; o resto (chave já usada no rascunho,
+    /// <c>key-taken</c>, e o teto de 200 flags) vai para a mensagem geral com o texto da API.
     /// </summary>
-    /// <param name="sentJson">Se o pedido recusado era de uma flag JSON: o 413 fala dos valores que foram enviados.</param>
+    /// <param name="sentType">O tipo do pedido recusado: o 413 de uma flag JSON fala dos valores que foram enviados, e a
+    /// chave publicada com outro tipo é marcada na chave.</param>
     /// <remarks>O mesmo switch do <c>FlagEditor.ExplainAsync</c>, sem o 412 e o 404; fica repetido até uma terceira tela.</remarks>
-    private void Explain(Problem problem, bool sentJson)
+    private void Explain(Problem problem, string sentType)
     {
         switch (problem.StatusCode)
         {
@@ -170,7 +171,12 @@
             case System.Net.HttpStatusCode.Conflict when problem.Type == FormProblems.JsonBudgetReachedType:
                 _problem = FormProblems.OutOfJsonRoom;
                 break;
-            case System.Net.HttpStatusCode.RequestEntityTooLarge when sentJson:
+            case System.Net.HttpStatusCode.Conflict when problem.Type == FormProblems.FlagTypeLockedType:
+                var keyError = new FieldErrors();
+                keyError.Add(FieldErrors.Key, FormProblems.KeyPublishedWithAnotherType(sentType));
+                MarkFields(keyError);
+                break;
+            case System.Net.HttpStatusCode.RequestEntityTooLarge when FlagTypes.IsJson(sentType):
                 _valuesTooLarge = true;
                 break;
             default:
