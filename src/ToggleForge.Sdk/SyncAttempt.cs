@@ -1,4 +1,5 @@
 using System;
+using System.Net;
 
 namespace ToggleForge.Sdk
 {
@@ -18,5 +19,12 @@ namespace ToggleForge.Sdk
         public int? StatusCode { get; }
 
         public TimeSpan? RetryAfter { get; }
+
+        /// <summary>401 ou 403: a credencial foi revogada ou recusada, e não volta a valer sozinha em segundos.</summary>
+        public bool IsCredentialRefused =>
+            Outcome == SyncOutcome.Failed && StatusCode is (int)HttpStatusCode.Unauthorized or (int)HttpStatusCode.Forbidden;
+
+        /// <summary>404: o ambiente ainda não tem nenhuma publicação.</summary>
+        public bool IsNeverPublished => Outcome == SyncOutcome.Failed && StatusCode == (int)HttpStatusCode.NotFound;
     }
 }

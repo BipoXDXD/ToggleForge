@@ -25,7 +25,7 @@ namespace ToggleForge.Sdk
         /// </summary>
         public static bool CountsAsFailure(SyncAttempt attempt) =>
             attempt.Outcome == SyncOutcome.Invalid
-            || (attempt.Outcome == SyncOutcome.Failed && attempt.StatusCode != 404);
+            || (attempt.Outcome == SyncOutcome.Failed && !attempt.IsNeverPublished);
 
         /// <param name="consecutiveFailures">Quantas falhas seguidas, contando a última; 0 depois de um sucesso.</param>
         /// <param name="sample">Um número aleatório em [0, 1) que escolhe a variação.</param>
@@ -49,7 +49,7 @@ namespace ToggleForge.Sdk
         /// </summary>
         public static TimeSpan PauseBeforeRefresh(SyncAttempt attempt)
         {
-            if (attempt.Outcome == SyncOutcome.Failed && attempt.StatusCode is 401 or 403)
+            if (attempt.IsCredentialRefused)
             {
                 return MaxBackoff;
             }
@@ -62,9 +62,8 @@ namespace ToggleForge.Sdk
         private TimeSpan BaseDelay(SyncAttempt attempt, int consecutiveFailures)
         {
             var ceiling = _interval > MaxBackoff ? _interval : MaxBackoff;
-            if (attempt.Outcome == SyncOutcome.Failed && attempt.StatusCode is 401 or 403)
+            if (attempt.IsCredentialRefused)
             {
-                // Credencial revogada não volta sozinha em segundos: o jogo tenta de novo no teto.
                 return ceiling;
             }
 
