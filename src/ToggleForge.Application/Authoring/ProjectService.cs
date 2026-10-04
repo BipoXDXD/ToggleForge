@@ -53,7 +53,7 @@ public sealed class ProjectService(
     public async Task<Result<IReadOnlyList<ProjectView>>> ListAsync(
         Guid memberId, Guid organizationId, CancellationToken cancellationToken)
     {
-        if (!(await access.FindRoleAsync(memberId, organizationId, cancellationToken)).TryGetValue(out _, out var failure))
+        if (await access.RequireMembershipAsync(memberId, organizationId, cancellationToken) is { } failure)
         {
             return failure;
         }
@@ -64,7 +64,7 @@ public sealed class ProjectService(
     public async Task<Result<ProjectView>> GetAsync(
         Guid memberId, Guid organizationId, ProjectKey key, CancellationToken cancellationToken)
     {
-        if (!(await access.FindRoleAsync(memberId, organizationId, cancellationToken)).TryGetValue(out _, out var failure))
+        if (await access.RequireMembershipAsync(memberId, organizationId, cancellationToken) is { } failure)
         {
             return failure;
         }
@@ -114,7 +114,7 @@ public sealed class ProjectService(
     {
         ArgumentNullException.ThrowIfNull(locator);
 
-        if (!(await access.FindRoleAsync(memberId, locator.OrganizationId, cancellationToken)).TryGetValue(out _, out var failure))
+        if (await access.RequireMembershipAsync(memberId, locator.OrganizationId, cancellationToken) is { } failure)
         {
             return failure;
         }
