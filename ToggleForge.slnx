@@ -9,11 +9,13 @@
     <Project Path="src/ToggleForge.Domain/ToggleForge.Domain.csproj" />
     <Project Path="src/ToggleForge.Evaluation/ToggleForge.Evaluation.csproj" />
     <Project Path="src/ToggleForge.Infrastructure/ToggleForge.Infrastructure.csproj" />
+    <Project Path="src/ToggleForge.Sdk/ToggleForge.Sdk.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/ToggleForge.Api.Tests/ToggleForge.Api.Tests.csproj" />
     <Project Path="tests/ToggleForge.Console.Tests/ToggleForge.Console.Tests.csproj" />
     <Project Path="tests/ToggleForge.Domain.Tests/ToggleForge.Domain.Tests.csproj" />
     <Project Path="tests/ToggleForge.Evaluation.Tests/ToggleForge.Evaluation.Tests.csproj" />
+    <Project Path="tests/ToggleForge.Sdk.Tests/ToggleForge.Sdk.Tests.csproj" />
   </Folder>
 </Solution>
