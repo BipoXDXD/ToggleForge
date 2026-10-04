@@ -2417,6 +2417,77 @@ git commit -m "feat(api): create, change, publish and simulate json flags
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
+#### Adendo à Tarefa 9 (spike e revisão de segurança, 2026-10-04)
+
+Fontes: o spike descartável `task9-spike.md` e a revisão de segurança `slice4-security-review.md`, os dois no
+workspace do plano. Este adendo **prevalece** sobre o texto acima quando os dois divergirem.
+
+**O que o spike mediu e muda o texto acima:**
+- **Limite de corpo:** `RequestSizeLimitAttribute` como metadata é respeitado pelo **Kestrel**, mas o `TestServer`
+  do `ApiFactory` o ignora (só loga um aviso). Além disso, o `RequestDelegateFactory` engole a exceção da leitura
+  mesmo com `ThrowOnBadRequest`, e o 413 chega **vazio** ao `UseStatusCodePages`, nunca ao `UnexpectedErrors`.
+  - O endpoint filter **não serve**, porque roda depois do binding.
+  - **Decisão:** usar o limite nativo (`RequestSizeLimit` no endpoint) e mapear o 413 vazio para o problem
+    `/problems/payload-too-large` no handler de `UseStatusCodePages` (`ApiPipeline`), ao lado do tratamento do 415.
+  - Os testes de 413 rodam num host **Kestrel** (como o `BrowserHost`, ou um host Kestrel sem navegador em
+    `Support/`), não no `TestServer`.
+- **Chave repetida:** o binding (`AllowDuplicateProperties = false` global) recusa antes do domínio, com 400
+  `INVALID_BODY`. No POST o ponteiro é `/onValue`; no PATCH o `Path` vem `$` e o ponteiro sai vazio. O teste 6 afirma
+  400 `INVALID_BODY` com ponteiro `/onValue` no POST, sem o "se". O `DuplicateKey` do domínio fica como defesa em
+  profundidade.
+- **`null` no PATCH:** `PatchField<JsonElement>` entrega `IsPresent = true` e `ValueKind.Null`, sem lançar.
+  - A recusa é no endpoint, com ponteiro `/onValue` ou `/offValue`; no conversor o ponteiro sairia vazio.
+  - Corrija os comentários de `PatchField.cs`, que hoje afirmam que `null` "já falha aqui".
+  - Sabotagem: tirar a recusa derruba o teste 10.
+- **Saída:** o `JsonElement` vindo de `JsonSerializer.Deserialize<JsonElement>(text)` sai como JSON cru, com a ordem
+  das chaves e o texto dos números preservados, e `ç` sai sem escape. Os asserts comparam o JSON re-serializado ou
+  usam `JsonElement.DeepEquals`.
+
+**Testes e correções a mais (revisão de segurança):**
+- **I2:** `A_boolean_flag_refuses_a_patch_with_a_value_that_is_not_true_or_false`. É uma teoria com o campo
+  (`onValue`/`offValue`) × o valor (`1`, `"true"`, `{}`). Afirma 400 `/problems/invalid-request`, ponteiro igual ao
+  campo enviado e ETag e corpo inalterados. Estenda o teste 4 com casos em `offValue`. Sabotagem: tirar o mapeamento
+  de `OnValueNotOfFlagType` no PATCH derruba o teste com 500.
+- **I3:** testes num host Kestrel:
+  - `A_body_over_32_KiB_gets_413`;
+  - `A_chunked_body_over_32_KiB_gets_413` (sem `Content-Length`);
+  - `A_body_of_exactly_32_KiB_is_read`;
+  - `The_413_problem_says_only_the_limit`: as chaves são exatamente `type`, `title`, `status` e `detail`, e o corpo
+    não traz `Exception`, `Kestrel` nem `at `.
+  - Em todos: rascunho vazio e nenhum 500 nos logs.
+- **I4:**
+  - Em `IsolationTests`, o dono ganha uma flag `json` publicada com `{"secret":"CANARY-<guid>"}`, e toda operação da
+    teoria afirma que o canário não aparece no corpo do intruso.
+  - Casos novos:
+    - `A_member_of_another_organization_gets_404_for_a_json_value_that_does_not_fit_the_flag`: PATCH
+      `{"onValue":{}}` na flag booleana de A → 404, não 400;
+    - `A_member_of_another_organization_gets_404_even_when_the_owner_draft_is_full`: 404, não 409.
+  - Em `RoleTests`: `A_viewer_gets_403_for_a_json_value_that_does_not_fit_the_flag` (403, não 400), e viewer criando
+    flag `json` → 403.
+- **M3:**
+  - `Unusual_but_valid_json_values_round_trip_unchanged`, uma teoria com `"\u0000"`, `"a\nb"`, `"😀"`, `" "`, `-0`,
+    `1.7976931348623157e308`, `1e-320`, 8 níveis, `{"":1}` e chave com `/` e `~`. O valor faz POST → GET → publicação
+    → snapshot e continua o mesmo (`JsonElement.DeepEquals`), sem nenhum 500.
+  - `A_value_nested_past_the_reader_depth_gets_400`: 65 níveis → 400.
+  - `A_body_that_is_not_utf8_gets_400`.
+- **M4:** chame `FlagValues.Of` só com o tipo lido **e** os dois valores não nulos. Testes:
+  - `A_flag_with_an_unknown_type_reports_only_the_type`: só `/type`;
+  - `Every_invalid_field_of_a_creation_is_reported_together`: `/onValue` e `/offValue`, nunca 500.
+- **M5:** `"type": null` → 400 `/type`. Leia `type` como `JsonElement` para distinguir ausente de `null`. Teste
+  `A_null_type_is_rejected`.
+- **M6 (decisão):** `UnexpectedErrors.ToPointer` corta o ponteiro no membro de topo do corpo (`/onValue`), para não
+  refletir chaves escolhidas pelo cliente. Os DTOs da API são planos, então o membro de topo basta para achar o campo.
+  Teste `An_invalid_body_inside_a_value_points_at_the_field`: `{"onValue":{"<b>x</b>":1,"<b>x</b>":2}}` → ponteiro
+  exatamente `/onValue`, e o corpo sem `<b>`.
+- **M7 (decisão):** o spike mostrou que a saída com `JsonElement` não reescapa `ç`. O download fica no tamanho
+  contado, e não há conversor próprio.
+- **M10:** em `LimitTests`, `Concurrent_changes_cannot_exceed_the_environment_json_budget`. São `Racers` PATCHes
+  simultâneos em flags **diferentes**, com folga para um só aumento: um 200, os demais 409 `limit-reached`, e a soma
+  final ≤ 131.072 bytes.
+- **M11:** comentários de `PatchField.cs` corrigidos (ver o spike acima).
+- **M13:** `A_patch_that_only_reformats_a_json_value_keeps_the_etag`: PATCH com `{ "a" : 1 }` numa flag com `{"a":1}`
+  → 200, mesma ETag e `hasUnpublishedChanges` igual.
+
 ### Tarefa 10: revisão final e PR da Fatia 4
 
 - [ ] Rebase sobre o `main`, suíte inteira (`dotnet test --solution ToggleForge.slnx -c Release`) e lint da spec.
