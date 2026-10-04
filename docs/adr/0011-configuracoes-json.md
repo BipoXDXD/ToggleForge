@@ -143,8 +143,11 @@ O que já existe e pesa na escolha:
     deixa um tipo futuro passar por builds antigos;
   - chave duplicada continua recusando o snapshot inteiro, mesmo entre tipos.
 - O valor JSON é regravado compacto. Com `DateParseHandling.None` (já em uso), datas e inteiros passam sem
-  conversão; uma fração passa pelo `double`, que mantém o valor e pode mudar a grafia (`1.50` vira `1.5`). Um valor
-  que só o Newtonsoft aceita (`NaN`, `1e400`) recusa o snapshot (ADR 0010).
+  conversão; uma fração passa pelo `double`, e o que se mantém é o `double` mais próximo: a grafia pode mudar
+  (`1.50` vira `1.5`, `1e2` vira `100.0`), mais de 17 dígitos arredondam e `1e-400` vira `0.0` sem recusar o
+  snapshot. Um valor que, regravado, o parser do jogo leria de outro jeito ou nem leria (`NaN`, `1e400`) recusa o
+  snapshot; aspas simples, nome sem aspas, comentário e vírgula sobrando são aceitos e normalizados pelo
+  Newtonsoft. A grafia do `double` no Mono fica para conferir no build Unity (ADR 0010).
 - A exceção do parser não chega ao SDK: para diagnosticá-la, o jogo a registra dentro do próprio parser.
 - `EvaluateJson<T>(chave, contexto, defaultValue, parse)` devolve `FlagResult<T>`. Cache do valor já lido
   fica para quando houver medição.
@@ -168,8 +171,10 @@ O que já existe e pesa na escolha:
 - O snapshot cresce até 128 KiB de valores por ambiente. O 304 continua evitando o download quando nada mudou.
 - O estúdio pode pôr um segredo numa configuração, e ele chegaria a todo jogador: a credencial do SDK sai do
   build (`ToggleForge.md`, seção 11). Esse risco é **aceito**. O console avisa no editor e o canvas o registra.
-- O jogo que avalia a cada frame paga o parse a cada frame. O XML doc do `EvaluateJson<T>` manda guardar o
-  resultado.
+- O jogo que avalia a cada frame paga o parse a cada frame. O XML doc do `EvaluateJson<T>` orienta avaliar em
+  pontos naturais do jogo (abrir a loja, carregar a cena), não a cada frame. Um valor guardado pelo jogo não vê
+  publicação, rollback nem expiração até a próxima avaliação. Um sinal de mudança (evento ou a versão em uso) é
+  candidato aditivo futuro, para quando um estúdio precisar reagir sem reavaliar.
 - Um tipo futuro (por exemplo, número) passa por builds antigos sem derrubá-los: eles só não o enxergam.
 
 ## Compliance
@@ -186,7 +191,7 @@ O que já existe e pesa na escolha:
   - os CHECKs do banco;
   - duas criações concorrentes que passariam do teto: só uma entra;
   - todas as respostas conferidas contra o `openapi.yaml`.
-- **`Sdk.Tests`:** tipo ausente, flag JSON, tipo desconhecido ignorado sem recusar o snapshot, datas e números
-  preservados, parser que lança.
+- **`Sdk.Tests`:** tipo ausente, flag JSON, tipo desconhecido ignorado sem recusar o snapshot, datas e inteiros
+  preservados, fração pelo `double`, valor fora do padrão recusa o snapshot, parser que lança.
 - **`Console.Tests` e `ConsoleJourneyTests`:** editor de flag JSON, o aviso de que o valor chega a todo jogador, valor com
   `<script>` exibido como texto, e a jornada criar → publicar → simular → reverter.
