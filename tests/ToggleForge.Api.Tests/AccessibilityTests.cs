@@ -33,12 +33,18 @@ public sealed class AccessibilityTests(ApiFactory api, Browser browser) : IClass
 
     private const int PhoneWidth = 320;
     private const int PhoneHeight = 800;
+    private const string LongJsonLine = "{\"featuredItems\": [\"sword\", \"shield\", \"bow\", \"arrows\", \"potion\", \"map\"]}";
 
     private BrowserHost? _host;
 
     private BrowserHost Host => _host ?? throw new InvalidOperationException("The host has not started.");
 
-    public static TheoryData<string> JourneyPages => ["sign-in", "projects", "draft", "flag-editor", "publish", "history", "version", "simulator"];
+    /// <summary>
+    /// As páginas da jornada. O <c>draft-json</c> é o rascunho com JSON escolhido no formulário de flag nova e uma linha
+    /// longa no valor: as áreas de texto não quebram linha (<c>wrap="off"</c>) e precisam rolar por dentro, sem empurrar a
+    /// página.
+    /// </summary>
+    public static TheoryData<string> JourneyPages => ["sign-in", "projects", "draft", "draft-json", "flag-editor", "publish", "history", "version", "simulator"];
 
     public static TheoryData<string> PagesReachedByClicking => ["draft", "publish", "history", "version", "simulator"];
 
@@ -180,7 +186,7 @@ public sealed class AccessibilityTests(ApiFactory api, Browser browser) : IClass
         var (path, heading) = journeyPage switch
         {
             "projects" => ($"/organizations/{owner.OrganizationId}/projects", "Projects"),
-            "draft" or "flag-editor" => (draft, "Draft flags"),
+            "draft" or "draft-json" or "flag-editor" => (draft, "Draft flags"),
             "publish" => ($"{draft}/publish", "Changes since version 2"),
             "history" => ($"{draft}/history", "History of Development (dev)"),
             "version" => ($"{draft}/history/1", "Roll back Development to version 1"),
@@ -195,6 +201,13 @@ public sealed class AccessibilityTests(ApiFactory api, Browser browser) : IClass
             await page.GetByLabel("Player ID").FillAsync("player-42");
             await page.GetByRole(AriaRole.Button, new() { Name = "Simulate" }).ClickAsync();
             await Expect(page.Locator("#simulation-results")).ToBeVisibleAsync();
+        }
+
+        if (journeyPage == "draft-json")
+        {
+            await page.GetByRole(AriaRole.Radio, new() { Name = "JSON" }).CheckAsync();
+            await page.Locator("#on-value").FillAsync(LongJsonLine);
+            await Expect(page.Locator("#on-value-size")).ToContainTextAsync("bytes");
         }
 
         if (journeyPage == "flag-editor")

@@ -134,33 +134,6 @@ public sealed class ConsoleContrastTests(ApiFactory api, Browser browser) : ICla
         Assert.Equal(0, await page.EvaluateAsync<int>("window.__csp.length"));
     }
 
-    /// <summary>
-    /// As áreas de texto não quebram linha (<c>wrap="off"</c>) e rolam por dentro, sem empurrar a página. Mede só o
-    /// formulário: o cabeçalho do console nesta base ainda passa de 320 px, e o reflow dele chegou ao <c>main</c> com
-    /// o PR de acessibilidade (#43, <c>AccessibilityTests</c>).
-    /// </summary>
-    [Fact]
-    public async Task The_new_json_flag_form_does_not_scroll_sideways_on_a_phone()
-    {
-        using var owner = await ConsoleClient.SignUpAsync(api);
-        Assert.Equal(HttpStatusCode.Created, (await owner.CreateProjectAsync("space-race")).Status);
-        await using var context = await browser.NewContextAsync(Host.Address);
-        var page = await context.NewPageAsync();
-        await page.SetViewportSizeAsync(320, 800);
-
-        await ConsolePages.OpenDraftAsync(page, owner);
-        await page.GetByRole(AriaRole.Radio, new() { Name = "JSON" }).CheckAsync();
-        await page.Locator("#on-value").FillAsync("{\"featuredItems\": [\"sword\", \"shield\", \"bow\", \"arrows\", \"potion\", \"map\"]}");
-        await Expect(page.Locator("#on-value-size")).ToContainTextAsync("bytes");
-        var wider = await page.Locator("section[aria-labelledby=new-flag]").EvaluateAsync<string[]>("""
-            form => [form, ...form.querySelectorAll('*')]
-              .filter(element => element.getBoundingClientRect().right > document.documentElement.clientWidth)
-              .map(element => element.tagName.toLowerCase() + (element.id ? '#' + element.id : '') + '.' + [...element.classList].join('.'))
-            """);
-
-        Assert.True(wider.Length == 0, $"wider than a 320 px page: {string.Join(", ", wider.Take(10))}");
-    }
-
     public async ValueTask DisposeAsync()
     {
         if (_host is not null)
