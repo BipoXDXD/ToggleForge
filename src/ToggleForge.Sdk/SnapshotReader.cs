@@ -107,7 +107,17 @@ namespace ToggleForge.Sdk
             if (Boolean(flag, "enabled") is not { } enabled
                 || Boolean(flag, "onValue") is not { } onValue
                 || Boolean(flag, "offValue") is not { } offValue
-                || Integer(flag, "rolloutBasisPoints") is not { } basisPoints
+                || ReadRollout(flag) is not { } rollout)
+            {
+                return null;
+            }
+
+            return new BooleanFlag(key, enabled, onValue, offValue, rollout);
+        }
+
+        private static PercentageRollout? ReadRollout(JObject flag)
+        {
+            if (Integer(flag, "rolloutBasisPoints") is not { } basisPoints
                 || basisPoints is < int.MinValue or > int.MaxValue
                 || !RolloutPercentage.TryFromBasisPoints((int)basisPoints, out var percentage)
                 || !RolloutSeed.TryParse(Text(flag, "seed"), out var seed))
@@ -115,7 +125,7 @@ namespace ToggleForge.Sdk
                 return null;
             }
 
-            return new BooleanFlag(key, enabled, onValue, offValue, new PercentageRollout(percentage, seed));
+            return new PercentageRollout(percentage, seed);
         }
 
         // Tipos JSON exatos: "true" em texto não é booleano, e 10.0 não é inteiro.
