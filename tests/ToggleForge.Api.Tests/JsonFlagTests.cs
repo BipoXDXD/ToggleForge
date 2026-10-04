@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using ToggleForge.Api.Tests.Support;
+using ToggleForge.Evaluation;
 
 namespace ToggleForge.Api.Tests;
 
@@ -298,6 +299,61 @@ public sealed class JsonFlagTests(ApiFactory api)
     }
 
     [Fact]
+    public async Task Each_simulated_flag_reports_its_own_type()
+    {
+        using var owner = await OwnerWithProjectAsync();
+        await owner.CreateFlagAsync(Project, "new-shop");
+        await owner.CreateJsonFlagAsync(Project, "shop-config", """{"discount":0.2}""", "null");
+
+        var response = await owner.SimulateDraftAsync(Project, "player-42");
+
+        Assert.Equal(HttpStatusCode.OK, response.Status);
+        Assert.Equal("boolean", SimulationResult(response, "new-shop").GetProperty("type").GetString());
+        Assert.Equal("json", SimulationResult(response, "shop-config").GetProperty("type").GetString());
+    }
+
+    [Fact]
+    public async Task A_disabled_json_flag_simulates_to_its_off_value_without_a_bucket()
+    {
+        using var owner = await OwnerWithProjectAsync();
+        var created = await owner.CreateJsonFlagAsync(Project, "shop-config", """{"discount":0.2}""", """{"discount":0}""");
+        Assert.Equal(HttpStatusCode.OK, (await owner.UpdateFlagAsync(Project, "shop-config", created.Header("ETag"), """{"enabled":false}""")).Status);
+
+        var response = await owner.SimulateDraftAsync(Project, "player-42");
+
+        Assert.Equal(HttpStatusCode.OK, response.Status);
+        var result = SimulationResult(response, "shop-config");
+        Assert.Equal("""{"discount":0}""", result.GetProperty("value").GetRawText());
+        Assert.Equal("disabled", result.GetProperty("reason").GetString());
+        Assert.Equal(JsonValueKind.Null, result.GetProperty("bucket").ValueKind);
+    }
+
+    /// <summary>
+    /// O jogo calcula o bucket só com projeto, ambiente, chave, seed e jogador (ADR 0002): o tipo da flag não entra no
+    /// hash, então a simulação de uma flag JSON num rollout parcial tem de cair no mesmo bucket e no mesmo valor.
+    /// </summary>
+    [Theory]
+    [InlineData("player-42")]
+    [InlineData("player-7")]
+    [InlineData("jogadora-ção-🎮")]
+    public async Task A_json_flag_in_a_partial_rollout_simulates_what_the_game_evaluates(string playerId)
+    {
+        using var owner = await OwnerWithProjectAsync();
+        var created = await owner.CreateJsonFlagAsync(Project, "shop-config", """{"discount":0.2}""", """{"discount":0}""", rolloutBasisPoints: 5_000);
+        Assert.Equal(HttpStatusCode.Created, (await owner.PublishAsync(Project, ConsoleClient.Revision(created), ConsoleClient.NewIdempotencyKey())).Status);
+        var secret = (await owner.CreateCredentialAsync(Project)).Json["secret"]!.GetValue<string>();
+        var game = GameEvaluation(await GameClient.GetSnapshotAsync(api, secret), "shop-config", playerId);
+
+        var response = await owner.SimulatePublicationAsync(Project, playerId, version: 1);
+
+        Assert.Equal(HttpStatusCode.OK, response.Status);
+        var result = SimulationResult(response, "shop-config");
+        Assert.Equal(game.Value, result.GetProperty("value").GetRawText());
+        Assert.Equal(game.Reason.ToString().ToLowerInvariant(), result.GetProperty("reason").GetString());
+        Assert.Equal(game.Bucket, result.GetProperty("bucket").GetInt32());
+    }
+
+    [Fact]
     public async Task Rolling_back_restores_the_json_value()
     {
         using var owner = await OwnerWithProjectAsync();
@@ -507,4 +563,37 @@ public sealed class JsonFlagTests(ApiFactory api)
 
     private static void AssertSameJson(JsonElement expected, JsonElement actual) =>
         Assert.True(JsonElement.DeepEquals(expected, actual), $"Expected {expected.GetRawText()}, got {actual.GetRawText()}.");
+
+    private static JsonElement SimulationResult(ApiResponse simulation, string flagKey)
+    {
+        using var body = JsonDocument.Parse(simulation.Body);
+        return body.RootElement.GetProperty("results").EnumerateArray()
+            .Single(result => result.GetProperty("flagKey").GetString() == flagKey)
+            .Clone();
+    }
+
+    /// <summary>O que o SDK calcularia para a flag JSON com o snapshot que o jogo baixou; o valor sai como texto JSON.</summary>
+    private static EvaluationResult<string> GameEvaluation(ApiResponse snapshot, string flagKey, string playerId)
+    {
+        using var body = JsonDocument.Parse(snapshot.Body);
+        var root = body.RootElement;
+        var flags = root.GetProperty("flags").EnumerateArray()
+            .Where(flag => flag.GetProperty("type").GetString() == "json")
+            .Select(flag => new JsonFlag(
+                FlagKey.Parse(flag.GetProperty("key").GetString()!),
+                flag.GetProperty("enabled").GetBoolean(),
+                flag.GetProperty("onValue").GetRawText(),
+                flag.GetProperty("offValue").GetRawText(),
+                new PercentageRollout(
+                    RolloutPercentage.FromBasisPoints(flag.GetProperty("rolloutBasisPoints").GetInt32()),
+                    RolloutSeed.Parse(flag.GetProperty("seed").GetString()!))))
+            .ToList();
+        var configuration = new ConfigurationSnapshot(
+            ProjectKey.Parse(root.GetProperty("projectKey").GetString()!),
+            EnvironmentKey.Parse(root.GetProperty("environmentKey").GetString()!),
+            root.GetProperty("version").GetInt64(),
+            flags);
+        return new FlagEvaluator().EvaluateJson(
+            configuration, flagKey, EvaluationContext.ForPlayer(PlayerId.Parse(playerId)), defaultValue: "null", text => text);
+    }
 }
