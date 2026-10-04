@@ -90,6 +90,27 @@ public sealed class ForwardedHeadersTests(ApiFactory api)
         Assert.Contains("ForwardedHeaders:KnownNetworks", error.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// ASPNETCORE_FORWARDEDHEADERS_ENABLED (chave ForwardedHeaders_Enabled) faz o host ligar o próprio middleware
+    /// de forwarded headers e limpar as redes conhecidas: qualquer remetente escolheria o próprio IP e esquema.
+    /// </summary>
+    [Theory]
+    [InlineData("true")]
+    [InlineData("True")]
+    public async Task Outside_development_the_api_does_not_start_with_forwarded_headers_opened_by_the_host(string enabled)
+    {
+        await using var production = api.WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Production");
+            builder.UseSetting("ForwardedHeaders:KnownNetworks:0", TrustedNetwork);
+            builder.UseSetting("ForwardedHeaders_Enabled", enabled);
+        });
+
+        var error = Assert.Throws<OptionsValidationException>(() => production.CreateClient());
+
+        Assert.Contains("ASPNETCORE_FORWARDEDHEADERS_ENABLED", error.Message, StringComparison.Ordinal);
+    }
+
     private WebApplicationFactory<Program> Host(string? knownNetwork, int anonymousPerMinute = 1) =>
         api.WithWebHostBuilder(builder =>
         {

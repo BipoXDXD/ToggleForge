@@ -13,6 +13,9 @@ internal static class ApiForwardedHeaders
 {
     public const string Section = "ForwardedHeaders";
 
+    /// <summary>A chave que ASPNETCORE_FORWARDEDHEADERS_ENABLED (ou DOTNET_FORWARDEDHEADERS_ENABLED) vira na configuração.</summary>
+    private const string HostForwardedHeadersSwitch = "ForwardedHeaders_Enabled";
+
     public static IServiceCollection AddToggleForgeForwardedHeaders(this IServiceCollection services)
     {
         services.AddOptions<TrustedProxies>()
@@ -25,6 +28,11 @@ internal static class ApiForwardedHeaders
             .Validate<IHostEnvironment>(
                 (proxies, environment) => environment.IsDevelopment() || proxies.KnownNetworks.Count > 0,
                 $"Set {Section}:KnownNetworks to the network of the ingress, such as 10.0.0.0/8.")
+            // A variável faz o host ligar o próprio middleware de forwarded headers e limpar as redes conhecidas
+            // (Learn, "Kestrel security considerations"): todo remetente passaria a escolher o próprio IP e esquema.
+            .Validate<IHostEnvironment, IConfiguration>(
+                (_, environment, configuration) => environment.IsDevelopment() || !configuration.GetValue<bool>(HostForwardedHeadersSwitch),
+                $"Unset ASPNETCORE_FORWARDEDHEADERS_ENABLED ({HostForwardedHeadersSwitch}): it trusts forwarded headers from any sender.")
             .ValidateOnStart();
         services.AddOptions<ForwardedHeadersOptions>().Configure<IOptions<TrustedProxies>>((options, proxies) =>
         {

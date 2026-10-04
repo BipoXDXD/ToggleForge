@@ -80,7 +80,17 @@ ficam no padrão, que o Learn considera adequado: 32 KB de headers, 100 headers,
 **Sem `Server: Kestrel`** (`AddServerHeader = false`).
 
 **Forwarded headers fechados:** só redes em `ForwardedHeaders:KnownNetworks` dizem o IP e o esquema do
-cliente (ADR 0006). Fora de Development, a lista vazia impede a API de subir.
+cliente (ADR 0006). Fora de Development, a API não sobe em dois casos:
+
+- com a lista vazia;
+- com `ASPNETCORE_FORWARDEDHEADERS_ENABLED`, ou `DOTNET_FORWARDEDHEADERS_ENABLED`, valendo `true` (na configuração,
+  a chave `ForwardedHeaders_Enabled`).
+
+Segundo o Learn ("Kestrel security considerations" e "Configure ASP.NET Core to work with proxy servers and load
+balancers"), essa variável faz o host ligar o middleware de forwarded headers por conta própria, com
+`X-Forwarded-For` e `X-Forwarded-Proto`. Ela também limpa `KnownProxies` e `KnownIPNetworks`, de modo que todo
+remetente passa a ser confiável. As notas do ASP.NET Core 3.0 dizem que as imagens de container oficiais a
+definem como `true`; o Dockerfile do Marco 6 precisa conferir a imagem base.
 
 **CORS continua desligado:** o console está na mesma origem, e nenhum site alheio lê resposta da API, nem com
 o cookie do membro. Liberar uma origem passa a exigir uma ADR.
@@ -95,8 +105,9 @@ O ingress recusa HTTP (`allowInsecure: false`).
 - Todo ambiente fora de Development precisa declarar `ForwardedHeaders:KnownNetworks`, inclusive os testes
   que sobem em Production.
 - **Checklist do Marco 6 (deploy):** depois do primeiro deploy estável em HTTPS, subir
-  `StrictTransportSecurity:MaxAge` para `365.00:00:00`. Definir `AllowedHosts` com o domínio público e garantir
-  que `ASPNETCORE_FORWARDEDHEADERS_ENABLED` nunca esteja definido, porque ele confia em qualquer remetente.
+  `StrictTransportSecurity:MaxAge` para `365.00:00:00`. Definir `AllowedHosts` com o domínio público. Se a imagem
+  base definir `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true`, a API não sobe: sobrescreva a variável com `false` no
+  Dockerfile ou no Container Apps.
 - Um corpo acima de 32 KiB numa operação futura exige subir o teto global ou um override por endpoint, e uma
   revisão desta ADR.
 - Os testes do header `Server` e do teto de corpo rodam num Kestrel real (`BrowserHost`), porque o TestServer
@@ -117,8 +128,9 @@ O ingress recusa HTTP (`allowInsecure: false`).
 - `KestrelHardeningTests`: `No_response_names_the_server_software`, `A_body_of_exactly_32_KiB_is_read` e
   `A_body_over_32_KiB_is_refused_before_anything_is_created`, que também conferem as respostas contra o contrato,
   e `Every_operation_that_takes_a_body_declares_413`.
-- `ForwardedHeadersTests.Outside_development_the_api_does_not_start_without_the_ingress_network`, além dos testes
-  da ADR 0006.
+- `ForwardedHeadersTests.Outside_development_the_api_does_not_start_without_the_ingress_network` e
+  `Outside_development_the_api_does_not_start_with_forwarded_headers_opened_by_the_host`, além dos testes da
+  ADR 0006.
 - `CrossOriginTests`: `Another_site_cannot_read_an_api_response`, `Another_site_gets_no_preflight_approval_for_a_mutation`,
   `Another_site_cannot_read_a_signed_in_members_session` e `A_preflight_for_the_session_from_another_site_is_not_approved`.
 - CI: o Spectral com o ruleset OWASP sobre o `openapi.yaml`.
