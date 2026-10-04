@@ -1119,6 +1119,26 @@ public sealed class FlagEditorPageTests
         AssertGoneWithTheFocusOnTheWayBack(console, page);
     }
 
+    // Durante o DELETE o botão do diálogo fica desabilitado e o foco vai para o <body>; a recusa tira o diálogo.
+    [Fact]
+    public void A_refused_removal_puts_the_focus_back_on_remove_from_draft()
+    {
+        var api = NewShopAtTenPercent().Answer(HttpMethod.Delete, NewShop, HttpStatusCode.Conflict,
+            """{"type":"/problems/conflict","title":"Conflict","status":409,"detail":"Not now."}""", "application/problem+json");
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console);
+        var removeFromDraft = page.FindAll("button").Single(button => button.TextContent.Trim() == "Remove from draft");
+        var reference = ReferenceOf(removeFromDraft);
+
+        removeFromDraft.Click();
+        page.FindAll("button").Single(button => button.TextContent.Trim() == "Remove").Click();
+
+        page.WaitForElement("[role=alert]");
+        Assert.Empty(page.FindAll("[role=alertdialog]"));
+        page.WaitForAssertion(() => AssertFocused(console, reference));
+    }
+
     // Hoje o console só manda true ou false, mas o contrato tem value-not-of-flag-type: o erro fica ligado ao select.
     [Theory]
     [InlineData("/onValue", 0, "on-value-error")]

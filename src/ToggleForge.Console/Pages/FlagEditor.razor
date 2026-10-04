@@ -129,7 +129,7 @@ else
                     class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60">
                 Save
             </button>
-            <button type="button" disabled="@_busy" @onclick="() => _confirmingRemoval = true"
+            <button type="button" @ref="_remove" disabled="@_busy" @onclick="() => _confirmingRemoval = true"
                     class="rounded-md px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60">
                 Remove from draft
             </button>
@@ -156,9 +156,10 @@ else
 }
 
 @code {
-    // Alvos de foco que não são campo: o botão Save, onde o membro estava quando salvou, e a volta ao rascunho, a próxima
-    // ação quando a flag saiu dele e o formulário sumiu.
+    // Alvos de foco que não são campo: os botões Save e Remove from draft, onde o membro estava quando salvou ou pediu a
+    // remoção, e a volta ao rascunho, a próxima ação quando a flag saiu dele e o formulário sumiu.
     private const string SaveButton = "save";
+    private const string RemoveButton = "remove";
     private const string BackToDraft = "back-to-draft";
 
     private static readonly Problem _nothingToSave = new(
@@ -181,9 +182,10 @@ else
     private ElementReference _includedChoice;
     private ElementReference _othersChoice;
     private ElementReference _save;
+    private ElementReference _remove;
     private ElementReference _backToDraft;
 
-    // Um campo (pelo ponteiro de FieldErrors), o SaveButton ou o BackToDraft; nulo quando o foco fica onde está.
+    // Um campo (pelo ponteiro de FieldErrors) ou um dos alvos acima; nulo quando o foco fica onde está.
     private string? _focusAfterRender;
 
     [Parameter]
@@ -276,6 +278,7 @@ else
         await (target switch
         {
             SaveButton => _save.FocusAsync(),
+            RemoveButton => _remove.FocusAsync(),
             BackToDraft => _backToDraft.FocusAsync(),
             FieldErrors.Rollout => _rollout.FocusAsync(),
             FieldErrors.OnValue when _values is null => _includedChoice.FocusAsync(),
@@ -302,7 +305,9 @@ else
             return;
         }
 
+        // O botão do diálogo, desabilitado durante o pedido, levou o foco para o <body>, e a recusa tirou o diálogo.
         await ExplainAsync(problem);
+        _focusAfterRender ??= RemoveButton;
     }
 
     /// <summary>
