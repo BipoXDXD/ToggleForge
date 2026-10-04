@@ -118,6 +118,20 @@ public sealed class FlagEvaluatorTests
         Assert.Null(result.Bucket);
     }
 
+    [Fact]
+    public void A_json_flag_asked_as_boolean_falls_back_with_TypeMismatch()
+    {
+        var config = new JsonFlag(
+            FlagKey.Parse("shop-config"), isEnabled: true, onValue: "{}", offValue: "{}",
+            new PercentageRollout(RolloutPercentage.All, NewShopFlag.Seed));
+
+        var result = _evaluator.EvaluateBoolean(SnapshotWith(config), "shop-config", ReferencePlayer(), defaultValue: true);
+
+        AssertResult(result, true, EvaluationReason.TypeMismatch, SnapshotVersion);
+        Assert.True(result.IsFallback);
+        Assert.Null(result.Bucket);
+    }
+
     private static void AssertResult(
         EvaluationResult<bool> result, bool expectedValue, EvaluationReason expectedReason, long? expectedVersion)
     {

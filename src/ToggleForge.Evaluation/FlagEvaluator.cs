@@ -24,12 +24,9 @@ namespace ToggleForge.Evaluation
                 return Fallback(defaultValue, missing, snapshot.Version);
             }
 
-            if (flag is not BooleanFlag boolean)
-            {
-                throw new InvalidOperationException($"Unknown flag type '{flag.GetType().Name}'.");
-            }
-
-            return boolean.Evaluate(IdentityOf(snapshot, boolean), context, defaultValue, snapshot.Version);
+            return flag is BooleanFlag boolean
+                ? boolean.Evaluate(IdentityOf(snapshot, boolean), context, defaultValue, snapshot.Version)
+                : Fallback(defaultValue, EvaluationReason.TypeMismatch, snapshot.Version);
         }
 
         /// <returns>Nula quando a chave é inválida ou não está no snapshot; <paramref name="missing"/> diz qual dos dois.</returns>

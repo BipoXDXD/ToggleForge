@@ -83,6 +83,27 @@ public sealed class NullArgumentTests
     }
 
     [Fact]
+    public void JsonFlag_rejects_null_key_values_and_targeting()
+    {
+        AssertNullRejected("key", () => new JsonFlag(null!, true, "{}", "{}", Rollout));
+        AssertNullRejected("onValue", () => new JsonFlag(Flag, true, null!, "{}", Rollout));
+        AssertNullRejected("offValue", () => new JsonFlag(Flag, true, "{}", null!, Rollout));
+        AssertNullRejected("targeting", () => new JsonFlag(Flag, true, "{}", "{}", null!));
+    }
+
+    [Fact]
+    public void JsonFlag_Evaluate_rejects_null_keys_context_and_parser()
+    {
+        var flag = new JsonFlag(Flag, isEnabled: true, onValue: "{}", offValue: "{}", Rollout);
+        var player = EvaluationContext.ForPlayer(PlayerId.Parse("player"));
+
+        AssertNullRejected("projectKey", () => flag.Evaluate(null!, Environment, player, "", json => json));
+        AssertNullRejected("environmentKey", () => flag.Evaluate(Project, null!, player, "", json => json));
+        AssertNullRejected("context", () => flag.Evaluate(Project, Environment, null!, "", json => json));
+        AssertNullRejected("parse", () => flag.Evaluate(Project, Environment, player, "", null!));
+    }
+
+    [Fact]
     public void ConfigurationSnapshot_rejects_null_keys_and_flag_list()
     {
         AssertNullRejected("projectKey", () => new ConfigurationSnapshot(null!, Environment, 1, []));

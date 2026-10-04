@@ -32,6 +32,15 @@ public sealed class ConfigurationSnapshotTests
     }
 
     [Fact]
+    public void Rejects_the_same_key_in_flags_of_different_types()
+    {
+        var config = new JsonFlag(
+            FlagKey.Parse("new-shop"), true, "{}", "{}", new PercentageRollout(RolloutPercentage.All, NewShopFlag.Seed));
+
+        Assert.Throws<ArgumentException>(() => SnapshotWith(Flag("new-shop"), config));
+    }
+
+    [Fact]
     public void Rejects_null_flags_in_the_list()
     {
         var error = Assert.Throws<ArgumentException>(() => SnapshotWith([null!]));

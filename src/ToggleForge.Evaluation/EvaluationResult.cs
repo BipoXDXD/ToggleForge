@@ -27,6 +27,8 @@ namespace ToggleForge.Evaluation
             Reason is EvaluationReason.SnapshotMissing
                 or EvaluationReason.InvalidFlagKey
                 or EvaluationReason.FlagNotFound
-                or EvaluationReason.MissingPlayerId;
+                or EvaluationReason.MissingPlayerId
+                or EvaluationReason.TypeMismatch
+                or EvaluationReason.InvalidValue;
     }
 }
