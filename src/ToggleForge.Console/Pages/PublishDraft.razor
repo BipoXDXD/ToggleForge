@@ -62,12 +62,12 @@ else
             <label class="block">
                 <span class="text-sm font-medium text-slate-700">Summary (optional)</span>
                 <input maxlength="280" @bind="_summary" disabled="@(_attempt is not null)"
-                       class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none disabled:bg-slate-100" />
+                       class="mt-1 block w-full rounded-md border border-slate-500 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none disabled:bg-slate-100" />
             </label>
             <label class="block">
                 <span class="text-sm font-medium text-slate-700">Type @EnvironmentKey to confirm</span>
                 <input autocomplete="off" spellcheck="false" @bind="_confirmation" @bind:event="oninput"
-                       class="mt-1 block w-40 rounded-md border border-slate-300 px-3 py-2 font-mono text-sm focus:border-indigo-500 focus:outline-none" />
+                       class="mt-1 block w-40 rounded-md border border-slate-500 px-3 py-2 font-mono text-sm focus:border-indigo-500 focus:outline-none" />
             </label>
 
             <ProblemMessage Problem="_problem" />
@@ -82,7 +82,7 @@ else
             else
             {
                 <button type="submit" disabled="@_busy"
-                        class="rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-500 disabled:opacity-60">
+                        class="rounded-md bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-800 disabled:opacity-60">
                     Check the result
                 </button>
             }

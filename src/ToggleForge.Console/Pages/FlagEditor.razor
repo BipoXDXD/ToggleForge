@@ -46,18 +46,18 @@ else
 {
     <form class="mt-6 max-w-lg space-y-4" @onsubmit="SaveAsync" @onsubmit:preventDefault>
         <label class="flex items-center gap-2">
-            <input type="checkbox" @bind="_edit.Enabled" class="h-4 w-4 rounded border-slate-300" />
+            <input type="checkbox" @bind="_edit.Enabled" class="h-4 w-4 rounded border-slate-500" />
             <span class="text-sm text-slate-700">Enabled</span>
         </label>
         <label class="block">
             <span class="text-sm font-medium text-slate-700">Rollout (%)</span>
             <input type="number" required min="0" max="100" step="0.01" @bind="_edit.RolloutPercent"
-                   class="mt-1 block w-40 rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none" />
+                   class="mt-1 block w-40 rounded-md border border-slate-500 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none" />
         </label>
         <label class="block">
             <span class="text-sm font-medium text-slate-700">Value for included players</span>
             <select value="@BooleanText(_edit.OnValue)" @onchange="choice => _edit.OnValue = IsTrue(choice)"
-                    class="mt-1 block w-40 rounded-md border border-slate-300 px-3 py-2 text-sm">
+                    class="mt-1 block w-40 rounded-md border border-slate-500 px-3 py-2 text-sm">
                 <option value="true">true</option>
                 <option value="false">false</option>
             </select>
@@ -65,7 +65,7 @@ else
         <label class="block">
             <span class="text-sm font-medium text-slate-700">Value for everyone else</span>
             <select value="@BooleanText(_edit.OffValue)" @onchange="choice => _edit.OffValue = IsTrue(choice)"
-                    class="mt-1 block w-40 rounded-md border border-slate-300 px-3 py-2 text-sm">
+                    class="mt-1 block w-40 rounded-md border border-slate-500 px-3 py-2 text-sm">
                 <option value="true">true</option>
                 <option value="false">false</option>
             </select>
