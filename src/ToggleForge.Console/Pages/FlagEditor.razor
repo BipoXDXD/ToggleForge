@@ -40,7 +40,7 @@ else if (!CanEdit(_flag.Value))
     {
         <p data-testid="unknown-type" class="mt-6 text-sm text-slate-600">This console cannot edit flags of type "@_flag.Value.Type" yet.</p>
     }
-    @if (_flag.Value.Type != FlagTypes.Boolean)
+    @if (ShowsAsJson(_flag.Value))
     {
         <p class="mt-6 flex max-w-4xl gap-2 rounded-md border-l-2 border-amber-400 bg-amber-50 px-3 py-2 text-sm text-amber-900" id="json-public">
             <span aria-hidden="true">⚠</span>
@@ -55,9 +55,9 @@ else if (!CanEdit(_flag.Value))
         <dt class="text-slate-500">Rollout</dt>
         <dd>@RolloutShare.Format(_flag.Value.RolloutBasisPoints)</dd>
         <dt class="text-slate-500">Value for included players</dt>
-        <dd class="min-w-0">@if (_flag.Value.Type == FlagTypes.Boolean){<span class="font-mono">@_flag.Value.OnValue.Text</span>}else{<JsonValueBlock Value="_flag.Value.OnValue" Open="true" />}</dd>
+        <dd class="min-w-0">@ValueShown(_flag.Value, _flag.Value.OnValue)</dd>
         <dt class="text-slate-500">Value for everyone else</dt>
-        <dd class="min-w-0">@if (_flag.Value.Type == FlagTypes.Boolean){<span class="font-mono">@_flag.Value.OffValue.Text</span>}else{<JsonValueBlock Value="_flag.Value.OffValue" Open="true" />}</dd>
+        <dd class="min-w-0">@ValueShown(_flag.Value, _flag.Value.OffValue)</dd>
     </dl>
 }
 else
@@ -325,4 +325,11 @@ else
 
     // Um tipo novo da API pode ter regras que este console não conhece: ele mostra, mas não grava (design spec, 2.2).
     private static bool IsKnown(Flag flag) => flag.IsJson || flag.Type == FlagTypes.Boolean;
+
+    // Na leitura, todo tipo que não é booleano aparece como bloco JSON e com o aviso de valor público: o valor de um tipo
+    // que o console não conhece pode ser qualquer JSON, e o bloco mostra qualquer um (design spec, 2.2).
+    private static bool ShowsAsJson(Flag flag) => flag.Type != FlagTypes.Boolean;
+
+    private static RenderFragment ValueShown(Flag flag, FlagValue value) =>
+        ShowsAsJson(flag) ? @<JsonValueBlock Value="value" Open="true" /> : @<span class="font-mono">@value.Text</span>;
 }
