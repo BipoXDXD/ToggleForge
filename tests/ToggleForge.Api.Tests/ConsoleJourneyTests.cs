@@ -234,6 +234,62 @@ public sealed class ConsoleJourneyTests(ApiFactory api, Browser browser) : IClas
         Assert.True(browserErrors.Count == 0, string.Join(" | ", browserErrors));
     }
 
+    /// <summary>
+    /// Durante o envio o formulário fica desabilitado e o navegador manda o foco para o <c>body</c>; o bUnit não vê essa
+    /// perda. Depois do sucesso, o foco volta à chave vazia, pronta para a próxima flag (WCAG 2.4.3).
+    /// </summary>
+    [Fact]
+    public async Task After_adding_a_flag_with_enter_the_focus_is_back_on_the_empty_key()
+    {
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        Assert.Equal(HttpStatusCode.Created, (await owner.CreateProjectAsync("space-race")).Status);
+        await using var context = await browser.NewContextAsync(Host.Address);
+        var page = await context.NewPageAsync();
+
+        await ConsolePages.OpenDraftAsync(page, owner);
+        await page.Locator("#flag-key").FillAsync("new-shop");
+        await page.Locator("#flag-key").PressAsync("Enter");
+
+        await Expect(page.GetByRole(AriaRole.Row).Filter(new() { HasText = "new-shop" })).ToBeVisibleAsync();
+        await Expect(page.Locator("#flag-key")).ToBeFocusedAsync();
+        await Expect(page.Locator("#flag-key")).ToHaveValueAsync(string.Empty);
+    }
+
+    /// <summary>Uma recusa sem campo (a chave já está no rascunho) devolve o foco ao botão, onde o membro estava.</summary>
+    [Fact]
+    public async Task After_a_refusal_without_a_field_the_focus_is_back_on_the_add_button()
+    {
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        Assert.Equal(HttpStatusCode.Created, (await owner.CreateProjectAsync("space-race")).Status);
+        Assert.Equal(HttpStatusCode.Created, (await owner.CreateFlagAsync("space-race", "new-shop")).Status);
+        await using var context = await browser.NewContextAsync(Host.Address);
+        var page = await context.NewPageAsync();
+
+        await ConsolePages.OpenDraftAsync(page, owner);
+        await page.Locator("#flag-key").FillAsync("new-shop");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Add to draft" }).ClickAsync();
+
+        await Expect(page.GetByRole(AriaRole.Alert)).ToBeVisibleAsync();
+        await Expect(page.GetByRole(AriaRole.Button, new() { Name = "Add to draft" })).ToBeFocusedAsync();
+    }
+
+    /// <summary>Uma recusa da API que aponta um campo (a chave fora do padrão) leva o foco a esse campo.</summary>
+    [Fact]
+    public async Task After_the_api_refuses_the_key_the_focus_is_on_the_key()
+    {
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        Assert.Equal(HttpStatusCode.Created, (await owner.CreateProjectAsync("space-race")).Status);
+        await using var context = await browser.NewContextAsync(Host.Address);
+        var page = await context.NewPageAsync();
+
+        await ConsolePages.OpenDraftAsync(page, owner);
+        await page.Locator("#flag-key").FillAsync("Shop Config");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Add to draft" }).ClickAsync();
+
+        await Expect(page.Locator("#flag-key-error")).ToBeVisibleAsync();
+        await Expect(page.Locator("#flag-key")).ToBeFocusedAsync();
+    }
+
     [Fact]
     public async Task A_visitor_without_session_signs_in_and_returns_to_the_page_asked_for()
     {
