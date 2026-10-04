@@ -9,24 +9,33 @@ public sealed class FlagEdit
 
     public decimal RolloutPercent { get; set; }
 
-    public bool OnValue { get; set; }
+    /// <summary>O valor como texto JSON: <c>true</c> ou <c>false</c> numa flag booleana, indentado numa flag JSON.</summary>
+    public string OnValueText { get; set; } = string.Empty;
 
-    public bool OffValue { get; set; }
+    /// <inheritdoc cref="OnValueText"/>
+    public string OffValueText { get; set; } = string.Empty;
 
     public static FlagEdit Of(Flag flag) => new()
     {
         Enabled = flag.Enabled,
         RolloutPercent = RolloutShare.ToPercent(flag.RolloutBasisPoints),
-        OnValue = flag.OnValue == FlagValue.True,
-        OffValue = flag.OffValue == FlagValue.True,
+        OnValueText = flag.OnValue.Indented(),
+        OffValueText = flag.OffValue.Indented(),
     };
 
     /// <param name="original">A flag como foi lida da API.</param>
-    /// <param name="changes">Só os campos diferentes de <paramref name="original"/>; vazio se nada mudou.</param>
-    /// <returns>Falso se o percentual não vira pontos-base (fora de 0–100 ou com mais de duas casas).</returns>
-    public bool TryGetChanges(Flag original, out FlagModification changes)
+    /// <param name="changes">
+    /// Só os campos diferentes de <paramref name="original"/>, com os valores já compactados pelo console; vazio se
+    /// nada mudou ou se há erro. Espaço em branco não conta como mudança.
+    /// </param>
+    /// <param name="errors">Por campo, o que impediu montar as mudanças; vazio quando o retorno é verdadeiro.</param>
+    public bool TryGetChanges(Flag original, out FlagModification changes, out FieldErrors errors)
     {
-        if (!RolloutShare.TryToBasisPoints(RolloutPercent, out var basisPoints))
+        errors = new FieldErrors();
+        var basisPoints = FlagFields.Rollout(RolloutPercent, errors);
+        var onValue = EditedValue(OnValueText, original.OnValue, FieldErrors.OnValue, errors);
+        var offValue = EditedValue(OffValueText, original.OffValue, FieldErrors.OffValue, errors);
+        if (basisPoints is not { } points || onValue is null || offValue is null)
         {
             changes = new FlagModification();
             return false;
@@ -34,10 +43,24 @@ public sealed class FlagEdit
 
         changes = new FlagModification(
             Enabled: Changed(original.Enabled, Enabled),
-            OnValue: ChangedValue(original.OnValue, FlagValue.Of(OnValue)),
-            OffValue: ChangedValue(original.OffValue, FlagValue.Of(OffValue)),
-            RolloutBasisPoints: Changed(original.RolloutBasisPoints, basisPoints));
+            OnValue: ChangedValue(original.OnValue, onValue),
+            OffValue: ChangedValue(original.OffValue, offValue),
+            RolloutBasisPoints: Changed(original.RolloutBasisPoints, points));
         return true;
+    }
+
+    // No merge patch, null quer dizer "apague o campo", e nenhum campo de flag pode ser apagado: o JSON null só entra
+    // na criação (contrato, updateFlag). Um null que já estava lá e não mudou não vai no pedido, então passa.
+    private static FlagValue? EditedValue(string text, FlagValue original, string field, FieldErrors errors)
+    {
+        var value = FlagFields.Value(text, field, errors);
+        if (value is { IsNull: true } && value != original)
+        {
+            errors.Add(field, FlagFields.NullOnlyAtCreation);
+            return null;
+        }
+
+        return value;
     }
 
     private static T? Changed<T>(T original, T edited)

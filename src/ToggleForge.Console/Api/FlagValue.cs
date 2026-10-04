@@ -19,7 +19,9 @@ public sealed record FlagValue
     // A profundidade é regra da API (8 níveis, ADR 0011), e é ela que devolve o erro de profundidade. Com o padrão de
     // 64 do leitor, o console recusaria um valor mais fundo como erro de sintaxe; com 512, só acima de 512 níveis o
     // console recusa assim, e a API responde pelo resto.
-    private static readonly JsonDocumentOptions _reading = new() { MaxDepth = 512 };
+    internal const int MaxReadingDepth = 512;
+
+    private static readonly JsonDocumentOptions _reading = new() { MaxDepth = MaxReadingDepth };
 
     // Acentos e <, >, & ficam como foram escritos, como a API os guarda. A página nunca põe este texto em HTML sem
     // codificação: o Blazor codifica toda expressão, e nenhum valor passa por MarkupString.

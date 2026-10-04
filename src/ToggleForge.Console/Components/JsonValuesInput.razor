@@ -1,0 +1,72 @@
+@*
+    As duas áreas de uma flag JSON, na criação e na edição. O aviso vem antes delas e não fecha: o valor chega a todo
+    jogador, e qualquer um com o jogo o lê (canvas, I7). O fieldset aponta para o aviso, então o leitor de tela o lê ao
+    entrar no grupo.
+*@
+<fieldset aria-describedby="json-public" class="space-y-4">
+    <legend class="sr-only">JSON values</legend>
+    <p id="json-public" role="note" class="flex gap-2 rounded-md border-l-2 border-amber-400 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+        <span aria-hidden="true">⚠</span>
+        <span>Every player who has the game can read these values. Never put API keys, passwords or personal data in them.</span>
+    </p>
+    <div class="grid gap-6 md:grid-cols-2">
+        <JsonValueField @ref="_included" Id="on-value" Field="@FieldErrors.OnValue" Label="Value for included players"
+                        Audience="@AudienceText.Included(RolloutPercent, Enabled)" Placeholder="@IncludedExample"
+                        Text="@OnValueText" TextChanged="OnValueTextChanged" Error="@Errors.For(FieldErrors.OnValue)" />
+        <JsonValueField @ref="_others" Id="off-value" Field="@FieldErrors.OffValue" Label="Value for everyone else"
+                        Audience="@AudienceText.Others(RolloutPercent)" Placeholder="@OthersExample"
+                        Text="@OffValueText" TextChanged="OffValueTextChanged" Error="@Errors.For(FieldErrors.OffValue)">
+            <Actions>
+                <button type="button" @onclick="CopyOnValueAsync" class="text-xs font-medium text-indigo-700 hover:underline">Copy from included</button>
+            </Actions>
+        </JsonValueField>
+    </div>
+    @if (TooLarge)
+    {
+        <p role="alert" data-testid="values-too-large" class="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">@TooLargeToSend</p>
+    }
+</fieldset>
+
+@code {
+    // O 413 não diz qual campo, mas só os valores fazem o corpo crescer. Os números repetem os limites da ADR 0011 só
+    // no texto: quem confere é a API.
+    public const string TooLargeToSend =
+        "This change is too big to send (over 32 KiB), so nothing was saved. Each value can have at most 4 KiB once compacted.";
+
+    private const string IncludedExample = """{ "discount": 0.2 }""";
+    private const string OthersExample = """{ "discount": 0 }""";
+
+    private JsonValueField? _included;
+    private JsonValueField? _others;
+
+    [Parameter, EditorRequired]
+    public string OnValueText { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback<string> OnValueTextChanged { get; set; }
+
+    [Parameter, EditorRequired]
+    public string OffValueText { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback<string> OffValueTextChanged { get; set; }
+
+    /// <summary>O rollout digitado, para dizer a quem vai cada valor.</summary>
+    [Parameter, EditorRequired]
+    public decimal RolloutPercent { get; set; }
+
+    [Parameter, EditorRequired]
+    public bool Enabled { get; set; }
+
+    [Parameter, EditorRequired]
+    public FieldErrors Errors { get; set; } = new();
+
+    /// <summary>A API recusou o corpo pelo tamanho (413).</summary>
+    [Parameter]
+    public bool TooLarge { get; set; }
+
+    /// <param name="field"><see cref="FieldErrors.OnValue"/> ou <see cref="FieldErrors.OffValue"/>.</param>
+    public ValueTask FocusAsync(string field) => (field == FieldErrors.OnValue ? _included : _others)?.FocusAsync() ?? ValueTask.CompletedTask;
+
+    private Task CopyOnValueAsync() => OffValueTextChanged.InvokeAsync(OnValueText);
+}

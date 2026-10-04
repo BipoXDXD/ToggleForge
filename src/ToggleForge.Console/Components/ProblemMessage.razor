@@ -3,6 +3,10 @@
 @if (Problem is not null)
 {
     <div role="alert" class="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+        @if (Heading is not null)
+        {
+            <p class="mb-1 font-semibold">@Heading</p>
+        }
         @if (Problem.Messages is [var only])
         {
             <p>@only</p>
@@ -22,4 +26,8 @@
 @code {
     [Parameter]
     public Problem? Problem { get; set; }
+
+    /// <summary>Uma linha em negrito antes das mensagens, quando o console tem um título melhor que o da API.</summary>
+    [Parameter]
+    public string? Heading { get; set; }
 }

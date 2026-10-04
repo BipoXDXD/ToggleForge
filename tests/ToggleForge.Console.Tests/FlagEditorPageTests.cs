@@ -13,6 +13,24 @@ public sealed class FlagEditorPageTests
 
     private const string AtTenPercent = """{"key":"new-shop","type":"boolean","enabled":true,"onValue":true,"offValue":false,"rolloutBasisPoints":1000}""";
     private const string AtFiftyPercent = """{"key":"new-shop","type":"boolean","enabled":true,"onValue":true,"offValue":false,"rolloutBasisPoints":5000}""";
+    private const string ShopConfig =
+        "/api/v1/organizations/3f1c7d8e-2b4a-4c6d-9e8f-0a1b2c3d4e5f/projects/space-race/environments/dev/draft/flags/shop-config";
+
+    private const string ShopConfigJson =
+        """{"key":"shop-config","type":"json","enabled":true,"onValue":{"discount":0.2,"items":["sword"]},"offValue":{"discount":0},"rolloutBasisPoints":10000}""";
+
+    private const string ShopConfigAtHalf =
+        """{"key":"shop-config","type":"json","enabled":true,"onValue":{"discount":0.2,"items":["sword"]},"offValue":{"discount":0},"rolloutBasisPoints":5000}""";
+
+    private const string IndentedOnValue = "{\n  \"discount\": 0.2,\n  \"items\": [\n    \"sword\"\n  ]\n}";
+
+    private const string PublicValuesWarning =
+        "Every player who has the game can read these values. Never put API keys, passwords or personal data in them.";
+
+    private const string OutOfRoomText =
+        "All JSON values of an environment add up to at most 128 KiB, because every player downloads all of them. " +
+        "Make a value smaller or remove a JSON flag you no longer use, then save again. Nothing was saved.";
+
     private const string AtThirtyPercent = """{"key":"new-shop","type":"boolean","enabled":true,"onValue":true,"offValue":false,"rolloutBasisPoints":3000}""";
 
     [Fact]
@@ -143,6 +161,7 @@ public sealed class FlagEditorPageTests
 
         Assert.Empty(page.FindAll("form"));
         Assert.Equal(["Enabled", "10%", "true", "false"], page.FindAll("dd").Select(value => value.TextContent));
+        Assert.Empty(page.FindAll("dd pre"));
     }
 
     [Fact]
@@ -170,13 +189,501 @@ public sealed class FlagEditorPageTests
         Assert.Equal("new-shop", AccessibleNames.CurrentBreadcrumb(page));
     }
 
+    [Fact]
+    public void A_json_flag_opens_with_its_values_indented()
+    {
+        var api = ShopConfigRead();
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+
+        var page = RenderEditor(console, "shop-config");
+
+        Assert.Equal(IndentedOnValue, TextOf(page.Find("#on-value")));
+        Assert.Equal("{\n  \"discount\": 0\n}", TextOf(page.Find("#off-value")));
+        Assert.Equal("JSON", page.Find("[data-testid=flag-type]").TextContent);
+        Assert.Equal("The type is fixed: games already read this flag as JSON.", page.Find("[data-testid=type-fixed]").TextContent);
+        Assert.Empty(page.FindAll("select"));
+    }
+
+    [Theory]
+    [InlineData("editor")]
+    [InlineData("viewer")]
+    public void The_json_editor_warns_that_values_reach_every_player(string role)
+    {
+        var api = ShopConfigRead();
+        ConsoleRendering.SignInAs(api, role);
+        using var console = ConsoleRendering.Create(api);
+
+        var page = RenderEditor(console, "shop-config");
+
+        Assert.Equal(PublicValuesWarning, MessageOf(page.Find("#json-public[role=note]")));
+    }
+
+    [Fact]
+    public void The_values_point_to_the_warning_so_a_screen_reader_reads_it_first()
+    {
+        var api = ShopConfigRead();
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+
+        var page = RenderEditor(console, "shop-config");
+
+        Assert.Equal("json-public", page.Find("fieldset").GetAttribute("aria-describedby"));
+    }
+
+    [Fact]
+    public void A_boolean_flag_has_no_warning_about_public_values()
+    {
+        var api = NewShopAtTenPercent();
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+
+        var page = RenderEditor(console);
+
+        Assert.Empty(page.FindAll("[role=note]"));
+    }
+
+    [Fact]
+    public void Each_value_says_who_gets_it_from_the_rollout_typed()
+    {
+        var api = ShopConfigRead();
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+
+        page.Find("input[type=number]").Change("25");
+
+        Assert.Equal("The 25% of players inside the rollout.", page.Find("#on-value-audience").TextContent);
+        Assert.Equal("The other 75%, and every player while the flag is disabled.", page.Find("#off-value-audience").TextContent);
+        page.Find("input[type=checkbox]").Change(false);
+        Assert.Equal("Nobody while the flag is disabled.", page.Find("#on-value-audience").TextContent);
+    }
+
+    [Fact]
+    public void A_changed_json_value_is_sent_compact_with_the_etag_read()
+    {
+        var api = ShopConfigRead().Answer(HttpMethod.Patch, ShopConfig, HttpStatusCode.OK,
+            """{"key":"shop-config","type":"json","enabled":true,"onValue":{"discount":0.5,"items":["sword","shield"]},"offValue":{"discount":0},"rolloutBasisPoints":10000}""",
+            eTag: "\"5\"");
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+
+        page.Find("#on-value").Input("{ \"discount\": 0.5, \"items\": [\"sword\", \"shield\"] }");
+        page.Find("form").Submit();
+
+        page.WaitForAssertion(() => Assert.Equal("Saved to the draft. Games get it with the next publication.", page.Find("[role=status]").TextContent));
+        var patch = Assert.Single(api.RequestsTo(HttpMethod.Patch, ShopConfig));
+        Assert.Equal(["\"4\""], patch.Headers.GetValues("If-Match"));
+        Assert.Equal("""{"onValue":{"discount":0.5,"items":["sword","shield"]}}""", api.BodyOf(patch));
+        Assert.Equal("{\n  \"discount\": 0.5,\n  \"items\": [\n    \"sword\",\n    \"shield\"\n  ]\n}", TextOf(page.Find("#on-value")));
+    }
+
+    [Fact]
+    public void Whitespace_only_edits_have_nothing_to_save()
+    {
+        var api = ShopConfigRead();
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+
+        page.Find("#on-value").Input("""{"discount":0.2,   "items":["sword"]}""");
+        page.Find("form").Submit();
+
+        Assert.Equal("Nothing to save: these are already the values in the draft.", page.Find("[role=alert]").TextContent.Trim());
+        Assert.Empty(api.RequestsTo(HttpMethod.Patch, ShopConfig));
+    }
+
+    [Fact]
+    public void A_syntax_error_shows_its_line_and_column_and_marks_the_field_invalid()
+    {
+        var api = ShopConfigRead();
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+
+        page.Find("#on-value").Input("{\n  \"discount\": 0.2\n  \"items\": []\n}");
+
+        var error = page.Find("#on-value-syntax");
+        Assert.Equal("Not valid JSON at line 3, column 3.", error.QuerySelector("[data-testid=syntax-summary]")?.TextContent);
+        Assert.Equal("3 │   \"items\": []\n  │   ^", error.QuerySelector("pre")?.TextContent);
+        Assert.Equal("Size appears once the JSON is valid.", page.Find("#on-value-size").TextContent);
+        var area = page.Find("#on-value");
+        Assert.Equal("true", area.GetAttribute("aria-invalid"));
+        Assert.Equal("on-value-audience on-value-size on-value-syntax", area.GetAttribute("aria-describedby"));
+        Assert.Empty(page.FindAll("[role=alert]"));
+    }
+
+    [Fact]
+    public void A_valid_value_is_not_marked_invalid()
+    {
+        var api = ShopConfigRead();
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+
+        var page = RenderEditor(console, "shop-config");
+
+        var area = page.Find("#on-value");
+        Assert.Null(area.GetAttribute("aria-invalid"));
+        Assert.Equal("on-value-audience on-value-size", area.GetAttribute("aria-describedby"));
+        Assert.Empty(page.FindAll("#on-value-syntax"));
+    }
+
+    [Fact]
+    public void The_size_meter_counts_the_bytes_of_the_compacted_value()
+    {
+        var api = ShopConfigRead();
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+
+        var page = RenderEditor(console, "shop-config");
+
+        Assert.Equal("34 of 4,096 bytes", MeterOf(page.Find("#on-value-size")));
+    }
+
+    [Theory]
+    [InlineData(3_071, "3,071 of 4,096 bytes")]
+    [InlineData(3_072, "Near the limit 3,072 of 4,096 bytes")]
+    [InlineData(4_096, "Near the limit 4,096 of 4,096 bytes")]
+    [InlineData(4_097, "Over the limit by 1 byte 4,097 of 4,096 bytes")]
+    [InlineData(4_098, "Over the limit by 2 bytes 4,098 of 4,096 bytes")]
+    public void The_size_meter_warns_near_and_over_the_limit_in_words(int bytes, string shown)
+    {
+        var api = ShopConfigRead();
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+
+        page.Find("#off-value").Input(StringOfBytes(bytes));
+
+        Assert.Equal(shown, MeterOf(page.Find("#off-value-size")));
+    }
+
+    [Fact]
+    public void A_value_over_the_limit_is_marked_invalid_while_typing()
+    {
+        var api = ShopConfigRead();
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+
+        page.Find("#off-value").Input(StringOfBytes(4_097));
+
+        Assert.Equal("true", page.Find("#off-value").GetAttribute("aria-invalid"));
+    }
+
+    [Fact]
+    public void The_level_of_the_meter_is_announced_politely_without_the_byte_count()
+    {
+        var api = ShopConfigRead();
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+
+        Assert.Equal(string.Empty, page.Find("#off-value-live[aria-live=polite]").TextContent);
+        page.Find("#off-value").Input(StringOfBytes(3_500));
+        Assert.Equal("The value for everyone else is near the limit.", page.Find("#off-value-live").TextContent);
+        page.Find("#off-value").Input("{");
+        Assert.Equal("The value for everyone else is not valid JSON.", page.Find("#off-value-live").TextContent);
+    }
+
+    [Fact]
+    public void Saving_an_invalid_value_sends_nothing_and_focuses_the_field()
+    {
+        var api = ShopConfigRead();
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+        var area = ReferenceOf(page.Find("#off-value"));
+
+        page.Find("#off-value").Input("{\"discount\": }");
+        page.Find("form").Submit();
+
+        Assert.Equal("Nothing was saved: fix the fields marked below.", page.Find("[role=alert]").TextContent.Trim());
+        Assert.Equal("{\"discount\": }", TextOf(page.Find("#off-value")));
+        Assert.Empty(api.RequestsTo(HttpMethod.Patch, ShopConfig));
+        AssertFocused(console, area);
+    }
+
+    [Fact]
+    public void An_empty_value_is_refused_under_its_field()
+    {
+        var api = ShopConfigRead();
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+
+        page.Find("#on-value").Input(string.Empty);
+        page.Find("form").Submit();
+
+        Assert.Equal("Enter a JSON value for included players.", MessageOf(page.Find("#on-value-error")));
+        Assert.Equal("Any JSON value: 3, \"gold\", [1, 2] or an object.", MessageOf(page.Find("#on-value-size")));
+        Assert.Contains("on-value-error", page.Find("#on-value").GetAttribute("aria-describedby"), StringComparison.Ordinal);
+        Assert.Empty(api.RequestsTo(HttpMethod.Patch, ShopConfig));
+    }
+
+    [Fact]
+    public void Null_cannot_replace_a_value_when_editing()
+    {
+        var api = ShopConfigRead();
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+
+        page.Find("#off-value").Input("null");
+        page.Find("form").Submit();
+
+        Assert.Equal("null is accepted only when the flag is created. Use another value, such as {} or \"\".", MessageOf(page.Find("#off-value-error")));
+        Assert.Empty(api.RequestsTo(HttpMethod.Patch, ShopConfig));
+    }
+
+    [Fact]
+    public void A_server_error_on_a_value_appears_under_its_field()
+    {
+        var api = ShopConfigRead().Answer(HttpMethod.Patch, ShopConfig, HttpStatusCode.BadRequest, """
+            {"type":"/problems/invalid-input","title":"Invalid input","status":400,
+             "errors":[{"type":"INVALID_VALUE","detail":"The value nests deeper than 8 levels.","source":{"location":"body","pointer":"/onValue"}}]}
+            """, "application/problem+json");
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+        var area = ReferenceOf(page.Find("#on-value"));
+
+        page.Find("#on-value").Input("[1]");
+        page.Find("form").Submit();
+
+        page.WaitForAssertion(() => Assert.Equal("The value nests deeper than 8 levels.", MessageOf(page.Find("#on-value-error"))));
+        Assert.Equal("Nothing was saved: fix the fields marked below.", Assert.Single(page.FindAll("[role=alert]")).TextContent.Trim());
+        Assert.Equal("[1]", TextOf(page.Find("#on-value")));
+        Assert.Equal("true", page.Find("#on-value").GetAttribute("aria-invalid"));
+        AssertFocused(console, area);
+    }
+
+    [Fact]
+    public void The_environment_budget_conflict_is_explained_and_keeps_the_text()
+    {
+        var api = ShopConfigRead().Answer(HttpMethod.Patch, ShopConfig, HttpStatusCode.Conflict,
+            """{"type":"/problems/json-budget-reached","title":"JSON budget reached","status":409,"detail":"The draft would hold 131073 bytes of json values; the limit is 131072."}""",
+            "application/problem+json");
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+
+        page.Find("#on-value").Input("[1]");
+        page.Find("form").Submit();
+
+        page.WaitForAssertion(() => Assert.Equal(
+            ["This draft is out of room for JSON values.", OutOfRoomText],
+            page.Find("[role=alert]").QuerySelectorAll("p").Select(line => line.TextContent)));
+        Assert.Equal("[1]", TextOf(page.Find("#on-value")));
+    }
+
+    [Fact]
+    public void A_body_too_large_is_explained_next_to_the_values()
+    {
+        var api = ShopConfigRead().Answer(HttpMethod.Patch, ShopConfig, HttpStatusCode.RequestEntityTooLarge,
+            """{"type":"/problems/payload-too-large","title":"Payload too large","status":413,"detail":"The body is over the limit of 32768 bytes."}""",
+            "application/problem+json");
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+
+        page.Find("#on-value").Input("[1]");
+        page.Find("form").Submit();
+
+        page.WaitForAssertion(() => Assert.Equal(
+            "This change is too big to send (over 32 KiB), so nothing was saved. Each value can have at most 4 KiB once compacted.",
+            page.Find("[data-testid=values-too-large]").TextContent));
+        Assert.Equal("[1]", TextOf(page.Find("#on-value")));
+    }
+
+    [Fact]
+    public void A_flag_changed_by_someone_else_reloads_the_json_values_indented()
+    {
+        var api = ShopConfigRead()
+            .ThenAnswer(HttpMethod.Get, ShopConfig, HttpStatusCode.OK, ShopConfigAtHalf.Replace("\"discount\":0}", "\"discount\":0.1}", StringComparison.Ordinal), eTag: "\"6\"")
+            .Answer(HttpMethod.Patch, ShopConfig, HttpStatusCode.PreconditionFailed,
+                """{"type":"/problems/stale-revision","title":"Stale","status":412}""", "application/problem+json");
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+
+        page.Find("#off-value").Input("[1]");
+        page.Find("form").Submit();
+
+        page.WaitForAssertion(() => Assert.Contains("Someone changed this flag after you opened it.", page.Find("[role=alert]").TextContent, StringComparison.Ordinal));
+        Assert.Equal("{\n  \"discount\": 0.1\n}", TextOf(page.Find("#off-value")));
+        Assert.Equal("50", page.Find("input[type=number]").GetAttribute("value"));
+    }
+
+    [Fact]
+    public void Format_indents_the_value_keeping_key_order()
+    {
+        var api = ShopConfigRead();
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+
+        page.Find("#on-value").Input("""{"b":1,"a":[1]}""");
+        page.Find("[data-testid=on-value-format]").Click();
+
+        Assert.Equal("{\n  \"b\": 1,\n  \"a\": [\n    1\n  ]\n}", TextOf(page.Find("#on-value")));
+    }
+
+    [Fact]
+    public void Format_waits_for_valid_json()
+    {
+        var api = ShopConfigRead();
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+
+        page.Find("#on-value").Input("{");
+
+        Assert.True(page.Find("[data-testid=on-value-format]").HasAttribute("disabled"));
+        Assert.False(page.Find("[data-testid=off-value-format]").HasAttribute("disabled"));
+    }
+
+    [Fact]
+    public void Copying_the_included_value_fills_the_other_one()
+    {
+        var api = ShopConfigRead();
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+
+        page.FindAll("button").Single(button => button.TextContent.Trim() == "Copy from included").Click();
+
+        Assert.Equal(IndentedOnValue, TextOf(page.Find("#off-value")));
+    }
+
+    [Fact]
+    public void A_viewer_reads_a_json_flag_indented()
+    {
+        var api = ShopConfigRead();
+        ConsoleRendering.SignInAs(api, "viewer");
+        using var console = ConsoleRendering.Create(api);
+
+        var page = RenderEditor(console, "shop-config");
+
+        Assert.Empty(page.FindAll("form"));
+        Assert.Empty(page.FindAll("textarea"));
+        Assert.Equal(["Enabled", "100%", IndentedOnValue, "{\n  \"discount\": 0\n}"], page.FindAll("dd").Select(value => value.TextContent));
+    }
+
+    [Fact]
+    public void A_json_value_with_markup_is_shown_as_text_to_a_viewer()
+    {
+        var api = MarkupRead();
+        ConsoleRendering.SignInAs(api, "viewer");
+        using var console = ConsoleRendering.Create(api);
+
+        var page = RenderEditor(console, "shop-config");
+
+        Assert.Empty(page.FindAll("script"));
+        Assert.Empty(page.FindAll("img"));
+        Assert.Equal(["\"<script>x</script>\"", "\"<img src=x onerror=x>\""], page.FindAll("dd pre").Select(value => value.TextContent));
+    }
+
+    [Fact]
+    public void A_json_value_with_markup_is_shown_as_text_in_the_editor()
+    {
+        var api = MarkupRead();
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+
+        var page = RenderEditor(console, "shop-config");
+
+        Assert.Empty(page.FindAll("script"));
+        Assert.Empty(page.FindAll("img"));
+        Assert.Equal("\"<script>x</script>\"", TextOf(page.Find("#on-value")));
+        Assert.Equal("\"<img src=x onerror=x>\"", TextOf(page.Find("#off-value")));
+    }
+
+    [Fact]
+    public void A_flag_of_an_unknown_type_opens_read_only()
+    {
+        var api = new StubApi().Answer(HttpMethod.Get, ShopConfig, HttpStatusCode.OK,
+            """{"key":"shop-config","type":"remote-config","enabled":true,"onValue":{"a":1},"offValue":{"a":0},"rolloutBasisPoints":10000}""",
+            eTag: "\"4\"");
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+
+        var page = RenderEditor(console, "shop-config");
+
+        Assert.Empty(page.FindAll("form"));
+        Assert.Equal("remote-config", page.Find("[data-testid=flag-type]").TextContent);
+        Assert.Equal("This console cannot edit flags of type \"remote-config\" yet.", page.Find("[data-testid=unknown-type]").TextContent);
+        Assert.Equal(["Enabled", "100%", "{\n  \"a\": 1\n}", "{\n  \"a\": 0\n}"], page.FindAll("dd").Select(value => value.TextContent));
+    }
+
+    [Fact]
+    public void A_rollout_that_is_not_basis_points_is_refused_under_its_field()
+    {
+        var api = NewShopAtTenPercent();
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console);
+        var rollout = ReferenceOf(page.Find("input[type=number]"));
+
+        page.Find("input[type=number]").Change("12.345");
+        page.Find("form").Submit();
+
+        Assert.Equal("Enter a rollout between 0 and 100, with at most two decimals.", MessageOf(page.Find("#rollout-error")));
+        Assert.Equal("rollout-error", page.Find("input[type=number]").GetAttribute("aria-describedby"));
+        Assert.Empty(api.RequestsTo(HttpMethod.Patch, NewShop));
+        AssertFocused(console, rollout);
+    }
+
+    [Fact]
+    public void Saving_a_json_flag_with_only_a_new_rollout_sends_only_the_rollout()
+    {
+        var api = ShopConfigRead().Answer(HttpMethod.Patch, ShopConfig, HttpStatusCode.OK, ShopConfigAtHalf, eTag: "\"5\"");
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+
+        page.Find("input[type=number]").Change("50");
+        page.Find("form").Submit();
+
+        page.WaitForAssertion(() => Assert.Single(api.RequestsTo(HttpMethod.Patch, ShopConfig)));
+        Assert.Equal("""{"rolloutBasisPoints":5000}""", api.BodyOf(api.RequestsTo(HttpMethod.Patch, ShopConfig).Single()));
+    }
+
+    private static StubApi MarkupRead() =>
+        new StubApi().Answer(HttpMethod.Get, ShopConfig, HttpStatusCode.OK,
+            """{"key":"shop-config","type":"json","enabled":true,"onValue":"<script>x</script>","offValue":"<img src=x onerror=x>","rolloutBasisPoints":10000}""",
+            eTag: "\"4\"");
+
+    // Uma string JSON com exatamente esse tamanho em bytes depois de compactada: as aspas contam.
+    private static string StringOfBytes(int bytes) => $"\"{new string('a', bytes - 2)}\"";
+
+    // O bUnit põe o valor de um <textarea> ligado por value= no atributo; o helper aceita também o conteúdo.
+    private static string TextOf(AngleSharp.Dom.IElement area) => area.GetAttribute("value") ?? area.TextContent;
+
+    // O ⚠ é só reforço visual (aria-hidden); a mensagem é o resto.
+    private static string MessageOf(AngleSharp.Dom.IElement element) =>
+        string.Join(' ', element.TextContent.Replace("⚠", string.Empty, StringComparison.Ordinal)
+            .Split((char[])[' ', '\n'], StringSplitOptions.RemoveEmptyEntries));
+
+    private static string MeterOf(AngleSharp.Dom.IElement meter) => string.Join(' ', meter.QuerySelectorAll("p > span").Select(MessageOf));
+
+    // O bUnit só escreve o id da referência no primeiro render; ele é lido antes de editar.
+    private static string ReferenceOf(AngleSharp.Dom.IElement element) => element.GetAttribute("blazor:elementreference") ?? string.Empty;
+
+    private static void AssertFocused(BunitContext console, string reference) =>
+        Assert.Equal(reference, Assert.IsType<ElementReference>(console.JSInterop.VerifyFocusAsyncInvoke().Arguments[0]).Id);
+
+    private static StubApi ShopConfigRead() =>
+        new StubApi().Answer(HttpMethod.Get, ShopConfig, HttpStatusCode.OK, ShopConfigJson, eTag: "\"4\"");
+
     private static StubApi NewShopAtTenPercent() =>
         new StubApi().Answer(HttpMethod.Get, NewShop, HttpStatusCode.OK, AtTenPercent, eTag: "\"7\"");
 
-    private static IRenderedComponent<FlagEditor> RenderEditor(BunitContext console) =>
+    private static IRenderedComponent<FlagEditor> RenderEditor(BunitContext console, string flagKey = "new-shop") =>
         console.Render<FlagEditor>(parameters => parameters
             .Add(page => page.OrganizationId, ConsoleRendering.OrganizationId)
             .Add(page => page.ProjectKey, "space-race")
             .Add(page => page.EnvironmentKey, "dev")
-            .Add(page => page.FlagKey, "new-shop"));
+            .Add(page => page.FlagKey, flagKey));
 }
