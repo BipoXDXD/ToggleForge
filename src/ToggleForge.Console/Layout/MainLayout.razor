@@ -28,7 +28,10 @@ else if (_problem is not null)
 }
 else
 {
-    <div class="boot-screen">Loading ToggleForge…</div>
+    @* Sem h1: o FocusOnNavigate focaria este título, e o foco se perderia quando a página o substituísse. *@
+    <main class="boot-screen">
+        <p role="status">Loading ToggleForge…</p>
+    </main>
 }
 
 @code {
