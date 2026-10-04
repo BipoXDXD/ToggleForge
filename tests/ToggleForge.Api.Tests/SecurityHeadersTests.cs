@@ -58,7 +58,7 @@ public sealed class SecurityHeadersTests(ApiFactory api)
         Assert.Equal("same-origin", Assert.Single(response.Headers.GetValues("Cross-Origin-Resource-Policy")));
     }
 
-    /// <summary>O jogo lê o snapshot fora do navegador ou de outra origem; a rota do SDK não ganha a restrição.</summary>
+    /// <summary>O jogo lê o snapshot fora do navegador, onde o CORP não vale; a rota do SDK não ganha a restrição.</summary>
     [Fact]
     public async Task The_sdk_route_does_not_restrict_its_loading_origin()
     {

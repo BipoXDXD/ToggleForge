@@ -22,9 +22,10 @@ internal static class ApiSecurityHeaders
     private const string DeniedBrowserFeatures = "camera=(), microphone=(), geolocation=(), payment=(), usb=()";
 
     /// <summary>
-    /// O CORP só vale para cargas no-cors (img, script, iframe de outra origem); um fetch com CORS não passa por
-    /// ele. O SDK fica de fora porque quem o lê é o jogo, fora do navegador ou num build WebGL de outra origem, e
-    /// a restrição ali não protege nada que a credencial já não proteja.
+    /// O CORP só vale para cargas no-cors (img, script, iframe de outra origem) e não bloqueia um fetch com CORS.
+    /// Um build WebGL de outra origem dependeria do CORS, que continua desligado, não do CORP. O SDK fica de fora
+    /// porque o jogo o lê fora do navegador, onde o header não vale; sem ele, uma carga no-cors vinda de outro
+    /// site continua opaca e sem a credencial, que vai no Authorization.
     /// </summary>
     private static readonly PathString _sdkPath = new("/sdk");
 

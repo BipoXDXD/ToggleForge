@@ -61,9 +61,10 @@ Alternativas consideradas:
 | `Cross-Origin-Resource-Policy` | `same-origin` | tudo fora de `/sdk` |
 | `Strict-Transport-Security` | `max-age=<StrictTransportSecurity:MaxAge>` | só em HTTPS, fora de Development, exceto hosts de loopback |
 
-O CORP só vale para cargas no-cors (img, script, iframe de outra origem); um fetch com CORS não passa por ele.
-O `/sdk` fica de fora porque quem o lê é o jogo, fora do navegador ou num build WebGL de outra origem, e ali a
-restrição não protegeria nada que a credencial já não proteja.
+O CORP só vale para cargas no-cors (img, script, iframe de outra origem) e não bloqueia um fetch com CORS. Um
+build WebGL de outra origem dependeria do CORS, que continua desligado, não do CORP. O `/sdk` fica de fora porque
+o jogo o lê fora do navegador, onde o header não vale. Sem ele, uma carga no-cors vinda de outro site continua
+opaca e não leva a credencial, que vai no `Authorization`.
 
 **HSTS configurável:** `StrictTransportSecurity:MaxAge`, de 1 segundo a 2 anos, validado na partida. O
 `appsettings.json` traz **1 dia** para o primeiro deploy. Sem `includeSubDomains` nem `preload`: os dois prendem
