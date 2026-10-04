@@ -30,8 +30,9 @@ internal static class ApiForwardedHeaders
                 $"Set {Section}:KnownNetworks to the network of the ingress, such as 10.0.0.0/8.")
             // A variável faz o host ligar o próprio middleware de forwarded headers e limpar as redes conhecidas
             // (Learn, "Kestrel security considerations"): todo remetente passaria a escolher o próprio IP e esquema.
+            // O host só reconhece o literal "true", sem diferenciar maiúsculas; "1" ou "yes" ele ignora, e aqui também.
             .Validate<IHostEnvironment, IConfiguration>(
-                (_, environment, configuration) => environment.IsDevelopment() || !configuration.GetValue<bool>(HostForwardedHeadersSwitch),
+                (_, environment, configuration) => environment.IsDevelopment() || !HostOpensForwardedHeaders(configuration),
                 $"Unset ASPNETCORE_FORWARDEDHEADERS_ENABLED ({HostForwardedHeadersSwitch}): it trusts forwarded headers from any sender.")
             .ValidateOnStart();
         services.AddOptions<ForwardedHeadersOptions>().Configure<IOptions<TrustedProxies>>((options, proxies) =>
@@ -45,6 +46,9 @@ internal static class ApiForwardedHeaders
         });
         return services;
     }
+
+    private static bool HostOpensForwardedHeaders(IConfiguration configuration) =>
+        string.Equals(configuration[HostForwardedHeadersSwitch], "true", StringComparison.OrdinalIgnoreCase);
 
     private sealed class TrustedProxies
     {

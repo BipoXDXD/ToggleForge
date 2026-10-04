@@ -111,6 +111,39 @@ public sealed class ForwardedHeadersTests(ApiFactory api)
         Assert.Contains("ASPNETCORE_FORWARDEDHEADERS_ENABLED", error.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>O framework só liga o próprio middleware com o literal "true"; qualquer outro valor é ignorado.</summary>
+    [Theory]
+    [InlineData("1")]
+    [InlineData("yes")]
+    [InlineData("false")]
+    public async Task Outside_development_a_value_the_host_ignores_does_not_block_startup(string value)
+    {
+        await using var production = api.WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Production");
+            builder.UseSetting("ForwardedHeaders:KnownNetworks:0", TrustedNetwork);
+            builder.UseSetting("ForwardedHeaders_Enabled", value);
+        });
+
+        using var client = production.CreateClient();
+
+        Assert.NotNull(client);
+    }
+
+    [Fact]
+    public async Task In_development_forwarded_headers_opened_by_the_host_do_not_block_startup()
+    {
+        await using var development = api.WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Development");
+            builder.UseSetting("ForwardedHeaders_Enabled", "true");
+        });
+
+        using var client = development.CreateClient();
+
+        Assert.NotNull(client);
+    }
+
     private WebApplicationFactory<Program> Host(string? knownNetwork, int anonymousPerMinute = 1) =>
         api.WithWebHostBuilder(builder =>
         {

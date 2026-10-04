@@ -87,6 +87,9 @@ cliente (ADR 0006). Fora de Development, a API não sobe em dois casos:
 - com `ASPNETCORE_FORWARDEDHEADERS_ENABLED`, ou `DOTNET_FORWARDEDHEADERS_ENABLED`, valendo `true` (na configuração,
   a chave `ForwardedHeaders_Enabled`).
 
+As duas verificações rodam no `StartAsync` do host, então os modos de manutenção da CLI (`--migrate` e
+`--purge-idempotency-records`) não precisam das configurações do ingress.
+
 Segundo o Learn ("Kestrel security considerations" e "Configure ASP.NET Core to work with proxy servers and load
 balancers"), essa variável faz o host ligar o middleware de forwarded headers por conta própria, com
 `X-Forwarded-For` e `X-Forwarded-Proto`. Ela também limpa `KnownProxies` e `KnownIPNetworks`, de modo que todo
