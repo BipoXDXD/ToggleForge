@@ -44,6 +44,17 @@ internal sealed class FlagFormState
     public void MarkValuesTooLarge() => ValuesTooLarge = true;
 
     /// <summary>
+    /// O tipo da flag mudou: os erros dos valores JSON e o 413 foram dados ao tipo anterior, e as áreas nem estão mais na
+    /// tela quando ele vira booleano. O erro da chave e o do rollout continuam.
+    /// </summary>
+    public void ClearValues()
+    {
+        Clear(FieldErrors.OnValue);
+        Clear(FieldErrors.OffValue);
+        ValuesTooLarge = false;
+    }
+
+    /// <summary>
     /// O membro mexeu no campo: a mensagem antiga já não diz respeito a ele. O resumo fala dos campos marcados; quando o
     /// último deixa de estar, ele já não diz respeito ao formulário.
     /// </summary>

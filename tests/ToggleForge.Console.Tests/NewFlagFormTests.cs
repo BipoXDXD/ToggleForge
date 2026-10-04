@@ -594,6 +594,75 @@ public sealed class NewFlagFormTests
             form.Find("[data-testid=values-too-large]").TextContent));
     }
 
+    [Fact]
+    public void Switching_to_boolean_drops_the_errors_of_the_json_values()
+    {
+        var api = Editor(new StubApi().Answer(HttpMethod.Post, Flags, HttpStatusCode.BadRequest, """
+            {"type":"/problems/invalid-input","title":"Invalid input","status":400,
+             "errors":[{"type":"INVALID_VALUE","detail":"The value nests deeper than 8 levels.","source":{"location":"body","pointer":"/offValue"}}]}
+            """, "application/problem+json"));
+        using var console = ConsoleRendering.Create(api);
+        var form = RenderForm(console);
+        form.Find("#flag-key").Change("shop-config");
+        form.Find("#flag-type-json").Change(true);
+        form.Find("#on-value").Input("1");
+        form.Find("#off-value").Input("[[[[[[[[[1]]]]]]]]]");
+        form.Find("form").Submit();
+        form.WaitForElement("#off-value-error");
+
+        form.Find("#flag-type-boolean").Change(true);
+
+        Assert.Empty(form.FindAll("[role=alert]"));
+        form.Find("#flag-type-json").Change(true);
+        Assert.Empty(form.FindAll("#off-value-error"));
+        Assert.Null(form.Find("#off-value").GetAttribute("aria-invalid"));
+        Assert.Equal("[[[[[[[[[1]]]]]]]]]", TextOf(form.Find("#off-value")));
+    }
+
+    [Fact]
+    public void Switching_to_boolean_keeps_the_error_on_the_key()
+    {
+        var api = Editor(new StubApi().Answer(HttpMethod.Post, Flags, HttpStatusCode.BadRequest, """
+            {"type":"/problems/invalid-input","title":"Invalid input","status":400,
+             "errors":[{"type":"INVALID_VALUE","detail":"Keys start with a letter or digit.","source":{"location":"body","pointer":"/key"}},
+                       {"type":"INVALID_VALUE","detail":"The value nests deeper than 8 levels.","source":{"location":"body","pointer":"/onValue"}}]}
+            """, "application/problem+json"));
+        using var console = ConsoleRendering.Create(api);
+        var form = RenderForm(console);
+        form.Find("#flag-key").Change("-shop");
+        form.Find("#flag-type-json").Change(true);
+        form.Find("#on-value").Input("[[[[[[[[[1]]]]]]]]]");
+        form.Find("#off-value").Input("0");
+        form.Find("form").Submit();
+        form.WaitForElement("#on-value-error");
+
+        form.Find("#flag-type-boolean").Change(true);
+
+        Assert.Equal("Keys start with a letter or digit.", MessageOf(form.Find("#flag-key-error")));
+        Assert.Equal(FixMarkedFields, Assert.Single(form.FindAll("[role=alert]")).TextContent.Trim());
+    }
+
+    [Fact]
+    public void Switching_to_boolean_drops_the_notice_that_the_values_were_too_large()
+    {
+        var api = Editor(new StubApi().Answer(HttpMethod.Post, Flags, HttpStatusCode.RequestEntityTooLarge,
+            """{"type":"/problems/payload-too-large","title":"Payload too large","status":413,"detail":"The body is over the limit of 32768 bytes."}""",
+            "application/problem+json"));
+        using var console = ConsoleRendering.Create(api);
+        var form = RenderForm(console);
+        form.Find("#flag-key").Change("shop-config");
+        form.Find("#flag-type-json").Change(true);
+        form.Find("#on-value").Input("1");
+        form.Find("#off-value").Input("0");
+        form.Find("form").Submit();
+        form.WaitForElement("[data-testid=values-too-large]");
+
+        form.Find("#flag-type-boolean").Change(true);
+        form.Find("#flag-type-json").Change(true);
+
+        Assert.Empty(form.FindAll("[data-testid=values-too-large]"));
+    }
+
     private static AngleSharp.Dom.IElement CardOf(IRenderedComponent<NewFlagForm> form, string radio) =>
         form.Find(radio).ParentElement ?? throw new InvalidOperationException($"{radio} has no card.");
 

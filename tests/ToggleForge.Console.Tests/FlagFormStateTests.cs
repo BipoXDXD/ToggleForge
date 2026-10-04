@@ -122,6 +122,32 @@ public sealed class FlagFormStateTests
         Assert.Equal("Wrong.", form.Fields.For(FieldErrors.Rollout));
     }
 
+    [Fact]
+    public void Clearing_the_values_keeps_the_errors_of_the_other_fields()
+    {
+        var form = new FlagFormState();
+        form.Mark(Errors(FieldErrors.Key, FieldErrors.OnValue, FieldErrors.OffValue));
+        form.MarkValuesTooLarge();
+
+        form.ClearValues();
+
+        Assert.Equal("Wrong.", form.Fields.For(FieldErrors.Key));
+        Assert.Equal([null, null], [form.Fields.For(FieldErrors.OnValue), form.Fields.For(FieldErrors.OffValue)]);
+        Assert.False(form.ValuesTooLarge);
+        Assert.Equal(FormProblems.FixMarkedFields, form.Problem);
+    }
+
+    [Fact]
+    public void Clearing_the_last_marked_values_takes_the_summary_with_them()
+    {
+        var form = new FlagFormState();
+        form.Mark(Errors(FieldErrors.OnValue, FieldErrors.OffValue));
+
+        form.ClearValues();
+
+        Assert.Null(form.Problem);
+    }
+
     private static FieldErrors Errors(params string[] fields)
     {
         var errors = new FieldErrors();

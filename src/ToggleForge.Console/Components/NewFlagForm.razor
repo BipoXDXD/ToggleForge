@@ -185,8 +185,13 @@
         _focusAfterRender = _form.FirstMarkedField;
     }
 
-    // Os textos JSON ficam guardados na troca: voltar para JSON antes de enviar devolve o que o membro digitou.
-    private void ChooseType(string type) => _newFlag.Type = type;
+    // Os textos JSON ficam guardados na troca: voltar para JSON antes de enviar devolve o que o membro digitou. Os erros
+    // deles, não: sem as áreas na tela, o resumo falaria de campos que ninguém vê.
+    private void ChooseType(string type)
+    {
+        _newFlag.Type = type;
+        _form.ClearValues();
+    }
 
     // O rádio marcado é o sinal principal; a cor do cartão é reforço (design spec, 2.1).
     private string CardStyle(string type) =>
