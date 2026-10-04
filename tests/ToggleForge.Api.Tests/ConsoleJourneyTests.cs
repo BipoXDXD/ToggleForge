@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.RegularExpressions;
 using Microsoft.Playwright;
 using ToggleForge.Api.Tests.Support;
 using static Microsoft.Playwright.Assertions;
@@ -47,6 +48,65 @@ public sealed class ConsoleJourneyTests(ApiFactory api, Browser browser) : IClas
         var flag = Assert.Single(draft.Json["flags"]!.AsArray())!;
         Assert.Equal("new-shop", flag["key"]!.GetValue<string>());
         Assert.Equal(2_500, flag["rolloutBasisPoints"]!.GetValue<int>());
+        Assert.True(browserErrors.Count == 0, string.Join(" | ", browserErrors));
+    }
+
+    /// <summary>
+    /// A evidência do Marco 3 (ToggleForge.md, seção 9): a experiência central inteira pela interface. Só a conta
+    /// nasce pela API, porque o console não tem cadastro.
+    /// </summary>
+    [Fact]
+    public async Task A_member_creates_simulates_publishes_widens_and_rolls_back_a_flag_from_the_console()
+    {
+        const string playerId = "player-42";
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        await using var context = await browser.NewContextAsync(Host.Address);
+        var page = await context.NewPageAsync();
+        var browserErrors = CollectErrors(page);
+
+        await page.GotoAsync("/");
+        await SignInAsync(page, owner.Email, ConsoleClient.Password);
+        await Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Projects" })).ToBeVisibleAsync();
+        await page.GetByLabel("Name").FillAsync("Space Race");
+        await page.GetByLabel("Key").FillAsync("space-race");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Create project" }).ClickAsync();
+        await Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Space Race" })).ToBeVisibleAsync();
+        await page.GetByLabel("Key").FillAsync("new-shop");
+        await page.GetByLabel("Rollout (%)").FillAsync("10");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Add to draft" }).ClickAsync();
+        await Expect(page.GetByRole(AriaRole.Row).Filter(new() { HasText = "new-shop" })).ToContainTextAsync("10%");
+
+        await SimulateAsync(page, playerId, publishedVersion: false);
+        await Expect(ResultCells(page).Nth(2)).ToHaveTextAsync(new Regex("^Bucket \\d+ is (inside|outside) the rollout\\.$"));
+        var atTenPercent = await ResultCells(page).AllInnerTextsAsync();
+        await ReturnToDraftAsync(page);
+        await PublishAsync(page, "Open the new shop to 10%");
+        await Expect(page.GetByRole(AriaRole.Status)).ToContainTextAsync("Version 1 is live in Development.");
+
+        await page.GetByRole(AriaRole.Link, new() { Name = "Back to the draft" }).ClickAsync();
+        await page.GetByRole(AriaRole.Link, new() { Name = "new-shop" }).ClickAsync();
+        await page.GetByLabel("Rollout (%)").FillAsync("100");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Save" }).ClickAsync();
+        await Expect(page.GetByRole(AriaRole.Status)).ToContainTextAsync("Saved to the draft");
+        await ReturnToDraftAsync(page);
+        await PublishAsync(page, "Open the new shop to everyone");
+        await Expect(page.GetByRole(AriaRole.Status)).ToContainTextAsync("Version 2 is live in Development.");
+        await page.GetByRole(AriaRole.Link, new() { Name = "Back to the draft" }).ClickAsync();
+        await SimulateAsync(page, playerId, publishedVersion: true);
+        await Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Version 2", Exact = true })).ToBeVisibleAsync();
+        await Expect(ResultCells(page)).ToHaveTextAsync(["new-shop", "true", "The rollout includes everyone."]);
+
+        await ReturnToDraftAsync(page);
+        await page.GetByRole(AriaRole.Link, new() { Name = "History" }).ClickAsync();
+        await page.GetByRole(AriaRole.Link, new() { Name = "Version 1" }).ClickAsync();
+        await page.GetByLabel("Type dev to confirm").FillAsync("dev");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Roll back to version 1" }).ClickAsync();
+        await Expect(page.GetByRole(AriaRole.Status)).ToContainTextAsync("Version 3 is live in Development with the content of version 1.");
+        await ReturnToDraftAsync(page);
+        await SimulateAsync(page, playerId, publishedVersion: true);
+
+        await Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Version 3", Exact = true })).ToBeVisibleAsync();
+        await Expect(ResultCells(page)).ToHaveTextAsync(atTenPercent.ToArray());
         Assert.True(browserErrors.Count == 0, string.Join(" | ", browserErrors));
     }
 
@@ -243,6 +303,35 @@ public sealed class ConsoleJourneyTests(ApiFactory api, Browser browser) : IClas
     {
         await page.GotoAsync($"/organizations/{member.OrganizationId}/projects/space-race/environments/dev");
         await SignInAsync(page, member.Email, ConsoleClient.Password);
+        await Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Draft flags" })).ToBeVisibleAsync();
+    }
+
+    /// <summary>Do rascunho ao simulador; <paramref name="publishedVersion"/> simula a versão no ar, que vem preenchida.</summary>
+    private static async Task SimulateAsync(IPage page, string playerId, bool publishedVersion)
+    {
+        await page.GetByRole(AriaRole.Link, new() { Name = "Simulate" }).ClickAsync();
+        await page.GetByLabel("Player ID").FillAsync(playerId);
+        if (publishedVersion)
+        {
+            await page.GetByLabel("Published version").CheckAsync();
+        }
+
+        await page.GetByRole(AriaRole.Button, new() { Name = "Simulate" }).ClickAsync();
+        await Expect(page.Locator("#simulation-results")).ToBeVisibleAsync();
+    }
+
+    /// <summary>Da página de revisão até o pedido de publicação, com a chave de <c>dev</c> digitada.</summary>
+    private static async Task PublishAsync(IPage page, string summary)
+    {
+        await page.GetByRole(AriaRole.Link, new() { Name = "Review and publish" }).ClickAsync();
+        await page.GetByLabel("Summary (optional)").FillAsync(summary);
+        await page.GetByLabel("Type dev to confirm").FillAsync("dev");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Publish 1 change to dev" }).ClickAsync();
+    }
+
+    private static async Task ReturnToDraftAsync(IPage page)
+    {
+        await page.GetByRole(AriaRole.Link, new() { Name = "space-race · dev" }).ClickAsync();
         await Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Draft flags" })).ToBeVisibleAsync();
     }
 
