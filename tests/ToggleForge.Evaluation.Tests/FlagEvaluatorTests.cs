@@ -145,9 +145,10 @@ public sealed class FlagEvaluatorTests
     [Fact]
     public void EvaluateJson_in_a_partial_rollout_carries_the_player_bucket_and_is_not_a_fallback()
     {
-        // A chave new-shop é a dos vetores de rollout: o bucket do jogador de referência nela é conhecido.
+        // Flag JSON com a chave new-shop, e não shop-config, porque o bucket depende da chave e os vetores de
+        // rollout só dão o bucket do jogador de referência em new-shop.
         var config = new JsonFlag(
-            NewShopFlag.Key, isEnabled: true, ShopConfigJson, offValue: "{}",
+            NewShopFlag.Key, isEnabled: true, onValue: ShopConfigJson, offValue: "{}",
             new PercentageRollout(RolloutPercentage.FromBasisPoints(NewShopFlag.ReferencePlayerBucket + 1), NewShopFlag.Seed));
 
         var result = _evaluator.EvaluateJson(SnapshotWith(config), "new-shop", ReferencePlayer(), "game-default", json => json);
