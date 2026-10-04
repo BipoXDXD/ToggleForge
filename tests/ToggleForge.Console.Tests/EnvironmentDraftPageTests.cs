@@ -182,7 +182,24 @@ public sealed class EnvironmentDraftPageTests
 
         var page = RenderDraft(console);
 
-        page.WaitForAssertion(() => Assert.Equal("JSON values: 0.0 of 128 KiB", JsonBudgetText(page)));
+        page.WaitForAssertion(() => Assert.Equal("JSON values: < 0.1 of 128 KiB", JsonBudgetText(page)));
+    }
+
+    // Um texto de n letras entre aspas tem n + 2 bytes, mais 1 do offValue 0: 102 bytes ficam abaixo de 0,1 KiB, 103 não.
+    [Theory]
+    [InlineData(99, "JSON values: < 0.1 of 128 KiB")]
+    [InlineData(100, "JSON values: 0.1 of 128 KiB")]
+    public void A_tenth_of_a_kibibyte_is_where_the_budget_shows_a_number(int letters, string shown)
+    {
+        var api = DraftWith($$"""
+            [{"key":"greeting","type":"json","enabled":true,"onValue":"{{new string('a', letters)}}","offValue":0,"rolloutBasisPoints":10000}]
+            """);
+        ConsoleRendering.SignInAs(api, "viewer");
+        using var console = ConsoleRendering.Create(api);
+
+        var page = RenderDraft(console);
+
+        page.WaitForAssertion(() => Assert.Equal(shown, JsonBudgetText(page)));
     }
 
     [Fact]

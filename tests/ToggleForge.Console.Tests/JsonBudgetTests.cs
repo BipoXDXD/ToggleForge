@@ -26,6 +26,7 @@ public sealed class JsonBudgetTests
 
     [Theory]
     [InlineData(0, "0.0")]
+    [InlineData(103, "0.1")]
     [InlineData(1_023, "0.9")]
     [InlineData(1_024, "1.0")]
     [InlineData(3_994, "3.9")]
@@ -33,6 +34,13 @@ public sealed class JsonBudgetTests
     [InlineData(131_072, "128.0")]
     public void The_spent_bytes_read_as_kibibytes_rounded_down(int bytes, string expected) =>
         Assert.Equal(expected, JsonBudget.FormatKibibytes(bytes));
+
+    // 0,1 KiB são 102,4 bytes: de 1 a 102 o arredondamento para baixo mostraria 0.0, como um rascunho sem nada.
+    [Theory]
+    [InlineData(1)]
+    [InlineData(102)]
+    public void Less_than_a_tenth_of_a_kibibyte_does_not_read_as_empty(int bytes) =>
+        Assert.Equal("< 0.1", JsonBudget.FormatKibibytes(bytes));
 
     [Theory]
     [InlineData(98_304, false)]
