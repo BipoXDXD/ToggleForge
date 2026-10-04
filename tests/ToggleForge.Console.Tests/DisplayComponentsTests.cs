@@ -8,6 +8,7 @@ public sealed class DisplayComponentsTests
     [Theory]
     [InlineData("boolean", "boolean")]
     [InlineData("json", "JSON")]
+    [InlineData("<b>remote-config</b>", "<b>remote-config</b>")]
     public void The_badge_names_the_type(string type, string shown)
     {
         using var console = new BunitContext();
