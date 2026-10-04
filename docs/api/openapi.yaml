@@ -430,8 +430,9 @@ paths:
       summary: Create a flag in the draft
       description: |
         Owner and editor only: viewers get 403. The server generates the rollout seed.
-        409 `key-taken` when the key exists in the draft; 409 `limit-reached` at 200 flags or at 128 KiB of json
-        values in the draft. Bodies over 32 KiB get 413.
+        409 `key-taken` when the key exists in the draft; 409 `limit-reached` at 200 flags; 409
+        `json-budget-reached` when the flag would take the draft over 128 KiB of json values. Bodies over 32 KiB
+        get 413 `payload-too-large`.
       parameters:
         - $ref: '#/components/parameters/Antiforgery'
       requestBody:
@@ -509,8 +510,8 @@ paths:
       description: |
         Owner and editor only. Absent fields keep their value; `null` is rejected because no field can
         be cleared. The key and the seed never change.
-        409 `limit-reached` when the change would take the draft over 128 KiB of json values. The type of a flag
-        never changes: `type` is an unknown field here. Bodies over 32 KiB get 413.
+        409 `json-budget-reached` when the change would take the draft over 128 KiB of json values. The type of a
+        flag never changes: `type` is an unknown field here. Bodies over 32 KiB get 413 `payload-too-large`.
         A json flag can get the JSON `null` as a value only when it is created: in a merge patch `null` means
         removing the field, and no field of a flag can be removed.
       parameters:
@@ -1127,7 +1128,7 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
     PayloadTooLarge:
-      description: The body is over the limit of the operation; nothing was saved.
+      description: The body is over the limit of the operation (`/problems/payload-too-large`); nothing was saved.
       content:
         application/problem+json:
           schema:
