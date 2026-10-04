@@ -10,9 +10,15 @@ internal sealed class TallyingFlagEvaluator(IFlagEvaluator inner) : IFlagEvaluat
     public IReadOnlyDictionary<EvaluationReason, int> CountsByReason => _countsByReason;
 
     public EvaluationResult<bool> EvaluateBoolean(
-        ConfigurationSnapshot? snapshot, string? flagKey, EvaluationContext context, bool defaultValue)
+        ConfigurationSnapshot? snapshot, string? flagKey, EvaluationContext context, bool defaultValue) =>
+        Tally(inner.EvaluateBoolean(snapshot, flagKey, context, defaultValue));
+
+    public EvaluationResult<T> EvaluateJson<T>(
+        ConfigurationSnapshot? snapshot, string? flagKey, EvaluationContext context, T defaultValue, Func<string, T> parse) =>
+        Tally(inner.EvaluateJson(snapshot, flagKey, context, defaultValue, parse));
+
+    private EvaluationResult<T> Tally<T>(EvaluationResult<T> result)
     {
-        var result = inner.EvaluateBoolean(snapshot, flagKey, context, defaultValue);
         _countsByReason[result.Reason] = _countsByReason.GetValueOrDefault(result.Reason) + 1;
         return result;
     }

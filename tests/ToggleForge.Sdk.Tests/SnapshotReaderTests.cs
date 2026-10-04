@@ -11,7 +11,8 @@ public sealed class SnapshotReaderTests
 
         Assert.NotNull(snapshot);
         Assert.Equal(("space-race", "dev", 7L), (snapshot.ProjectKey.Value, snapshot.EnvironmentKey.Value, snapshot.Version));
-        Assert.True(snapshot.TryGetFlag(FlagKey.Parse("new-shop"), out var flag));
+        Assert.True(snapshot.TryGetFlag(FlagKey.Parse("new-shop"), out var found));
+        var flag = Assert.IsType<BooleanFlag>(found);
         Assert.Equal((true, true, false), (flag.IsEnabled, flag.OnValue, flag.OffValue));
         var rollout = Assert.IsType<PercentageRollout>(flag.Targeting);
         Assert.Equal((10_000, "s1"), (rollout.Percentage.BasisPoints, rollout.Seed.Value));

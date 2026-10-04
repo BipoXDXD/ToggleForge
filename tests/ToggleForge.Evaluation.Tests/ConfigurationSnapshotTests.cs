@@ -32,6 +32,17 @@ public sealed class ConfigurationSnapshotTests
     }
 
     [Fact]
+    public void Rejects_the_same_key_in_flags_of_different_types()
+    {
+        var config = new JsonFlag(
+            FlagKey.Parse("new-shop"), true, "{}", "{}", new PercentageRollout(RolloutPercentage.All, NewShopFlag.Seed));
+
+        var error = Assert.Throws<ArgumentException>(() => SnapshotWith(Flag("new-shop"), config));
+
+        Assert.Equal("flags", error.ParamName);
+    }
+
+    [Fact]
     public void Rejects_null_flags_in_the_list()
     {
         var error = Assert.Throws<ArgumentException>(() => SnapshotWith([null!]));
@@ -69,6 +80,6 @@ public sealed class ConfigurationSnapshotTests
             offValue: false,
             new PercentageRollout(RolloutPercentage.All, NewShopFlag.Seed));
 
-    private static ConfigurationSnapshot SnapshotWith(params BooleanFlag[] flags) =>
+    private static ConfigurationSnapshot SnapshotWith(params Flag[] flags) =>
         new(NewShopFlag.Project, NewShopFlag.Environment, 1, flags);
 }

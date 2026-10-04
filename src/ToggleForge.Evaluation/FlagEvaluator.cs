@@ -15,24 +15,72 @@ namespace ToggleForge.Evaluation
 
             if (snapshot is null)
             {
-                return Fallback(EvaluationReason.SnapshotMissing, snapshotVersion: null);
+                return Fallback(defaultValue, EvaluationReason.SnapshotMissing, snapshotVersion: null);
             }
 
+            var flag = Find(snapshot, flagKey, out var missing);
+            if (flag is null)
+            {
+                return Fallback(defaultValue, missing, snapshot.Version);
+            }
+
+            return flag is BooleanFlag boolean
+                ? boolean.Evaluate(IdentityOf(snapshot, boolean), context, defaultValue, snapshot.Version)
+                : Fallback(defaultValue, EvaluationReason.TypeMismatch, snapshot.Version);
+        }
+
+        public EvaluationResult<T> EvaluateJson<T>(
+            ConfigurationSnapshot? snapshot, string? flagKey, EvaluationContext context, T defaultValue, Func<string, T> parse)
+        {
+            if (context is null)
+            {
+                throw new ArgumentNullException(nameof(context));
+            }
+
+            if (parse is null)
+            {
+                throw new ArgumentNullException(nameof(parse));
+            }
+
+            if (snapshot is null)
+            {
+                return Fallback(defaultValue, EvaluationReason.SnapshotMissing, snapshotVersion: null);
+            }
+
+            var flag = Find(snapshot, flagKey, out var missing);
+            if (flag is null)
+            {
+                return Fallback(defaultValue, missing, snapshot.Version);
+            }
+
+            return flag is JsonFlag json
+                ? json.Evaluate(IdentityOf(snapshot, json), context, defaultValue, parse, snapshot.Version)
+                : Fallback(defaultValue, EvaluationReason.TypeMismatch, snapshot.Version);
+        }
+
+        /// <returns>Nula quando a chave é inválida ou não está no snapshot; <paramref name="missing"/> diz qual dos dois.</returns>
+        private static Flag? Find(ConfigurationSnapshot snapshot, string? flagKey, out EvaluationReason missing)
+        {
             if (!FlagKey.TryParse(flagKey, out var key))
             {
-                return Fallback(EvaluationReason.InvalidFlagKey, snapshot.Version);
+                missing = EvaluationReason.InvalidFlagKey;
+                return null;
             }
 
             if (!snapshot.TryGetFlag(key, out var flag))
             {
-                return Fallback(EvaluationReason.FlagNotFound, snapshot.Version);
+                missing = EvaluationReason.FlagNotFound;
+                return null;
             }
 
-            var identity = new FlagIdentity(snapshot.ProjectKey, snapshot.EnvironmentKey, flag.Key);
-            return flag.Evaluate(identity, context, defaultValue, snapshot.Version);
-
-            EvaluationResult<bool> Fallback(EvaluationReason reason, long? snapshotVersion) =>
-                new(defaultValue, reason, snapshotVersion, bucket: null);
+            missing = default;
+            return flag;
         }
+
+        private static FlagIdentity IdentityOf(ConfigurationSnapshot snapshot, Flag flag) =>
+            new FlagIdentity(snapshot.ProjectKey, snapshot.EnvironmentKey, flag.Key);
+
+        private static EvaluationResult<T> Fallback<T>(T defaultValue, EvaluationReason reason, long? snapshotVersion) =>
+            new EvaluationResult<T>(defaultValue, reason, snapshotVersion, bucket: null);
     }
 }

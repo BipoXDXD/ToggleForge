@@ -9,10 +9,10 @@ namespace ToggleForge.Evaluation
     /// </summary>
     public sealed class ConfigurationSnapshot
     {
-        private readonly Dictionary<FlagKey, BooleanFlag> _flags;
+        private readonly Dictionary<FlagKey, Flag> _flags;
 
         public ConfigurationSnapshot(
-            ProjectKey projectKey, EnvironmentKey environmentKey, long version, IEnumerable<BooleanFlag> flags)
+            ProjectKey projectKey, EnvironmentKey environmentKey, long version, IEnumerable<Flag> flags)
         {
             if (version < 1)
             {
@@ -31,12 +31,13 @@ namespace ToggleForge.Evaluation
 
         public long Version { get; }
 
-        public bool TryGetFlag(FlagKey key, [NotNullWhen(true)] out BooleanFlag? flag) =>
+        /// <summary>A flag com a chave, de qualquer tipo; quem avalia confere o tipo.</summary>
+        public bool TryGetFlag(FlagKey key, [NotNullWhen(true)] out Flag? flag) =>
             _flags.TryGetValue(key, out flag);
 
-        private static Dictionary<FlagKey, BooleanFlag> IndexByKey(IEnumerable<BooleanFlag> flags)
+        private static Dictionary<FlagKey, Flag> IndexByKey(IEnumerable<Flag> flags)
         {
-            var index = new Dictionary<FlagKey, BooleanFlag>();
+            var index = new Dictionary<FlagKey, Flag>();
             foreach (var flag in flags)
             {
                 if (flag is null)
