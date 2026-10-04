@@ -1,6 +1,8 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using ToggleForge.Console.Session;
 
 namespace ToggleForge.Console.Api;
@@ -14,40 +16,68 @@ public sealed class ConsoleApi(HttpClient http, SessionState session)
 {
     private const string AntiforgeryHeader = "X-XSRF-TOKEN";
 
+    // A API recusa null num merge patch (nenhum campo da flag pode ser apagado): campo sem mudança fica de fora.
+    private static readonly JsonSerializerOptions _omitNulls = new(JsonSerializerDefaults.Web)
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    };
+
     public Task<ApiResult<Api.Session>> GetSessionAsync(CancellationToken cancellationToken) =>
-        SendAsync<Api.Session>(HttpMethod.Get, "api/v1/session", body: null, cancellationToken);
+        SendAsync<Api.Session>(new Outgoing(HttpMethod.Get, "api/v1/session"), cancellationToken);
 
     public Task<ApiResult<Api.Session>> SignInAsync(Credentials credentials, CancellationToken cancellationToken) =>
-        SendAsync<Api.Session>(HttpMethod.Post, "api/v1/session", credentials, cancellationToken);
+        SendAsync<Api.Session>(new Outgoing(HttpMethod.Post, "api/v1/session", Json(credentials)), cancellationToken);
 
     /// <returns>O problema, ou <see langword="null"/> quando a sessão foi encerrada no servidor.</returns>
     public async Task<Problem?> SignOutAsync(CancellationToken cancellationToken)
     {
-        var result = await SendAsync<NoContent>(HttpMethod.Delete, "api/v1/session", body: null, cancellationToken);
+        var result = await SendAsync<NoContent>(new Outgoing(HttpMethod.Delete, "api/v1/session"), cancellationToken);
         return result.Problem;
     }
 
     public async Task<ApiResult<IReadOnlyList<Project>>> ListProjectsAsync(Guid organizationId, CancellationToken cancellationToken)
     {
-        var result = await SendAsync<ProjectList>(HttpMethod.Get, ProjectsPath(organizationId), body: null, cancellationToken);
+        var result = await SendAsync<ProjectList>(new Outgoing(HttpMethod.Get, ProjectsPath(organizationId)), cancellationToken);
         return result.Succeeded
             ? ApiResult.Success<IReadOnlyList<Project>>(result.Value.Data)
             : ApiResult.Failure<IReadOnlyList<Project>>(result.Problem);
     }
 
     public Task<ApiResult<Project>> CreateProjectAsync(Guid organizationId, ProjectCreation project, CancellationToken cancellationToken) =>
-        SendAsync<Project>(HttpMethod.Post, ProjectsPath(organizationId), project, cancellationToken);
+        SendAsync<Project>(new Outgoing(HttpMethod.Post, ProjectsPath(organizationId), Json(project)), cancellationToken);
 
     public Task<ApiResult<Project>> GetProjectAsync(Guid organizationId, string projectKey, CancellationToken cancellationToken) =>
-        SendAsync<Project>(HttpMethod.Get, ProjectPath(organizationId, projectKey), body: null, cancellationToken);
+        SendAsync<Project>(new Outgoing(HttpMethod.Get, ProjectPath(organizationId, projectKey)), cancellationToken);
 
     public Task<ApiResult<Draft>> GetDraftAsync(
         Guid organizationId, string projectKey, string environmentKey, CancellationToken cancellationToken) =>
-        SendAsync<Draft>(HttpMethod.Get, DraftPath(organizationId, projectKey, environmentKey), body: null, cancellationToken);
+        SendAsync<Draft>(new Outgoing(HttpMethod.Get, DraftPath(organizationId, projectKey, environmentKey)), cancellationToken);
 
     public Task<ApiResult<Flag>> CreateFlagAsync(
         Guid organizationId, string projectKey, string environmentKey, FlagCreation flag, CancellationToken cancellationToken) =>
-        SendAsync<Flag>(HttpMethod.Post, $"{DraftPath(organizationId, projectKey, environmentKey)}/flags", flag, cancellationToken);
+        SendAsync<Flag>(
+            new Outgoing(HttpMethod.Post, $"{DraftPath(organizationId, projectKey, environmentKey)}/flags", Json(flag)), cancellationToken);
+
+    public Task<ApiResult<Versioned<Flag>>> GetFlagAsync(FlagAddress flag, CancellationToken cancellationToken) =>
+        ExchangeVersionedAsync<Flag>(new Outgoing(HttpMethod.Get, FlagPath(flag)), cancellationToken);
+
+    /// <param name="eTag">A ETag da última leitura; se a flag mudou desde então, a API responde 412 e nada muda.</param>
+    public Task<ApiResult<Versioned<Flag>>> UpdateFlagAsync(
+        FlagAddress flag, string eTag, FlagModification changes, CancellationToken cancellationToken) =>
+        ExchangeVersionedAsync<Flag>(new Outgoing(HttpMethod.Patch, FlagPath(flag), MergePatch(changes), eTag), cancellationToken);
+
+    /// <param name="eTag">A ETag da última leitura; se a flag mudou desde então, a API responde 412 e nada muda.</param>
+    /// <returns>O problema, ou <see langword="null"/> quando a flag saiu do rascunho.</returns>
+    public async Task<Problem?> DeleteFlagAsync(FlagAddress flag, string eTag, CancellationToken cancellationToken)
+    {
+        var result = await SendAsync<NoContent>(new Outgoing(HttpMethod.Delete, FlagPath(flag), IfMatch: eTag), cancellationToken);
+        return result.Problem;
+    }
+
+    private static JsonContent Json(object body) => JsonContent.Create(body);
+
+    private static JsonContent MergePatch(FlagModification changes) =>
+        JsonContent.Create(changes, new MediaTypeHeaderValue("application/merge-patch+json"), _omitNulls);
 
     private static string ProjectsPath(Guid organizationId) => $"api/v1/organizations/{organizationId}/projects";
 
@@ -58,29 +88,62 @@ public sealed class ConsoleApi(HttpClient http, SessionState session)
     private static string DraftPath(Guid organizationId, string projectKey, string environmentKey) =>
         $"{ProjectPath(organizationId, projectKey)}/environments/{Uri.EscapeDataString(environmentKey)}/draft";
 
-    private async Task<ApiResult<T>> SendAsync<T>(HttpMethod method, string path, object? body, CancellationToken cancellationToken)
+    private static string FlagPath(FlagAddress flag) =>
+        $"{DraftPath(flag.OrganizationId, flag.ProjectKey, flag.EnvironmentKey)}/flags/{Uri.EscapeDataString(flag.FlagKey)}";
+
+    private async Task<ApiResult<T>> SendAsync<T>(Outgoing outgoing, CancellationToken cancellationToken)
+        where T : class
+    {
+        var result = await ExchangeAsync<T>(outgoing, cancellationToken);
+        return result.Succeeded ? ApiResult.Success(result.Value.Value) : ApiResult.Failure<T>(result.Problem);
+    }
+
+    /// <summary>Para recursos que se alteram com If-Match: sem ETag na resposta, não há como alterá-los depois.</summary>
+    private async Task<ApiResult<Versioned<T>>> ExchangeVersionedAsync<T>(Outgoing outgoing, CancellationToken cancellationToken)
+        where T : class
+    {
+        var result = await ExchangeAsync<T>(outgoing, cancellationToken);
+        if (!result.Succeeded)
+        {
+            return ApiResult.Failure<Versioned<T>>(result.Problem);
+        }
+
+        return result.Value.ETag is { } eTag
+            ? ApiResult.Success(new Versioned<T>(result.Value.Value, eTag))
+            : ApiResult.Failure<Versioned<T>>(Problem.UnexpectedResponse(HttpStatusCode.OK));
+    }
+
+    private async Task<ApiResult<Received<T>>> ExchangeAsync<T>(Outgoing outgoing, CancellationToken cancellationToken)
         where T : class
     {
         try
         {
-            using var request = new HttpRequestMessage(method, path) { Content = body is null ? null : JsonContent.Create(body) };
-            if (method != HttpMethod.Get)
+            using var request = new HttpRequestMessage(outgoing.Method, outgoing.Path) { Content = outgoing.Content };
+            if (outgoing.Method != HttpMethod.Get)
             {
                 var token = await AntiforgeryTokenAsync(cancellationToken);
                 if (!token.Succeeded)
                 {
-                    return ApiResult.Failure<T>(token.Problem);
+                    return ApiResult.Failure<Received<T>>(token.Problem);
                 }
 
                 request.Headers.Add(AntiforgeryHeader, token.Value.Token);
             }
 
+            if (outgoing.IfMatch is not null)
+            {
+                request.Headers.TryAddWithoutValidation("If-Match", outgoing.IfMatch);
+            }
+
             using var response = await http.SendAsync(request, cancellationToken);
-            return await ReadAsync<T>(response, cancellationToken);
+            var result = await ReadAsync<T>(response, cancellationToken);
+            return result.Succeeded
+                ? ApiResult.Success(new Received<T>(result.Value, response.Headers.ETag?.ToString()))
+                : ApiResult.Failure<Received<T>>(result.Problem);
         }
         catch (HttpRequestException)
         {
-            return ApiResult.Failure<T>(Problem.Unreachable);
+            return ApiResult.Failure<Received<T>>(Problem.Unreachable);
         }
     }
 
@@ -134,6 +197,12 @@ public sealed class ConsoleApi(HttpClient http, SessionState session)
             return ApiResult.Failure<T>(Problem.UnexpectedResponse(response.StatusCode));
         }
     }
+
+    /// <summary>Um pedido à API; <paramref name="IfMatch"/> é a ETag lida antes de alterar o recurso.</summary>
+    private sealed record Outgoing(HttpMethod Method, string Path, HttpContent? Content = null, string? IfMatch = null);
+
+    /// <summary>A resposta como chegou; a ETag só existe nos recursos que se alteram com If-Match.</summary>
+    private sealed record Received<T>(T Value, string? ETag);
 
     /// <summary>O "corpo" de uma resposta 204; outra operação que receber 204 cai em resposta inesperada.</summary>
     private sealed class NoContent

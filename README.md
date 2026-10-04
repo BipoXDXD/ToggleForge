@@ -83,8 +83,9 @@ dotnet run --project src/ToggleForge.Api
 
 Blazor WebAssembly com Tailwind, servido pela própria API na mesma origem (ADR 0009): o console é só mais
 um cliente de `/api/v1`, com o cookie de sessão e o token antiforgery. Com a API rodando, ele abre na raiz
-(`https://localhost:<porta>/`). O tracer bullet cobre entrar, listar e criar projetos e adicionar flags ao
-rascunho de um ambiente.
+(`https://localhost:<porta>/`). Já dá para entrar, listar e criar projetos, adicionar flags ao rascunho de um
+ambiente e editá-las ou removê-las. A edição vai com `If-Match`: se outra pessoa mudou a flag enquanto ela
+estava aberta, nada é gravado e o console mostra os valores atuais para a mudança ser refeita.
 
 ## Desenvolvimento
 

@@ -125,6 +125,48 @@ public sealed class ConsoleApiTests
         Assert.Equal($"{Projects}/..%2F..%2Faccounts/environments/dev/draft", request.RequestUri?.AbsolutePath);
     }
 
+    [Fact]
+    public async Task A_flag_change_is_a_merge_patch_with_only_the_changed_fields_and_the_etag_read()
+    {
+        var api = new StubApi().Answer(HttpMethod.Patch, NewShop, HttpStatusCode.OK, NewShopJson, eTag: "\"8\"");
+
+        var saved = await api.CreateClient().UpdateFlagAsync(
+            _newShop, "\"7\"", new FlagModification(RolloutBasisPoints: 5_000), TestContext.Current.CancellationToken);
+
+        Assert.True(saved.Succeeded);
+        Assert.Equal("\"8\"", saved.Value.ETag);
+        var request = Assert.Single(api.RequestsTo(HttpMethod.Patch, NewShop));
+        Assert.Equal(["\"7\""], request.Headers.GetValues("If-Match"));
+        Assert.Equal("application/merge-patch+json", request.Content?.Headers.ContentType?.MediaType);
+        Assert.Equal("""{"rolloutBasisPoints":5000}""", api.BodyOf(request));
+    }
+
+    [Fact]
+    public async Task Removing_a_flag_sends_the_etag_read()
+    {
+        var api = new StubApi().Answer(HttpMethod.Delete, NewShop, HttpStatusCode.NoContent, string.Empty);
+
+        var problem = await api.CreateClient().DeleteFlagAsync(_newShop, "\"7\"", TestContext.Current.CancellationToken);
+
+        Assert.Null(problem);
+        Assert.Equal(["\"7\""], Assert.Single(api.RequestsTo(HttpMethod.Delete, NewShop)).Headers.GetValues("If-Match"));
+    }
+
+    [Fact]
+    public async Task A_flag_read_without_etag_cannot_be_changed_later_and_is_unexpected()
+    {
+        var api = new StubApi().Answer(HttpMethod.Get, NewShop, HttpStatusCode.OK, NewShopJson);
+
+        var flag = await api.CreateClient().GetFlagAsync(_newShop, TestContext.Current.CancellationToken);
+
+        Assert.False(flag.Succeeded);
+        Assert.Equal("/problems/unexpected-response", flag.Problem.Type);
+    }
+
+    private const string NewShop = Projects + "/space-race/environments/dev/draft/flags/new-shop";
+    private const string NewShopJson = """{"key":"new-shop","enabled":true,"onValue":true,"offValue":false,"rolloutBasisPoints":5000}""";
+    private static readonly FlagAddress _newShop = new(_organizationId, "space-race", "dev", "new-shop");
+
     private const string Session = """
         {"member":{"id":"9b2f0c1e-5d6a-4b7c-8e9f-1a2b3c4d5e6f","email":"owner@toggleforge.test"},
          "organizations":[{"organizationId":"3f1c7d8e-2b4a-4c6d-9e8f-0a1b2c3d4e5f","name":"Studio","role":"owner"}]}

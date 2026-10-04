@@ -80,12 +80,82 @@ public sealed class ConsoleJourneyTests(ApiFactory api, Browser browser) : IClas
         Assert.EndsWith("/sign-in", page.Url, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task A_member_changes_the_rollout_of_a_flag_in_the_draft()
+    {
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        await owner.PublishedProjectAsync("space-race");
+        await using var context = await browser.NewContextAsync(Host.Address);
+        var page = await context.NewPageAsync();
+        var browserErrors = CollectErrors(page);
+
+        await OpenDraftAsync(page, owner);
+        await page.GetByRole(AriaRole.Link, new() { Name = "new-shop" }).ClickAsync();
+        await Expect(page.GetByLabel("Value for included players")).ToHaveValueAsync("true");
+        await Expect(page.GetByLabel("Value for everyone else")).ToHaveValueAsync("false");
+        await page.GetByLabel("Rollout (%)").FillAsync("50");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Save" }).ClickAsync();
+        await Expect(page.GetByRole(AriaRole.Status)).ToContainTextAsync("Saved to the draft");
+        await page.GetByRole(AriaRole.Link, new() { Name = "space-race · dev" }).ClickAsync();
+
+        await Expect(page.GetByRole(AriaRole.Row).Filter(new() { HasText = "new-shop" })).ToContainTextAsync("50%");
+        Assert.Equal(5_000, (await owner.GetFlagAsync("space-race", "new-shop")).Json["rolloutBasisPoints"]!.GetValue<int>());
+        Assert.True(browserErrors.Count == 0, string.Join(" | ", browserErrors));
+    }
+
+    [Fact]
+    public async Task A_change_made_by_someone_else_meanwhile_is_not_overwritten()
+    {
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        await owner.PublishedProjectAsync("space-race");
+        await using var context = await browser.NewContextAsync(Host.Address);
+        var page = await context.NewPageAsync();
+        await OpenDraftAsync(page, owner);
+        await page.GetByRole(AriaRole.Link, new() { Name = "new-shop" }).ClickAsync();
+        await Expect(page.GetByLabel("Rollout (%)")).ToHaveValueAsync("10");
+
+        var read = await owner.GetFlagAsync("space-race", "new-shop");
+        var meanwhile = await owner.UpdateFlagAsync("space-race", "new-shop", read.Header("ETag"), """{"rolloutBasisPoints":3000}""");
+        await page.GetByLabel("Rollout (%)").FillAsync("50");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Save" }).ClickAsync();
+
+        Assert.Equal(HttpStatusCode.OK, meanwhile.Status);
+        await Expect(page.GetByRole(AriaRole.Alert)).ToContainTextAsync("Someone changed this flag after you opened it.");
+        await Expect(page.GetByLabel("Rollout (%)")).ToHaveValueAsync("30");
+        Assert.Equal(3_000, (await owner.GetFlagAsync("space-race", "new-shop")).Json["rolloutBasisPoints"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task A_member_removes_a_flag_from_the_draft_after_confirming()
+    {
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        await owner.PublishedProjectAsync("space-race");
+        await using var context = await browser.NewContextAsync(Host.Address);
+        var page = await context.NewPageAsync();
+
+        await OpenDraftAsync(page, owner);
+        await page.GetByRole(AriaRole.Link, new() { Name = "new-shop" }).ClickAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "Remove from draft" }).ClickAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "Remove", Exact = true }).ClickAsync();
+
+        await Expect(page.GetByText("No flags in this draft yet.")).ToBeVisibleAsync();
+        Assert.Empty((await owner.GetDraftAsync("space-race")).Json["flags"]!.AsArray());
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (_host is not null)
         {
             await _host.DisposeAsync();
         }
+    }
+
+    /// <summary>Abre o rascunho de <c>dev</c> pelo endereço: o console pede o login e volta para ele.</summary>
+    private static async Task OpenDraftAsync(IPage page, ConsoleClient member)
+    {
+        await page.GotoAsync($"/organizations/{member.OrganizationId}/projects/space-race/environments/dev");
+        await SignInAsync(page, member.Email, ConsoleClient.Password);
+        await Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Draft flags" })).ToBeVisibleAsync();
     }
 
     private static async Task SignInAsync(IPage page, string email, string password)

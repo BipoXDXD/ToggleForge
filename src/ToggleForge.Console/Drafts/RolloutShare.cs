@@ -25,6 +25,8 @@ public static class RolloutShare
         return true;
     }
 
+    public static decimal ToPercent(int basisPoints) => (decimal)basisPoints / BasisPointsPerPercent;
+
     public static string Format(int basisPoints) =>
-        ((decimal)basisPoints / BasisPointsPerPercent).ToString("0.##", CultureInfo.InvariantCulture) + "%";
+        ToPercent(basisPoints).ToString("0.##", CultureInfo.InvariantCulture) + "%";
 }
