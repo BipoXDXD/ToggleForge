@@ -14,6 +14,10 @@ public sealed class MemberAccess(IMembershipDirectory memberships)
         return role is { } found ? found : AccessFailures.NotFound;
     }
 
+    /// <summary>Nulo quando o membro pertence à organização; senão a falha 404 do contrato.</summary>
+    public async Task<Failure?> RequireMembershipAsync(Guid memberId, Guid organizationId, CancellationToken cancellationToken) =>
+        (await FindRoleAsync(memberId, organizationId, cancellationToken)).TryGetValue(out _, out var failure) ? null : failure;
+
     public static Failure? Require(Role role, Func<Role, bool> permission)
     {
         ArgumentNullException.ThrowIfNull(permission);

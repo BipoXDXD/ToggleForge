@@ -14,16 +14,9 @@ public sealed class DraftService(
 {
     public async Task<Result<DraftView>> GetAsync(Guid memberId, EnvironmentLocator locator, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(locator);
-
-        if (!(await access.FindRoleAsync(memberId, locator.OrganizationId, cancellationToken)).TryGetValue(out _, out var failure))
+        if (!(await FindReadableEnvironmentAsync(memberId, locator, cancellationToken)).TryGetValue(out var environment, out var failure))
         {
             return failure;
-        }
-
-        if (await environments.FindAsync(locator, cancellationToken) is not { } environment)
-        {
-            return AccessFailures.NotFound;
         }
 
         var current = await publications.FindAsync(environment, cancellationToken);
@@ -37,16 +30,9 @@ public sealed class DraftService(
     public async Task<Result<FlagView>> GetFlagAsync(
         Guid memberId, EnvironmentLocator locator, FlagKey key, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(locator);
-
-        if (!(await access.FindRoleAsync(memberId, locator.OrganizationId, cancellationToken)).TryGetValue(out _, out var failure))
+        if (!(await FindReadableEnvironmentAsync(memberId, locator, cancellationToken)).TryGetValue(out var environment, out var failure))
         {
             return failure;
-        }
-
-        if (await environments.FindAsync(locator, cancellationToken) is not { } environment)
-        {
-            return AccessFailures.NotFound;
         }
 
         return environment.Flags.FirstOrDefault(flag => flag.Key == key) is { } found
@@ -68,6 +54,20 @@ public sealed class DraftService(
         Guid memberId, EnvironmentLocator locator, FlagKey key, long expectedRevision, CancellationToken cancellationToken) =>
         (await EditAsync(memberId, locator, environment => environment.RemoveFlag(key, expectedRevision), cancellationToken))
         .Map(FlagView.Of);
+
+    /// <summary>Leitura do rascunho: 404 para quem não é membro e para o ambiente que não existe.</summary>
+    private async Task<Result<ProjectEnvironment>> FindReadableEnvironmentAsync(
+        Guid memberId, EnvironmentLocator locator, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(locator);
+
+        if (await access.RequireMembershipAsync(memberId, locator.OrganizationId, cancellationToken) is { } failure)
+        {
+            return failure;
+        }
+
+        return await environments.FindAsync(locator, cancellationToken) is { } environment ? environment : AccessFailures.NotFound;
+    }
 
     /// <summary>
     /// Toda escrita no rascunho: 404 antes de 403, ambiente travado até o commit (ADR 0005) e a edição do

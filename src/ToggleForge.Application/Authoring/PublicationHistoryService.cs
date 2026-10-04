@@ -48,7 +48,7 @@ public sealed class PublicationHistoryService(
     {
         ArgumentNullException.ThrowIfNull(locator);
 
-        if (!(await access.FindRoleAsync(memberId, locator.OrganizationId, cancellationToken)).TryGetValue(out _, out var failure))
+        if (await access.RequireMembershipAsync(memberId, locator.OrganizationId, cancellationToken) is { } failure)
         {
             return failure;
         }
