@@ -23,6 +23,13 @@ public sealed class FlagValuesTests
     }
 
     [Fact]
+    public void A_value_of_the_wrong_type_is_an_invalid_value_with_the_same_code_on_either_side()
+    {
+        Assert.Equal((FailureKind.InvalidValue, "value-not-of-flag-type"), (AuthoringFailures.OnValueNotOfFlagType.Kind, AuthoringFailures.OnValueNotOfFlagType.Code));
+        Assert.Equal((FailureKind.InvalidValue, "value-not-of-flag-type"), (AuthoringFailures.OffValueNotOfFlagType.Kind, AuthoringFailures.OffValueNotOfFlagType.Code));
+    }
+
+    [Fact]
     public void A_json_flag_takes_any_json_value_including_true_and_null()
     {
         Assert.True(FlagValues.Of(FlagType.Json, JsonFlagValue.True, JsonFlagValue.Parse("null")).TryGetValue(out var values, out _));

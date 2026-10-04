@@ -81,6 +81,10 @@ public sealed class JsonBudgetTests
         Assert.True(environment.ChangeFlag(key, revision, new FlagChange(OnValue: JsonFlagValue.Parse("0"))).TryGetValue(out _, out _));
     }
 
+    [Fact]
+    public void Reaching_the_budget_is_a_conflict_over_a_limit() =>
+        Assert.Equal((FailureKind.Conflict, "limit-reached"), (AuthoringFailures.JsonBudgetReached.Kind, AuthoringFailures.JsonBudgetReached.Code));
+
     private static ProjectEnvironment FullEnvironment()
     {
         var environment = Flags.NewEnvironment();

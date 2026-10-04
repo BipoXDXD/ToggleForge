@@ -73,6 +73,13 @@ public sealed class JsonFlagValueTests
     public void The_same_key_in_different_objects_is_fine() =>
         Assert.True(JsonFlagValue.TryParse("[{\"a\":1},{\"a\":2}]", out _, out _));
 
+    [Fact]
+    public void Keys_that_differ_only_in_case_are_different_keys()
+    {
+        Assert.True(JsonFlagValue.TryParse("{\"a\":1,\"A\":2}", out var value, out _));
+        Assert.Equal("{\"a\":1,\"A\":2}", value.Text);
+    }
+
     [Theory]
     [InlineData(8, true)]
     [InlineData(9, false)]
@@ -94,6 +101,15 @@ public sealed class JsonFlagValueTests
 
         Assert.False(JsonFlagValue.TryParse(json, out _, out var problem));
         Assert.Equal(JsonValueProblem.TooDeep, problem);
+    }
+
+    [Fact]
+    public void Objects_nest_up_to_8_levels()
+    {
+        var json = string.Concat(Enumerable.Repeat("{\"a\":", 8)) + "1" + new string('}', 8);
+
+        Assert.True(JsonFlagValue.TryParse(json, out var value, out _));
+        Assert.Equal(json, value.Text);
     }
 
     [Theory]

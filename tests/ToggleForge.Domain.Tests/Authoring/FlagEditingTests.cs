@@ -21,6 +21,18 @@ public sealed class FlagEditingTests
         Assert.Equal(RolloutSeed.Parse("seed-new-shop"), flag.Seed);
     }
 
+    [Fact]
+    public void Disabling_a_flag_changes_only_its_state_at_the_next_revision()
+    {
+        var environment = EnvironmentWithNewShop();
+
+        var changed = environment.ChangeFlag(_newShop, expectedRevision: 2, new FlagChange(IsEnabled: false));
+
+        Assert.True(changed.TryGetValue(out var flag, out _));
+        Assert.Equal(3, flag.ChangedAtRevision);
+        Assert.Equal(Flags.Settings(isEnabled: false), flag.Settings);
+    }
+
     [Theory]
     [InlineData(1)]
     [InlineData(3)]
