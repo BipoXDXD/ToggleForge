@@ -114,6 +114,22 @@ public sealed class FlagValueTests
         Assert.Equal(expected, Values.Json(json).Preview(maxLength));
 
     [Fact]
+    public void The_shortest_preview_is_one_character_and_the_ellipsis() =>
+        Assert.Equal("1…", Values.Json("123").Preview(2));
+
+    [Fact]
+    public void A_preview_without_room_for_a_character_is_refused() =>
+        Assert.Throws<ArgumentOutOfRangeException>(() => Values.Json("123").Preview(1));
+
+    [Theory]
+    [InlineData("null", true)]
+    [InlineData("\"null\"", false)]
+    [InlineData("0", false)]
+    [InlineData("true", false)]
+    public void Only_the_json_null_is_null(string json, bool expected) =>
+        Assert.Equal(expected, Values.Json(json).IsNull);
+
+    [Fact]
     public void Booleans_are_the_json_literals()
     {
         Assert.Equal("true", FlagValue.Of(true).Text);
