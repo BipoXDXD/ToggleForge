@@ -20,6 +20,12 @@ public sealed class BrowserHost : WebApplicationFactory<Program>
     private readonly ApiFactory _api;
     private readonly X509Certificate2 _certificate = SelfSignedTlsCertificate();
 
+    /// <summary>
+    /// Só o que este host registra, separado do <see cref="ApiFactory.Logs"/>: os outros testes rodam em paralelo e
+    /// alguns provocam 500 de propósito.
+    /// </summary>
+    public LogCapture Logs { get; } = new();
+
     public BrowserHost(ApiFactory api)
     {
         _api = api;
@@ -42,7 +48,7 @@ public sealed class BrowserHost : WebApplicationFactory<Program>
             BaseAddress = Address,
         };
 
-    protected override void ConfigureWebHost(IWebHostBuilder builder) => _api.ConfigureTestHost(builder);
+    protected override void ConfigureWebHost(IWebHostBuilder builder) => _api.ConfigureTestHost(builder, Logs);
 
     protected override void Dispose(bool disposing)
     {

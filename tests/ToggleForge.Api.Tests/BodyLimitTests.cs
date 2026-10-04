@@ -93,6 +93,7 @@ public sealed class BodyLimitTests(ApiFactory api) : IAsyncLifetime
         Assert.DoesNotContain("Exception", response.Body, StringComparison.Ordinal);
         Assert.DoesNotContain("Kestrel", response.Body, StringComparison.Ordinal);
         Assert.DoesNotContain("at ", response.Body, StringComparison.Ordinal);
+        await AssertNothingSavedAsync(owner);
     }
 
     /// <summary>A conta nasce pelo TestServer, no mesmo banco, e entra pelo Kestrel.</summary>
@@ -126,7 +127,8 @@ public sealed class BodyLimitTests(ApiFactory api) : IAsyncLifetime
     private async Task AssertNothingSavedAsync(ConsoleClient owner)
     {
         Assert.Empty((await owner.GetDraftAsync(Project)).Json["flags"]!.AsArray());
-        Assert.DoesNotContain(api.Logs.Entries, entry => entry.StartsWith("Error", StringComparison.Ordinal) && entry.Contains("Request body too large", StringComparison.Ordinal));
+        // O Kestrel registra o corpo recusado em Debug; uma exceção no caminho do 413 viraria 500 e "Unexpected error".
+        Assert.DoesNotContain(Host.Logs.Entries, entry => entry.Contains("Unexpected error", StringComparison.Ordinal));
     }
 
     /// <summary>Sem tamanho conhecido, o HttpClient manda o corpo em <c>Transfer-Encoding: chunked</c>.</summary>

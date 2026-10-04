@@ -145,15 +145,23 @@ public sealed class ConsoleClient : IDisposable
 
     /// <summary>
     /// Cria flags <c>json</c> cujos valores somam exatamente <paramref name="bytes"/> bytes no teto do rascunho (ADR 0011):
-    /// flags de 8 KiB (dois valores de 4 KiB) e uma última com o resto.
+    /// flags de 8 KiB (dois valores de 4 KiB) e uma última com o resto. Cada flag ocupa pelo menos 2 bytes (<c>0</c> e
+    /// <c>0</c>), então, quando sobraria 1 byte, a flag anterior cede um para a última; 1 byte sozinho não cabe em flag.
     /// </summary>
     public async Task FillJsonBudgetAsync(string projectKey, int bytes, Guid? organizationId = null)
     {
         const int FullValue = 4_096;
+        ArgumentOutOfRangeException.ThrowIfEqual(bytes, 1);
         for (var flag = 1; bytes > 0; flag++)
         {
-            var onBytes = Math.Min(FullValue, bytes - 1);
-            var offBytes = Math.Min(FullValue, bytes - onBytes);
+            var flagBytes = Math.Min(2 * FullValue, bytes);
+            if (bytes - flagBytes == 1)
+            {
+                flagBytes--;
+            }
+
+            var onBytes = Math.Min(FullValue, flagBytes - 1);
+            var offBytes = flagBytes - onBytes;
             var created = await CreateJsonFlagAsync(
                 projectKey, $"fill-{flag}", JsonTextOf(onBytes), JsonTextOf(offBytes), organizationId: organizationId);
             Assert.Equal(HttpStatusCode.Created, created.Status);

@@ -92,10 +92,13 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         await _postgres.DisposeAsync();
     }
 
-    protected override void ConfigureWebHost(IWebHostBuilder builder) => ConfigureTestHost(builder);
+    protected override void ConfigureWebHost(IWebHostBuilder builder) => ConfigureTestHost(builder, Logs);
 
-    /// <summary>A configuração de teste, compartilhada com o <see cref="BrowserHost"/>: mesmo banco, chaves e falsos.</summary>
-    internal void ConfigureTestHost(IWebHostBuilder builder)
+    /// <summary>
+    /// A configuração de teste, compartilhada com o <see cref="BrowserHost"/>: mesmo banco, chaves e falsos. Os logs vão
+    /// para <paramref name="logs"/>.
+    /// </summary>
+    internal void ConfigureTestHost(IWebHostBuilder builder, LogCapture logs)
     {
         builder.UseSetting("ConnectionStrings:ToggleForge", _postgres.GetConnectionString());
         // Todo teste vem do mesmo "IP" e cria contas: os tetos reais ficam para RateLimitTests.
@@ -106,7 +109,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("DataProtection:KeyPath", TestCertificates.Current.KeyPath);
         builder.UseSetting("DataProtection:PreviousCertificatePath", TestCertificates.Next.CertificatePath);
         builder.UseSetting("DataProtection:PreviousKeyPath", TestCertificates.Next.KeyPath);
-        builder.ConfigureLogging(logging => logging.ClearProviders().AddProvider(Logs));
+        builder.ConfigureLogging(logging => logging.ClearProviders().AddProvider(logs));
         builder.ConfigureTestServices(services =>
         {
             services.AddSingleton<TimeProvider>(new HundredNanosecondClock());
