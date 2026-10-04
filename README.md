@@ -16,7 +16,7 @@ O plano de produto está em [`ToggleForge.md`](ToggleForge.md), e as decisões d
 | 1 — Núcleo | Avaliação booleana, contexto, rollout percentual e fallback | ✅ Concluído |
 | 2 — API persistente | Rascunho, publicação, rollback, autenticação e isolamento | ✅ Concluído |
 | 3 — Console | Editor, simulador, publicação e histórico (Blazor + Tailwind) | ✅ Concluído |
-| 4 — SDK e configurações | Sincronização, cache, JSON e app demonstrativo | Planejado |
+| 4 — SDK e configurações | Sincronização, cache, JSON e app demonstrativo | Em andamento |
 | 5 — Unity e segmentação | Adaptador, jogo simples e regras por atributos | Planejado |
 
 ## Como funciona o rollout
@@ -99,6 +99,25 @@ só pela interface e confere que, depois do rollback, o mesmo jogador volta ao m
 - **Histórico e rollback:** o histórico é paginado e marca a versão no ar. O rollback segue as regras da
   publicação e ainda pede o descarte explícito das mudanças não publicadas do rascunho, que ele substitui.
 
+## SDK (Marco 4)
+
+O jogo usa o `ToggleForgeClient` com a credencial do ambiente. O SDK baixa o snapshot em
+`GET /sdk/v1/snapshot` com `If-None-Match` e avalia as flags localmente, sem esperar rede nem disco. Cada
+resultado traz o valor, o motivo, a versão e a origem dos dados (`Server` ou `None`). Uma versão igual ou
+anterior à que está em uso é descartada, porque a ordem vem da versão da publicação e nunca do relógio. Um
+snapshot inválido ou de algoritmo desconhecido mantém o anterior. O SDK é netstandard2.1 com C# 9 e lê o JSON
+com Newtonsoft.Json mapeado à mão, sem reflection, para rodar no IL2CPP da Unity (ADR 0010).
+
+```csharp
+using var http = new HttpClient { BaseAddress = new Uri("https://api.toggleforge.example/") };
+var client = new ToggleForgeClient(new HttpSnapshotTransport(http, SdkCredential.Parse(credential)));
+await client.RefreshAsync();
+var newShop = client.EvaluateBoolean("new-shop", EvaluationContext.ForPlayer(PlayerId.Parse(playerId)), defaultValue: false);
+```
+
+A sincronização periódica com variação e backoff, o cache em disco com idade máxima de 7 dias e o app
+demonstrativo entram nas próximas fatias.
+
 ## Desenvolvimento
 
 Requisitos: .NET SDK 10.0.400, Docker (os testes da API sobem um Postgres com Testcontainers), Node 24
@@ -120,10 +139,12 @@ python3 tools/rollout-vectors/generate.py --check
 | `src/ToggleForge.Infrastructure` | EF Core e Npgsql, um `DbContext` e um schema por módulo, Identity |
 | `src/ToggleForge.Api` | Minimal APIs, autenticação e Problem Details; serve o console |
 | `src/ToggleForge.Console` | Console Blazor WebAssembly com Tailwind |
+| `src/ToggleForge.Sdk` | SDK do jogo: netstandard2.1, C# 9, só Newtonsoft.Json além do núcleo (ADR 0010) |
 | `tests/ToggleForge.Evaluation.Tests` | xUnit v3 no Microsoft.Testing.Platform, com vetores de referência |
 | `tests/ToggleForge.Domain.Tests` | Regras de negócio, sem banco |
 | `tests/ToggleForge.Api.Tests` | Integração com Postgres real, contrato, segurança, arquitetura e jornadas do console no navegador |
 | `tests/ToggleForge.Console.Tests` | Componentes e cliente do console com bUnit |
+| `tests/ToggleForge.Sdk.Tests` | Leitura do snapshot, ordem das versões e transporte do SDK, sem rede |
 | `samples/ToggleForge.RolloutDemo` | Simulação de rollout em etapas |
 | `tools/rollout-vectors` | Implementação de referência do algoritmo em Python |
 | `docs/` | ADRs, especificação do rollout, contrato e ameaças da API |

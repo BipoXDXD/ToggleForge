@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    O SDK roda dentro do jogo, inclusive na Unity: netstandard2.1 + C# 9, como o núcleo. Fora dele, só o
+    Newtonsoft.Json, que a Unity distribui num pacote oficial ajustado para IL2CPP (ADR 0010).
+  -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <ImplicitUsings>disable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ToggleForge.Evaluation\ToggleForge.Evaluation.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ToggleForge.Sdk.Tests" />
+  </ItemGroup>
+
+</Project>

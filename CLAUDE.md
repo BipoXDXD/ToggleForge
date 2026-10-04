@@ -30,6 +30,8 @@ nunca no repositório.
 
 - `src/ToggleForge.Evaluation`: núcleo de avaliação. netstandard2.1 com C# 9 (compatível com Unity),
   sem `PackageReference` nem `ProjectReference` (ADR 0001).
+- `src/ToggleForge.Sdk`: o SDK do jogo (Marco 4), netstandard2.1 com C# 9. Só referencia o `Evaluation` e o
+  Newtonsoft.Json, lido à mão, sem reflection, e nenhum tipo do Newtonsoft na API pública (ADR 0010).
 - `src/ToggleForge.Console`: o console do Marco 3, Blazor WebAssembly servido pela API na mesma origem
   (ADR 0009). Não referencia nenhum projeto de `src/`: fala com a API só por HTTP, com records próprios.
   O CSS sai do Tailwind via npm no build (ADR 0003); `wwwroot/css/` é gerado.
@@ -44,6 +46,8 @@ nunca no repositório.
     As jornadas do console (`ConsoleJourneyTests`) rodam num Chromium headless pelo Playwright, contra a
     API num Kestrel em HTTPS (`BrowserHost`); o Chromium é baixado na primeira execução.
   - `Console.Tests`: componentes e cliente da API do console com bUnit, contra uma API em stub.
+  - `Sdk.Tests`: leitura do snapshot, ordem das versões e transporte do SDK, com transporte em stub; a
+    integração do SDK com a API real fica em `Api.Tests` (`SdkClientTests`).
 - `samples/`: demonstrações executáveis.
 - `tools/rollout-vectors`: oráculo Python do algoritmo de rollout (ADR 0002).
 - `docs/api`: canvas de capacidades, ameaças e o contrato `openapi.yaml` (ADR 0004).
