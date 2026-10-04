@@ -47,7 +47,7 @@ O rollout usa um hash determinístico versionado, com codificação canônica do
 | Frontend | Blazor Web App, componentes Razor e Tailwind CSS | Decidido em `docs/adr/0003-frontend-blazor-tailwind.md`; render mode WebAssembly na mesma origem da API (`docs/adr/0009-render-mode-do-console.md`) |
 | Persistência | EF Core com PostgreSQL | Dapper ou SQL explícito podem entrar em consultas específicas |
 | Autenticação | ASP.NET Core Identity para o painel | OIDC com provedor externo pode substituir ou complementar |
-| SDK | Núcleo em C# compatível com .NET Standard 2.1 | Adaptador Unity validado na versão e plataformas escolhidas |
+| SDK | Núcleo em C# compatível com .NET Standard 2.1 | Newtonsoft.Json, sincronização e cache decididos em `docs/adr/0010-sdk-sincronizacao-e-cache.md`; adaptador Unity validado na versão e plataformas escolhidas |
 | Testes | xUnit, WebApplicationFactory, Testcontainers e Playwright | Domínio, API, banco real e jornadas da interface |
 | Desenvolvimento | Rider, Git e Docker Compose | API, console e PostgreSQL reproduzíveis localmente |
 | Cloud | Containers, Azure Container Apps e PostgreSQL gerenciado | Provedor e forma de hospedagem são revisáveis |
