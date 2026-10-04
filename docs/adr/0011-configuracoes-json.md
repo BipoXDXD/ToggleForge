@@ -142,7 +142,17 @@ O que já existe e pesa na escolha:
 - `Flag`, `SnapshotFlag` e `SimulationResult` ganham `type`, e os valores saem como JSON, não como string.
   No snapshot, `type` é opcional no schema (ausente quer dizer `boolean`), mas o servidor sempre o envia.
 - **Erros:** valor inválido ou fora dos limites → 400 no campo. Passar dos 128 KiB do ambiente → 409
-  `limit-reached`. Corpo acima de 32 KiB → 413.
+  `json-budget-reached`, um tipo próprio (mudança aditiva), para o console explicar o erro sem adivinhar; as 200
+  flags continuam `limit-reached`. Corpo acima de 32 KiB → 413 `payload-too-large`.
+  - O limite de corpo é o nativo do servidor (`RequestSizeLimit` nas duas rotas), aplicado pelo Kestrel na leitura
+    do binding. O 413 chega vazio ao `UseStatusCodePages` e vira Problem Details lá. O TestServer não aplica o
+    limite, então os testes de 413 rodam num Kestrel.
+  - `null` no PATCH é recusado no campo, porque no merge patch ele apagaria o valor; uma flag JSON só recebe o JSON
+    `null` na criação.
+  - Um corpo que o binding recusa aponta só o campo de topo (`/onValue`), sem as chaves escolhidas pelo cliente
+    dentro do valor.
+- **Saída:** o valor sai como o `JsonElement` do texto compacto. Acentos não são reescapados, então o download
+  fica no tamanho contado; o que a compactação escapa (fora do BMP, U+2028/U+2029) já pesa no limite.
 - O `openapi.yaml` muda na fatia da API, como primeiro commit dela e antes do código, porque os testes de
   integração conferem toda resposta contra ele.
 
@@ -198,9 +208,9 @@ O que já existe e pesa na escolha:
   recusada.
 - **`Api.Tests`:**
   - criar, editar, publicar, snapshot, simulação e rollback de uma flag JSON;
-  - cada 400, o 409 do teto e o 413 do corpo;
+  - cada 400, o 409 `json-budget-reached` do teto e o 413 do corpo (num Kestrel, com e sem `Content-Length`);
   - os CHECKs do banco;
-  - duas criações concorrentes que passariam do teto: só uma entra;
+  - duas criações ou duas edições concorrentes que passariam do teto: só uma entra;
   - todas as respostas conferidas contra o `openapi.yaml`.
 - **`Sdk.Tests`:** tipo ausente, flag JSON, tipo desconhecido ignorado sem recusar o snapshot, datas e inteiros
   preservados, fração pelo `double`, valor fora do padrão recusa o snapshot, parser que lança.
