@@ -171,6 +171,31 @@ public sealed class ConsoleJourneyTests(ApiFactory api, Browser browser) : IClas
         Assert.True(browserErrors.Count == 0, string.Join(" | ", browserErrors));
     }
 
+    [Fact]
+    public async Task A_member_rolls_back_to_an_earlier_version_from_the_history()
+    {
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        await owner.PublishedProjectAsync("space-race");
+        var read = await owner.GetFlagAsync("space-race", "new-shop");
+        var widened = await owner.UpdateFlagAsync("space-race", "new-shop", read.Header("ETag"), """{"rolloutBasisPoints":5000}""");
+        Assert.Equal(HttpStatusCode.Created, (await owner.PublishAsync("space-race", ConsoleClient.Revision(widened), ConsoleClient.NewIdempotencyKey())).Status);
+        await using var context = await browser.NewContextAsync(Host.Address);
+        var page = await context.NewPageAsync();
+        var browserErrors = CollectErrors(page);
+
+        await OpenDraftAsync(page, owner);
+        await page.GetByRole(AriaRole.Link, new() { Name = "History" }).ClickAsync();
+        await Expect(page.GetByRole(AriaRole.List, new() { Name = "Publications" }).GetByRole(AriaRole.Listitem).First).ToContainTextAsync("Live");
+        await page.GetByRole(AriaRole.Link, new() { Name = "Version 1" }).ClickAsync();
+        await page.GetByLabel("Type dev to confirm").FillAsync("dev");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Roll back to version 1" }).ClickAsync();
+
+        await Expect(page.GetByRole(AriaRole.Status)).ToContainTextAsync("Version 3 is live in Development with the content of version 1.");
+        Assert.Equal(3, (await owner.GetEnvironmentAsync("space-race", "dev")).Json["currentVersion"]!.GetValue<long>());
+        Assert.Equal(1_000, (await owner.GetFlagAsync("space-race", "new-shop")).Json["rolloutBasisPoints"]!.GetValue<int>());
+        Assert.True(browserErrors.Count == 0, string.Join(" | ", browserErrors));
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (_host is not null)
