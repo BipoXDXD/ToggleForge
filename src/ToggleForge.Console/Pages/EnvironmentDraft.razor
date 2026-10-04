@@ -34,6 +34,18 @@ else
         }
     </div>
 
+    <div class="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm">
+        <span class="text-slate-600" data-testid="draft-status">
+            @(_draft.BasedOnVersion is { } live ? $"Version {live} is live." : "Never published.")
+            @(_draft.Changes.Count switch { 0 => "No unpublished changes.", 1 => "1 unpublished change.", var count => $"{count} unpublished changes." })
+        </span>
+        @if (_draft.Changes.Count > 0 && Session.MembershipIn(OrganizationId) is { CanEditDrafts: true })
+        {
+            <a href="@($"{EnvironmentPath(EnvironmentKey)}/publish")"
+               class="rounded-md bg-indigo-600 px-3 py-1.5 font-semibold text-white hover:bg-indigo-500">Review and publish</a>
+        }
+    </div>
+
     <section class="mt-6" aria-labelledby="draft-flags">
         <h2 id="draft-flags" class="text-lg font-semibold">Draft flags</h2>
         @if (_draft.Flags.Count == 0)
@@ -159,8 +171,22 @@ else
             return;
         }
 
-        _draft = _draft! with { Flags = [.. _draft.Flags, flag.Value] };
         (_flagKey, _rolloutPercent, _enabled) = (string.Empty, 0, true);
+        await ReloadDraftAsync();
+    }
+
+    /// <summary>A lista de mudanças vem da API: comparar com a publicação é regra dela, não do console.</summary>
+    private async Task ReloadDraftAsync()
+    {
+        var draft = await Api.GetDraftAsync(OrganizationId, ProjectKey, EnvironmentKey, Leaving);
+        if (draft.Succeeded)
+        {
+            _draft = draft.Value;
+        }
+        else
+        {
+            _loadProblem = draft.Problem;
+        }
     }
 
     private string EnvironmentPath(string environmentKey) =>

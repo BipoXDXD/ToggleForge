@@ -163,6 +163,21 @@ public sealed class ConsoleApiTests
         Assert.Equal("/problems/unexpected-response", flag.Problem.Type);
     }
 
+    [Fact]
+    public async Task A_publication_without_summary_leaves_the_field_out()
+    {
+        const string Publications = Projects + "/space-race/environments/dev/publications";
+        var api = new StubApi().Answer(HttpMethod.Post, Publications, HttpStatusCode.Created, """{"version":1}""");
+
+        await api.CreateClient().PublishAsync(
+            new EnvironmentAddress(_organizationId, "space-race", "dev"), new PublicationRequest(9, Summary: null), "key-of-sixteen-chars",
+            TestContext.Current.CancellationToken);
+
+        var request = Assert.Single(api.RequestsTo(HttpMethod.Post, Publications));
+        Assert.Equal("""{"draftRevision":9}""", api.BodyOf(request));
+        Assert.Equal(["key-of-sixteen-chars"], request.Headers.GetValues("Idempotency-Key"));
+    }
+
     private const string NewShop = Projects + "/space-race/environments/dev/draft/flags/new-shop";
     private const string NewShopJson = """{"key":"new-shop","enabled":true,"onValue":true,"offValue":false,"rolloutBasisPoints":5000}""";
     private static readonly FlagAddress _newShop = new(_organizationId, "space-race", "dev", "new-shop");
