@@ -178,6 +178,33 @@ public sealed class ConsoleApiTests
         Assert.Equal(["key-of-sixteen-chars"], request.Headers.GetValues("Idempotency-Key"));
     }
 
+    [Fact]
+    public async Task The_next_page_of_the_history_goes_with_its_token_escaped()
+    {
+        const string Publications = Projects + "/space-race/environments/dev/publications";
+        var api = new StubApi().Answer(HttpMethod.Get, Publications, HttpStatusCode.OK, """{"data":[],"metadata":{}}""");
+
+        await api.CreateClient().ListPublicationsAsync(
+            new EnvironmentAddress(_organizationId, "space-race", "dev"), "abc&maxPageSize=100", TestContext.Current.CancellationToken);
+
+        Assert.Equal("?pageToken=abc%26maxPageSize%3D100", Assert.Single(api.Requests).RequestUri?.Query);
+    }
+
+    [Fact]
+    public async Task A_rollback_sends_what_the_member_saw_with_its_key()
+    {
+        const string Rollbacks = Projects + "/space-race/environments/dev/rollbacks";
+        var api = new StubApi().Answer(HttpMethod.Post, Rollbacks, HttpStatusCode.Created, """{"version":6}""");
+
+        await api.CreateClient().RollBackAsync(
+            new EnvironmentAddress(_organizationId, "space-race", "dev"), new RollbackRequest(2, 5, DiscardDraftChanges: false),
+            "key-of-sixteen-chars", TestContext.Current.CancellationToken);
+
+        var request = Assert.Single(api.RequestsTo(HttpMethod.Post, Rollbacks));
+        Assert.Equal("""{"targetVersion":2,"expectedCurrentVersion":5,"discardDraftChanges":false}""", api.BodyOf(request));
+        Assert.Equal(["key-of-sixteen-chars"], request.Headers.GetValues("Idempotency-Key"));
+    }
+
     private const string NewShop = Projects + "/space-race/environments/dev/draft/flags/new-shop";
     private const string NewShopJson = """{"key":"new-shop","enabled":true,"onValue":true,"offValue":false,"rolloutBasisPoints":5000}""";
     private static readonly FlagAddress _newShop = new(_organizationId, "space-race", "dev", "new-shop");

@@ -1,0 +1,232 @@
+@page "/organizations/{OrganizationId:guid}/projects/{ProjectKey}/environments/{EnvironmentKey}/history/{Version:long}"
+@inherits ConsolePage
+@inject ConsoleApi Api
+@inject SessionState Session
+
+<PageTitle>Version @Version · @ProjectKey · @EnvironmentKey · ToggleForge</PageTitle>
+
+<nav class="text-sm text-slate-500" aria-label="Breadcrumb">
+    <a href="organizations/@OrganizationId/projects" class="hover:text-slate-700 hover:underline">Projects</a>
+    <span aria-hidden="true"> / </span>
+    <a href="@DraftPath" class="hover:text-slate-700 hover:underline">@ProjectKey · @EnvironmentKey</a>
+    <span aria-hidden="true"> / </span>
+    <a href="@HistoryPath" class="hover:text-slate-700 hover:underline">History</a>
+</nav>
+
+@if (_loadProblem is not null)
+{
+    <div class="mt-6"><ProblemMessage Problem="_loadProblem" /></div>
+}
+else if (_environment is null || _publication is null)
+{
+    <p class="mt-6 text-sm text-slate-500">Loading the publication…</p>
+}
+else
+{
+    <h1 class="mt-2 text-2xl font-semibold tracking-tight">Version @_publication.Version</h1>
+    <p class="mt-1 text-sm text-slate-600">
+        @PublicationText.Origin(_publication.Origin, _publication.RestoredVersion) by @_publication.PublishedBy.Email,
+        @PublicationText.When(_publication.PublishedAt)
+    </p>
+    @if (_publication.Summary is { } summary)
+    {
+        <p class="mt-2 text-sm text-slate-800">@summary</p>
+    }
+
+    <div class="mt-6 overflow-hidden rounded-lg border border-slate-200 bg-white">
+        <table class="w-full text-left text-sm">
+            <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                    <th scope="col" class="px-4 py-2">Flag</th>
+                    <th scope="col" class="px-4 py-2">State</th>
+                    <th scope="col" class="px-4 py-2">Rollout</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-200">
+                @foreach (var flag in _publication.Flags)
+                {
+                    <tr>
+                        <td class="px-4 py-2 font-mono">@flag.Key</td>
+                        <td class="px-4 py-2">@(flag.Enabled ? "Enabled" : "Disabled")</td>
+                        <td class="px-4 py-2">@RolloutShare.Format(flag.RolloutBasisPoints)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @if (_rolledBack is not null)
+    {
+        <div role="status" class="mt-6 max-w-lg rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+            Version @_rolledBack.Version is live in @_environment.Name with the content of version @Version. The draft has it too.
+        </div>
+        <a href="@HistoryPath" class="mt-4 inline-block text-sm font-medium text-indigo-700 hover:underline">Back to the history</a>
+    }
+    else if (_publication.Version == _environment.CurrentVersion)
+    {
+        <p class="mt-6 text-sm text-slate-600">This version is live.</p>
+    }
+    else if (_environment.CurrentVersion is { } live && Session.MembershipIn(OrganizationId) is { CanEditDrafts: true })
+    {
+        <section class="mt-8 max-w-lg" aria-labelledby="roll-back">
+            <h2 id="roll-back" class="text-lg font-semibold">Roll back @_environment.Name to version @Version</h2>
+            <p class="mt-1 text-sm text-slate-600">
+                Publishes version @(live + 1) with the content of version @Version and puts the same content in the draft.
+                The history keeps every version.
+            </p>
+            <form class="mt-4 space-y-4" @onsubmit="RollBackAsync" @onsubmit:preventDefault>
+                @if (_environment.HasUnpublishedChanges)
+                {
+                    <label class="flex items-start gap-2">
+                        <input type="checkbox" @bind="_discardDraftChanges" disabled="@(_attempt is not null)" class="mt-0.5 h-4 w-4 rounded border-slate-300" />
+                        <span class="text-sm text-slate-700">Discard the unpublished changes of the draft. Rolling back replaces them.</span>
+                    </label>
+                }
+                <label class="block">
+                    <span class="text-sm font-medium text-slate-700">Type @EnvironmentKey to confirm</span>
+                    <input autocomplete="off" spellcheck="false" @bind="_confirmation" @bind:event="oninput"
+                           class="mt-1 block w-40 rounded-md border border-slate-300 px-3 py-2 font-mono text-sm focus:border-indigo-500 focus:outline-none" />
+                </label>
+
+                <ProblemMessage Problem="_problem" />
+
+                @if (_attempt is null)
+                {
+                    <button type="submit" disabled="@(_busy || !Ready)"
+                            class="rounded-md bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-60">
+                        Roll back to version @Version
+                    </button>
+                }
+                else
+                {
+                    <button type="submit" disabled="@_busy"
+                            class="rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-500 disabled:opacity-60">
+                        Check the result
+                    </button>
+                }
+            </form>
+        </section>
+    }
+}
+
+@code {
+    private static readonly Problem _unknownResult = new(
+        "/problems/unknown-result", "Unknown result", 0,
+        "We could not confirm whether the rollback happened. Check the result before doing anything else: checking never rolls back twice.");
+
+    private static readonly Problem _currentVersionChanged = new(
+        "/problems/current-version-changed", "Another publication went live", 409,
+        "Another publication went live after you opened this page. Check the history before rolling back.");
+
+    private static readonly Problem _draftGotChanges = new(
+        "/problems/draft-has-pending-changes", "The draft has unpublished changes", 409,
+        "The draft got unpublished changes meanwhile. Rolling back replaces them: confirm that they can go.");
+
+    private ProjectEnvironment? _environment;
+    private Publication? _publication;
+    private Publication? _rolledBack;
+    private Problem? _loadProblem;
+    private Problem? _problem;
+    private string _confirmation = string.Empty;
+    private bool _discardDraftChanges;
+    private bool _busy;
+
+    // Só existe enquanto o resultado é desconhecido: o reenvio usa o mesmo pedido e a mesma chave.
+    private RollbackAttempt? _attempt;
+
+    [Parameter]
+    public Guid OrganizationId { get; set; }
+
+    [Parameter]
+    public string ProjectKey { get; set; } = string.Empty;
+
+    [Parameter]
+    public string EnvironmentKey { get; set; } = string.Empty;
+
+    [Parameter]
+    public long Version { get; set; }
+
+    private EnvironmentAddress Address => new(OrganizationId, ProjectKey, EnvironmentKey);
+
+    private bool Ready =>
+        string.Equals(_confirmation, EnvironmentKey, StringComparison.Ordinal)
+        && (_environment is { HasUnpublishedChanges: false } || _discardDraftChanges);
+
+    private string DraftPath =>
+        $"organizations/{OrganizationId}/projects/{Uri.EscapeDataString(ProjectKey)}/environments/{Uri.EscapeDataString(EnvironmentKey)}";
+
+    private string HistoryPath => $"{DraftPath}/history";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        (_environment, _publication, _rolledBack, _loadProblem) = (null, null, null, null);
+        var publication = Api.GetPublicationAsync(Address, Version, Leaving);
+        var environment = LoadEnvironmentAsync();
+        var loadedPublication = await publication;
+        await environment;
+        if (loadedPublication.Succeeded)
+        {
+            _publication = loadedPublication.Value;
+        }
+        else
+        {
+            _loadProblem = loadedPublication.Problem;
+        }
+    }
+
+    private async Task LoadEnvironmentAsync()
+    {
+        var environment = await Api.GetEnvironmentAsync(Address, Leaving);
+        if (environment.Succeeded)
+        {
+            _environment = environment.Value;
+        }
+        else
+        {
+            _loadProblem = environment.Problem;
+        }
+    }
+
+    private async Task RollBackAsync()
+    {
+        if (_environment?.CurrentVersion is not { } live || (_attempt is null && !Ready))
+        {
+            return;
+        }
+
+        var attempt = _attempt ?? RollbackAttempt.Of(Version, live, _discardDraftChanges);
+        _problem = null;
+        _busy = true;
+        var rollback = await Api.RollBackAsync(Address, attempt.Request, attempt.IdempotencyKey, Leaving);
+        _busy = false;
+        if (rollback.Succeeded)
+        {
+            (_rolledBack, _attempt) = (rollback.Value, null);
+            return;
+        }
+
+        switch (RollbackAttempt.Classify(rollback.Problem))
+        {
+            case RollbackOutcome.Unknown:
+                (_attempt, _problem) = (attempt, _unknownResult);
+                break;
+            case RollbackOutcome.CurrentVersionChanged:
+                await StartOverAsync(_currentVersionChanged);
+                break;
+            case RollbackOutcome.DraftHasPendingChanges:
+                await StartOverAsync(_draftGotChanges);
+                break;
+            default:
+                (_attempt, _problem) = (null, rollback.Problem);
+                break;
+        }
+    }
+
+    /// <summary>O que o membro viu mudou: relê o ambiente e pede a confirmação de novo.</summary>
+    private async Task StartOverAsync(Problem reason)
+    {
+        (_attempt, _confirmation, _discardDraftChanges) = (null, string.Empty, false);
+        await LoadEnvironmentAsync();
+        _problem = reason;
+    }
+}

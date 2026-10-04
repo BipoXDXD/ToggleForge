@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -86,6 +87,32 @@ public sealed class ConsoleApi(HttpClient http, SessionState session)
                 $"{EnvironmentPath(environment)}/publications",
                 JsonContent.Create(request, options: _omitNulls),
                 IdempotencyKey: idempotencyKey),
+            cancellationToken);
+
+    public Task<ApiResult<ProjectEnvironment>> GetEnvironmentAsync(EnvironmentAddress environment, CancellationToken cancellationToken) =>
+        SendAsync<ProjectEnvironment>(new Outgoing(HttpMethod.Get, EnvironmentPath(environment)), cancellationToken);
+
+    /// <param name="pageToken">O <c>nextPageToken</c> da página anterior; nulo para a primeira.</param>
+    public Task<ApiResult<PublicationPage>> ListPublicationsAsync(
+        EnvironmentAddress environment, string? pageToken, CancellationToken cancellationToken) =>
+        SendAsync<PublicationPage>(
+            new Outgoing(
+                HttpMethod.Get,
+                $"{EnvironmentPath(environment)}/publications{(pageToken is null ? string.Empty : $"?pageToken={Uri.EscapeDataString(pageToken)}")}"),
+            cancellationToken);
+
+    public Task<ApiResult<Publication>> GetPublicationAsync(EnvironmentAddress environment, long version, CancellationToken cancellationToken) =>
+        SendAsync<Publication>(
+            new Outgoing(HttpMethod.Get, $"{EnvironmentPath(environment)}/publications/{version.ToString(CultureInfo.InvariantCulture)}"),
+            cancellationToken);
+
+    /// <param name="idempotencyKey">
+    /// A mesma chave em todo reenvio do mesmo pedido: a API devolve a resposta original em vez de reverter de novo.
+    /// </param>
+    public Task<ApiResult<Publication>> RollBackAsync(
+        EnvironmentAddress environment, RollbackRequest request, string idempotencyKey, CancellationToken cancellationToken) =>
+        SendAsync<Publication>(
+            new Outgoing(HttpMethod.Post, $"{EnvironmentPath(environment)}/rollbacks", Json(request), IdempotencyKey: idempotencyKey),
             cancellationToken);
 
     private static JsonContent Json(object body) => JsonContent.Create(body);

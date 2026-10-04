@@ -49,7 +49,30 @@ public sealed record FlagCreation(string Key, bool Enabled, bool OnValue, bool O
 /// <param name="Summary">Opcional; a API recusa texto vazio, então ausente vai como nulo e fica fora do JSON.</param>
 public sealed record PublicationRequest(long DraftRevision, string? Summary);
 
-public sealed record Publication(long Version);
+/// <param name="Origin"><c>publication</c> ou <c>rollback</c>; a lista pode crescer.</param>
+/// <param name="RestoredVersion">A versão cujo conteúdo um rollback restaurou; nula numa publicação comum.</param>
+public sealed record PublicationSummary(
+    long Version, DateTimeOffset PublishedAt, Member PublishedBy, string Origin, long? RestoredVersion, string? Summary = null);
+
+/// <param name="Flags">Todas as flags da versão, como os jogos as recebem.</param>
+public sealed record Publication(
+    long Version,
+    DateTimeOffset PublishedAt,
+    Member PublishedBy,
+    string Origin,
+    long? RestoredVersion,
+    IReadOnlyList<Flag> Flags,
+    string? Summary = null);
+
+/// <param name="Data">Mais nova primeiro.</param>
+public sealed record PublicationPage(IReadOnlyList<PublicationSummary> Data, PageMetadata Metadata);
+
+/// <param name="NextPageToken">Opaco; ausente na última página.</param>
+public sealed record PageMetadata(string? NextPageToken = null);
+
+/// <param name="ExpectedCurrentVersion">A versão no ar que o membro viu; se outra publicação veio depois, a API recusa.</param>
+/// <param name="DiscardDraftChanges">Sem isso, a API recusa reverter por cima de mudanças não publicadas.</param>
+public sealed record RollbackRequest(long TargetVersion, long ExpectedCurrentVersion, bool DiscardDraftChanges);
 
 /// <summary>Merge patch: só os campos que mudaram vão para a API, e campo nulo nem é enviado.</summary>
 public sealed record FlagModification(bool? Enabled = null, bool? OnValue = null, bool? OffValue = null, int? RolloutBasisPoints = null)

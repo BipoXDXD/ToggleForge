@@ -11,22 +11,16 @@ namespace ToggleForge.Console.Drafts;
 public sealed record PublicationAttempt(PublicationRequest Request, string IdempotencyKey)
 {
     public static PublicationAttempt Of(long draftRevision, string? summary) =>
-        new(new PublicationRequest(draftRevision, string.IsNullOrWhiteSpace(summary) ? null : summary.Trim()), NewKey());
+        new(new PublicationRequest(draftRevision, string.IsNullOrWhiteSpace(summary) ? null : summary.Trim()), IdempotentWrites.NewKey());
 
-    /// <summary>
-    /// O que fazer com uma recusa. Sem resposta da API, ou com um erro dela, não dá para saber se a versão foi
-    /// criada: a tentativa só pode ser conferida, nunca refeita com outra chave.
-    /// </summary>
+    /// <summary>O que fazer com uma recusa da publicação.</summary>
     public static PublicationOutcome Classify(Problem problem) => problem switch
     {
-        { Status: 0 } or { Status: >= 500 } or { Type: "/problems/unexpected-response" } => PublicationOutcome.Unknown,
+        _ when IdempotentWrites.LeftResultUnknown(problem) => PublicationOutcome.Unknown,
         { StatusCode: HttpStatusCode.Conflict, Type: "/problems/draft-changed" } => PublicationOutcome.DraftChanged,
         { StatusCode: HttpStatusCode.Conflict, Type: "/problems/nothing-to-publish" } => PublicationOutcome.NothingToPublish,
         _ => PublicationOutcome.Refused,
     };
-
-    // 32 caracteres hexadecimais de um GUID aleatório: dentro do padrão [A-Za-z0-9_-]{16,64} do contrato.
-    private static string NewKey() => Guid.NewGuid().ToString("N");
 }
 
 public enum PublicationOutcome
