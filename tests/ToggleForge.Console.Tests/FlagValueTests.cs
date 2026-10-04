@@ -106,6 +106,13 @@ public sealed class FlagValueTests
     public void A_preview_cuts_long_values_with_an_ellipsis(string json, int maxLength, string expected) =>
         Assert.Equal(expected, Values.Json(json).Preview(maxLength));
 
+    [Theory]
+    [InlineData("\"ab\\u2028cd\"", 6, "\"ab…")]
+    [InlineData("\"ab\\u2028cd\"", 10, "\"ab\\u2028…")]
+    [InlineData("\"a\\\\b\"", 4, "\"a…")]
+    public void A_preview_never_cuts_an_escape_in_half(string json, int maxLength, string expected) =>
+        Assert.Equal(expected, Values.Json(json).Preview(maxLength));
+
     [Fact]
     public void Booleans_are_the_json_literals()
     {

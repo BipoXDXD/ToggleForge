@@ -104,11 +104,39 @@ public sealed record FlagValue
     /// <remarks>
     /// Não corta um par de surrogates ao meio porque o texto não tem nenhum: o encoder escapa o que fica fora do BMP
     /// (um emoji vira <c>\uXXXX\uXXXX</c>).
+    /// Também não corta um escape ao meio: o corte recua para antes dele, então a prévia pode ficar mais curta.
     /// </remarks>
     public string Preview(int maxLength)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(maxLength, 2);
-        return Text.Length <= maxLength ? Text : string.Concat(Text.AsSpan(0, maxLength - 1), "…");
+        return Text.Length <= maxLength ? Text : string.Concat(Text.AsSpan(0, CutBeforeEscape(maxLength - 1)), "…");
+    }
+
+    // No texto compacto, toda barra começa um escape: \uXXXX tem 6 caracteres, os outros (\", \\, \n...) têm 2.
+    private int CutBeforeEscape(int cut)
+    {
+        const int UnicodeEscapeLength = 6;
+        const int ShortEscapeLength = 2;
+
+        var index = 0;
+        while (index < cut)
+        {
+            if (Text[index] != '\\')
+            {
+                index++;
+                continue;
+            }
+
+            var length = Text[index + 1] == 'u' ? UnicodeEscapeLength : ShortEscapeLength;
+            if (index + length > cut)
+            {
+                return index;
+            }
+
+            index += length;
+        }
+
+        return cut;
     }
 
     internal static FlagValue Read(ref Utf8JsonReader reader)
