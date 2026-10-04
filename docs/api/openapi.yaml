@@ -511,6 +511,8 @@ paths:
         be cleared. The key and the seed never change.
         409 `limit-reached` when the change would take the draft over 128 KiB of json values. The type of a flag
         never changes: `type` is an unknown field here. Bodies over 32 KiB get 413.
+        A json flag can get the JSON `null` as a value only when it is created: in a merge patch `null` means
+        removing the field, and no field of a flag can be removed.
       parameters:
         - $ref: '#/components/parameters/Antiforgery'
         - $ref: '#/components/parameters/IfMatch'
@@ -1360,9 +1362,10 @@ components:
 
     FlagValue:
       description: |
-        `true` or `false` for a boolean flag. Any JSON value for a json flag: at most 4 KiB in UTF-8 once
-        compacted, at most 8 levels deep, no key repeated in an object and every number within the range of a
-        double. The server returns it compacted, with the keys in the order they were sent.
+        `true` or `false` for a boolean flag. Any JSON value for a json flag (`null` only at creation; see
+        updateFlag): at most 4 KiB in UTF-8 once compacted, at most 8 levels deep, no key repeated in an object
+        and every number within the range of a double. The server returns it compacted, with the keys in the
+        order they were sent.
 
     FlagCreation:
       type: object
@@ -1373,6 +1376,7 @@ components:
           $ref: '#/components/schemas/Key'
         type:
           $ref: '#/components/schemas/FlagType'
+          default: boolean
           description: Defaults to boolean.
         enabled:
           type: boolean
