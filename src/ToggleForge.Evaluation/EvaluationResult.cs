@@ -23,12 +23,6 @@ namespace ToggleForge.Evaluation
         /// <summary>Bucket do jogador (0 a 9999) que decidiu o resultado; nulo quando o resultado não dependeu dele.</summary>
         public int? Bucket { get; }
 
-        public bool IsFallback =>
-            Reason is EvaluationReason.SnapshotMissing
-                or EvaluationReason.InvalidFlagKey
-                or EvaluationReason.FlagNotFound
-                or EvaluationReason.MissingPlayerId
-                or EvaluationReason.TypeMismatch
-                or EvaluationReason.InvalidValue;
+        public bool IsFallback => Reason.IsFallback();
     }
 }
