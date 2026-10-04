@@ -79,6 +79,32 @@ public sealed class ConsoleContrastTests(ApiFactory api, Browser browser) : ICla
     }
 
     /// <summary>
+    /// O número da linha com o erro fica na calha, em red-700 sobre o red-50 do quadro, e precisa do contraste de texto.
+    /// </summary>
+    [Fact]
+    public async Task The_line_number_of_a_syntax_error_meets_text_contrast()
+    {
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        Assert.Equal(HttpStatusCode.Created, (await owner.CreateProjectAsync("space-race")).Status);
+        await using var context = await browser.NewContextAsync(Host.Address);
+        var page = await context.NewPageAsync();
+        var gutters = page.Locator("#on-value-syntax pre > span");
+
+        await ConsolePages.OpenDraftAsync(page, owner);
+        await page.GetByRole(AriaRole.Radio, new() { Name = "JSON" }).CheckAsync();
+        await page.Locator("#on-value").FillAsync("{\n  \"discount\": 0.2\n  \"items\": []\n}");
+        await Expect(gutters).ToHaveCountAsync(2);
+        var ratios = new List<double>();
+        foreach (var gutter in await gutters.AllAsync())
+        {
+            ratios.Add(await ContrastProbe.TextRatioAsync(gutter));
+        }
+
+        Assert.Equal("3 │ ", await gutters.First.TextContentAsync());
+        Assert.All(ratios, ratio => Assert.True(ratio >= TextMinimum, $"line number: {ratio:F2}:1"));
+    }
+
+    /// <summary>
     /// O rádio esconde o próprio contorno, e o cartão inteiro mostra o foco, só quando ele vem do teclado: o cartão
     /// clicado com o mouse fica com o foco e sem contorno (A10, F7).
     /// </summary>
