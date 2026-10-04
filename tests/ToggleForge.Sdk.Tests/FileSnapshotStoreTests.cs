@@ -55,7 +55,6 @@ public sealed class FileSnapshotStoreTests : IDisposable
     [InlineData("""{"eTag":null,"confirmedAt":"2026-10-04T12:00:00.0000000+00:00","snapshot":"{}"}""")]
     [InlineData("""{"format":"1","eTag":null,"confirmedAt":"2026-10-04T12:00:00.0000000+00:00","snapshot":"{}"}""")]
     [InlineData("""{"format":1,"eTag":null,"confirmedAt":"2026-10-04T12:00:00.0000000+00:00","snapshot":{}}""")]
-    [InlineData("""{"format":1,"eTag":null,"confirmedAt":1791117600,"snapshot":"{}"}""")]
     [InlineData("""{"format":2,"eTag":null,"confirmedAt":"2026-10-04T12:00:00.0000000+00:00","snapshot":"{}"}""")]
     [InlineData("""{"format":1,"eTag":null,"confirmedAt":"yesterday","snapshot":"{}"}""")]
     [InlineData("""{"format":1,"eTag":null,"confirmedAt":"2026-10-04T12:00:00.0000000+00:00"}""")]

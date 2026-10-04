@@ -21,6 +21,7 @@ namespace ToggleForge.Sdk
 
         private const int ReadChunkBytes = 16 * 1024;
 
+        // O XML doc do construtor repete este valor: mude os dois juntos.
         private static readonly TimeSpan _defaultTimeout = TimeSpan.FromSeconds(10);
 
         private readonly HttpClient _http;
@@ -29,7 +30,7 @@ namespace ToggleForge.Sdk
 
         /// <param name="http">Com <c>BaseAddress</c> na raiz da API. O transporte não o descarta.</param>
         /// <param name="timeout">
-        /// O tempo de uma tentativa inteira, do envio ao fim do corpo; 10 s quando nulo (ADR 0010). O
+        /// O tempo de uma tentativa inteira, do envio ao fim do corpo; quando nulo, o padrão de 10 s (ADR 0010). O
         /// <c>Timeout</c> do <see cref="HttpClient"/> não serve: ele para de contar quando chegam os headers.
         /// </param>
         public HttpSnapshotTransport(HttpClient http, SdkCredential credential, TimeSpan? timeout = null)

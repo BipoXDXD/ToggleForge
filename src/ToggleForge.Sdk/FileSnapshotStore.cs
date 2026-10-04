@@ -120,10 +120,11 @@ namespace ToggleForge.Sdk
         private static StoredSnapshot? Parse(string text)
         {
             var stored = ReadObject(text);
-            if (stored?["format"] is not JValue { Type: JTokenType.Integer, Value: long format } || format != Format
+            if (stored is null
+                || stored["format"] is not JValue { Type: JTokenType.Integer, Value: long format } || format != Format
                 || stored["snapshot"] is not JValue { Type: JTokenType.String, Value: string body }
                 || !TryReadInstant(stored["confirmedAt"], out var confirmedAt)
-                || !TryReadETag(stored["eTag"], out var eTag))
+                || !TryReadOptionalETag(stored["eTag"], out var eTag))
             {
                 return null;
             }
@@ -156,7 +157,7 @@ namespace ToggleForge.Sdk
         /// Falso só quando há uma ETag em texto fora da forma que a API aceita. Ausente ou de outro tipo, ela fica
         /// nula e o snapshot vale sem ela.
         /// </returns>
-        private static bool TryReadETag(JToken? token, out string? eTag)
+        private static bool TryReadOptionalETag(JToken? token, out string? eTag)
         {
             eTag = token is JValue { Type: JTokenType.String, Value: string text } ? text : null;
             return eTag is null || _eTagShape.IsMatch(eTag);
