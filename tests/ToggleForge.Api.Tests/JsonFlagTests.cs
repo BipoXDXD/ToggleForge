@@ -330,27 +330,30 @@ public sealed class JsonFlagTests(ApiFactory api)
 
     /// <summary>
     /// O jogo calcula o bucket só com projeto, ambiente, chave, seed e jogador (ADR 0002): o tipo da flag não entra no
-    /// hash, então a simulação de uma flag JSON num rollout parcial tem de cair no mesmo bucket e no mesmo valor.
+    /// hash, então a simulação de uma flag JSON num rollout parcial tem de cair no mesmo bucket e no mesmo valor. O seed
+    /// é sorteado na criação, então os jogadores são escolhidos pelo resultado do jogo, um de cada lado do rollout.
     /// </summary>
-    [Theory]
-    [InlineData("player-42")]
-    [InlineData("player-7")]
-    [InlineData("jogadora-ção-🎮")]
-    public async Task A_json_flag_in_a_partial_rollout_simulates_what_the_game_evaluates(string playerId)
+    [Fact]
+    public async Task A_json_flag_in_a_partial_rollout_simulates_what_the_game_evaluates()
     {
         using var owner = await OwnerWithProjectAsync();
         var created = await owner.CreateJsonFlagAsync(Project, "shop-config", """{"discount":0.2}""", """{"discount":0}""", rolloutBasisPoints: 5_000);
         Assert.Equal(HttpStatusCode.Created, (await owner.PublishAsync(Project, ConsoleClient.Revision(created), ConsoleClient.NewIdempotencyKey())).Status);
         var secret = (await owner.CreateCredentialAsync(Project)).Json["secret"]!.GetValue<string>();
-        var game = GameEvaluation(await GameClient.GetSnapshotAsync(api, secret), "shop-config", playerId);
+        var snapshot = await GameClient.GetSnapshotAsync(api, secret);
+        var candidates = Enumerable.Range(1, 200)
+            .Select(number => $"player-{number}")
+            .Select(playerId => (PlayerId: playerId, Game: GameEvaluation(snapshot, "shop-config", playerId)))
+            .ToList();
 
-        var response = await owner.SimulatePublicationAsync(Project, playerId, version: 1);
+        // Com 50% de rollout, 200 candidatos todos do mesmo lado têm chance de 2 × 2^-200.
+        var included = candidates.Find(candidate => candidate.Game.Reason == EvaluationReason.Included);
+        var excluded = candidates.Find(candidate => candidate.Game.Reason == EvaluationReason.Excluded);
 
-        Assert.Equal(HttpStatusCode.OK, response.Status);
-        var result = SimulationResult(response, "shop-config");
-        Assert.Equal(game.Value, result.GetProperty("value").GetRawText());
-        Assert.Equal(game.Reason.ToString().ToLowerInvariant(), result.GetProperty("reason").GetString());
-        Assert.Equal(game.Bucket, result.GetProperty("bucket").GetInt32());
+        Assert.NotNull(included.PlayerId);
+        Assert.NotNull(excluded.PlayerId);
+        await AssertSimulationMatchesGameAsync(owner, included.PlayerId, included.Game, "included");
+        await AssertSimulationMatchesGameAsync(owner, excluded.PlayerId, excluded.Game, "excluded");
     }
 
     [Fact]
@@ -563,6 +566,19 @@ public sealed class JsonFlagTests(ApiFactory api)
 
     private static void AssertSameJson(JsonElement expected, JsonElement actual) =>
         Assert.True(JsonElement.DeepEquals(expected, actual), $"Expected {expected.GetRawText()}, got {actual.GetRawText()}.");
+
+    /// <summary>A simulação da publicação 1 para o jogador dá o valor, o motivo e o bucket do jogo, e o motivo esperado.</summary>
+    private static async Task AssertSimulationMatchesGameAsync(ConsoleClient owner, string playerId, EvaluationResult<string> game, string expectedReason)
+    {
+        var response = await owner.SimulatePublicationAsync(Project, playerId, version: 1);
+
+        Assert.Equal(HttpStatusCode.OK, response.Status);
+        var result = SimulationResult(response, "shop-config");
+        Assert.Equal(game.Value, result.GetProperty("value").GetRawText());
+        Assert.Equal(game.Reason.ToString().ToLowerInvariant(), result.GetProperty("reason").GetString());
+        Assert.Equal(game.Bucket, result.GetProperty("bucket").GetInt32());
+        Assert.Equal(expectedReason, result.GetProperty("reason").GetString());
+    }
 
     private static JsonElement SimulationResult(ApiResponse simulation, string flagKey)
     {
