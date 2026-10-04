@@ -180,6 +180,20 @@ public sealed class RollbackTests(ApiFactory api)
     }
 
     [Fact]
+    public async Task Reusing_a_rollback_key_with_only_the_discard_choice_changed_conflicts()
+    {
+        using var editor = await TwoPublicationsAsync();
+        var key = ConsoleClient.NewIdempotencyKey();
+        await editor.RollBackAsync("space-race", 1, 2, key);
+
+        var reused = await editor.RollBackAsync("space-race", 1, 2, key, discardDraftChanges: true);
+
+        Assert.Equal(HttpStatusCode.Conflict, reused.Status);
+        Assert.Equal("/problems/idempotency-key-reused", reused.ProblemType);
+        Assert.Equal(3, await CurrentVersionAsync(editor));
+    }
+
+    [Fact]
     public async Task A_key_used_to_publish_cannot_roll_back()
     {
         using var editor = await ConsoleClient.SignUpAsync(api);
