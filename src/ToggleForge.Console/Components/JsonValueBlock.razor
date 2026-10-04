@@ -34,17 +34,23 @@
     private FlagValue? _shown;
     private string _indented = string.Empty;
     private CopyState _copy;
+    private bool _copiedAgain;
 
     [Parameter, EditorRequired]
     public FlagValue Value { get; set; } = FlagValue.Null;
 
-    /// <summary>Começa aberto: na leitura de uma flag o valor é o assunto da página, não um detalhe da tabela.</summary>
+    /// <summary>
+    /// Verdadeiro para começar aberto, como na leitura de uma flag, onde o valor é o assunto da página; falso (o padrão)
+    /// numa tabela, onde ele é um detalhe da linha.
+    /// </summary>
     [Parameter]
     public bool Open { get; set; }
 
     private string CopyMessage => _copy switch
     {
-        CopyState.Copied => "Value copied.",
+        // Um texto igual ao anterior não muda a região viva e não seria lido de novo; o espaço inseparável no fim
+        // alterna e não aparece.
+        CopyState.Copied => _copiedAgain ? "Value copied.\u00A0" : "Value copied.",
         CopyState.Failed => "Copy failed. Select the text and copy it by hand.",
         _ => string.Empty,
     };
@@ -68,6 +74,7 @@
         try
         {
             await JS.InvokeVoidAsync("navigator.clipboard.writeText", _indented);
+            _copiedAgain = _copy == CopyState.Copied && !_copiedAgain;
             _copy = CopyState.Copied;
         }
         catch (JSException)

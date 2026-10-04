@@ -427,6 +427,25 @@ public sealed class SimulatorPageTests
     }
 
     [Fact]
+    public void Copying_again_changes_the_status_so_it_is_announced_again()
+    {
+        var api = LiveAtVersion(3).Answer(HttpMethod.Post, Simulations, HttpStatusCode.OK, ShopConfigResult);
+        using var console = ConsoleRendering.Create(api);
+        console.JSInterop.SetupVoid("navigator.clipboard.writeText", _ => true).SetVoidResult();
+        var page = RenderSimulator(console);
+        Simulate(page);
+        page.WaitForAssertion(() => Assert.Single(page.FindAll("tbody details")));
+
+        page.Find("tbody details button").Click();
+        page.WaitForAssertion(() => Assert.Equal("Copied", page.Find("tbody details button").TextContent.Trim()));
+        var first = page.Find("tbody details [role=status]").TextContent;
+        page.Find("tbody details button").Click();
+        page.WaitForAssertion(() => Assert.NotEqual(first, page.Find("tbody details [role=status]").TextContent));
+
+        Assert.Equal("Value copied.", page.Find("tbody details [role=status]").TextContent.Trim());
+    }
+
+    [Fact]
     public void A_copy_the_browser_refuses_asks_to_copy_by_hand()
     {
         var api = LiveAtVersion(3).Answer(HttpMethod.Post, Simulations, HttpStatusCode.OK, ShopConfigResult);

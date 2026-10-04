@@ -672,6 +672,39 @@ public sealed class FlagEditorPageTests
     }
 
     [Fact]
+    public void The_summary_leaves_once_the_last_marked_field_is_edited()
+    {
+        var api = ShopConfigRead();
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+        page.Find("#on-value").Input(string.Empty);
+        page.Find("form").Submit();
+        page.WaitForElement("[role=alert]");
+
+        page.Find("#on-value").Input("[2]");
+
+        Assert.Empty(page.FindAll("[role=alert]"));
+    }
+
+    [Fact]
+    public void The_summary_stays_while_another_marked_field_is_left()
+    {
+        var api = ShopConfigRead();
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+        page.Find("#on-value").Input(string.Empty);
+        page.Find("#off-value").Input(string.Empty);
+        page.Find("form").Submit();
+        page.WaitForElement("[role=alert]");
+
+        page.Find("#on-value").Input("[2]");
+
+        Assert.Equal("Nothing was saved: fix the fields marked below.", page.Find("[role=alert]").TextContent.Trim());
+    }
+
+    [Fact]
     public void A_raw_half_character_gets_a_neutral_message()
     {
         var api = ShopConfigRead();

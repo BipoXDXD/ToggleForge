@@ -75,7 +75,8 @@
 
     private Task CopyOnValueAsync()
     {
-        // Um texto igual ao anterior não muda a região viva e não seria lido de novo; o espaço fino alterna e não aparece.
+        // Um texto igual ao anterior não muda a região viva e não seria lido de novo; o espaço inseparável no fim alterna
+        // e não aparece, porque a região é sr-only.
         _copyAnnouncement = _copyAnnouncement == CopiedOnce ? CopiedAgain : CopiedOnce;
         return OffValueTextChanged.InvokeAsync(OnValueText);
     }
