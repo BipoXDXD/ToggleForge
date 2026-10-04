@@ -102,8 +102,14 @@ namespace ToggleForge.Sdk
             _stoppingToken = _stopping.Token;
         }
 
+        /// <exception cref="ArgumentNullException"><paramref name="context"/> é nulo, mesmo com o snapshot expirado.</exception>
         public FlagResult<bool> EvaluateBoolean(string flagKey, EvaluationContext context, bool defaultValue)
         {
+            if (context is null)
+            {
+                throw new ArgumentNullException(nameof(context));
+            }
+
             var current = Volatile.Read(ref _current);
             if (current is not null && IsExpired(current))
             {
@@ -127,9 +133,16 @@ namespace ToggleForge.Sdk
         /// volta <paramref name="defaultValue"/> com <see cref="EvaluationReason.InvalidValue"/> e a exceção se perde:
         /// para diagnosticá-la, registre-a dentro do próprio parser.
         /// </param>
-        /// <exception cref="ArgumentNullException"><paramref name="parse"/> é nulo.</exception>
+        /// <exception cref="ArgumentNullException">
+        /// <paramref name="context"/> ou <paramref name="parse"/> é nulo, mesmo com o snapshot expirado.
+        /// </exception>
         public FlagResult<T> EvaluateJson<T>(string flagKey, EvaluationContext context, T defaultValue, Func<string, T> parse)
         {
+            if (context is null)
+            {
+                throw new ArgumentNullException(nameof(context));
+            }
+
             if (parse is null)
             {
                 throw new ArgumentNullException(nameof(parse));

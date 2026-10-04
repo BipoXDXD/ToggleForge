@@ -119,6 +119,15 @@ public sealed class JsonEvaluationTests
         Assert.Throws<ArgumentNullException>(() => client.EvaluateJson<string>("shop-config", _player, Fallback, parse: null!));
     }
 
+    [Fact]
+    public async Task A_missing_context_is_refused_even_after_the_snapshot_expired()
+    {
+        var client = await SyncedAsync(Snapshots.WithShopConfig(version: 3));
+        _time.Advance(new ToggleForgeOptions().MaxCacheAge + TimeSpan.FromTicks(1));
+
+        Assert.Throws<ArgumentNullException>(() => client.EvaluateJson("shop-config", context: null!, Fallback, _parser.Parse));
+    }
+
     private static string HalfRolloutOfShopConfig() =>
         Snapshots.Json(flags: $"[{Snapshots.JsonFlag().Replace("\"rolloutBasisPoints\":10000", "\"rolloutBasisPoints\":5000", StringComparison.Ordinal)}]");
 

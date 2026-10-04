@@ -190,6 +190,16 @@ public sealed class SnapshotCacheTests
     }
 
     [Fact]
+    public async Task A_missing_context_is_refused_even_after_the_snapshot_expired()
+    {
+        await using var client = Client(new StubTransport().Then(SnapshotResponse.Failed(statusCode: null)), StoredAtVersion(3, confirmedAgo: TimeSpan.FromDays(8)));
+
+        await client.StartAsync(TestContext.Current.CancellationToken);
+
+        Assert.Throws<ArgumentNullException>(() => client.EvaluateBoolean("new-shop", context: null!, defaultValue: false));
+    }
+
+    [Fact]
     public async Task An_expired_snapshot_gives_the_game_its_json_default_without_calling_the_parser()
     {
         var store = new MemoryStore { Stored = new StoredSnapshot(Snapshots.WithShopConfig(version: 3), "\"v3\"", _time.GetUtcNow() - TimeSpan.FromDays(8)) };
