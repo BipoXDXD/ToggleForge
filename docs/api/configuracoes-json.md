@@ -22,11 +22,12 @@ Os mesmos de `autoria-e-publicacao.md`. O que muda para cada um:
 
 | Passo | Entradas | Sucesso | Falhas | Operação |
 |---|---|---|---|---|
-| Criar flag JSON | ambiente, chave, tipo `json`, ativa, valor ligado, valor desligado, percentual | flag no rascunho com os valores compactados; seed gerada pelo servidor | as da flag booleana; valor que não é JSON; chave duplicada num objeto; mais de 8 níveis; mais de 4 KiB compactado; número fora do `double`; soma do ambiente acima de 128 KiB | Criar flag |
+| Criar flag JSON | ambiente, chave, tipo `json`, ativa, valor ligado, valor desligado, percentual | flag no rascunho com os valores compactados; seed gerada pelo servidor | as da flag booleana; valor que não é JSON; chave duplicada num objeto; mais de 8 níveis; mais de 4 KiB compactado; número fora do `double`; soma do ambiente acima de 128 KiB; chave já publicada no ambiente com o outro tipo | Criar flag |
 | Alterar flag JSON | flag, revisão vista, campos alterados | flag alterada, nova revisão | as da flag booleana; valor do tipo errado; tentativa de mudar o tipo; os limites acima | Alterar flag |
 
 Sem o tipo, a flag nasce booleana, como hoje. O tipo não muda depois da criação: um build publicado lê a flag
-com uma classe dele.
+com uma classe dele. Pelo mesmo motivo, a chave publicada num ambiente fica com o tipo ali para sempre: apagar a
+flag não libera o tipo, e outro tipo pede uma chave nova.
 
 ### 2. Simular um jogador (Editor, Viewer)
 
@@ -54,13 +55,15 @@ Um SDK antigo que encontra um tipo que não conhece ignora aquela flag e segue c
 4. **O teto do ambiente é conflito de estado.** Passar dos 128 KiB é 409 `json-budget-reached`, um tipo
    próprio, separado do `limit-reached` das 200 flags, para o console explicar o erro sem adivinhar. Um valor
    acima de 4 KiB é erro de entrada, 400 no campo.
+5. **O tipo travado também é conflito de estado.** Recriar ou republicar uma chave com o outro tipo é 409
+   `flag-type-locked`, e o `detail` diz a chave e o tipo já publicado, para o console sugerir uma chave nova.
 
 ## Ameaças (STRIDE)
 
 | # | Ameaça | Mitigação | Teste que prova |
 |---|---|---|---|
 | T4 | O cliente troca o tipo de uma flag publicada e quebra builds antigos (mass assignment) | `type` só na criação; o DTO de alteração recusa o campo | `Changing_the_type_of_a_flag_is_rejected_and_nothing_is_saved` |
-| T4r | Residual de T4: a chave publicada é apagada e recriada com o outro tipo, ou um rollback volta à versão com o outro tipo | **Aceito** (ADR 0011): o build antigo recebe `TypeMismatch` e fica no próprio default, nunca com um valor do tipo errado | `Recreating_a_published_key_with_another_type_is_accepted` |
+| T4r | Residual de T4: a chave publicada é apagada e recriada com o outro tipo, ou um rollback volta à versão com o outro tipo | A chave publicada mantém o tipo no ambiente (ADR 0011): FK de `publication_flags` para `published_flag_types` (ambiente, chave, tipo), gravada na transação da publicação com o ambiente travado; 409 `flag-type-locked` na criação, no publish e no rollback, com 404 antes para outra organização | `Recreating_a_published_key_with_another_type_gets_409_and_nothing_is_saved`, `Publishing_a_draft_that_holds_a_key_with_another_type_gets_409_and_publishes_nothing`, `Racing_a_publication_against_recreating_the_key_with_another_type_never_publishes_both_types`, `The_database_refuses_a_published_flag_with_another_type_than_its_key_was_published_with`, `A_member_of_another_organization_gets_404_not_the_type_a_key_was_published_with` e, no domínio, `Rolling_back_to_a_key_with_another_type_than_published_fails_and_keeps_the_draft` |
 | T5 | O console e o jogo leem valores diferentes do mesmo JSON | Recusar chave duplicada e número fora do `double`; compactar no servidor; o SDK recusa o snapshot com chave repetida ou valor que um parser comum não leria. **Risco residual aceito:** a fração passa pelo `double` e chega ao jogo como o `double` mais próximo (mais de 17 dígitos arredondam) | `A_duplicated_key_is_rejected_at_any_depth`, `A_number_out_of_double_range_is_rejected`, `A_key_repeated_inside_a_json_value_refuses_the_snapshot` e `A_json_value_a_standard_parser_would_not_read_refuses_the_snapshot` |
 | T6 | Um valor JSON injeta script no console (XSS) | Blazor codifica a saída; nada de `MarkupString` com valor do usuário | `A_json_value_with_markup_is_shown_as_text` |
 | I7 | O estúdio põe um segredo numa configuração, e ele chega a todo jogador | **Aceito**: a credencial sai do build (`ToggleForge.md`, seção 11). O editor avisa que o valor é público para quem tem o jogo | `The_json_editor_warns_that_values_reach_every_player` |
