@@ -21,14 +21,18 @@ dotnet tool restore && dotnet ef migrations add <Nome> --context <Módulo>DbCont
   --project src/ToggleForge.Infrastructure --startup-project src/ToggleForge.Api --output-dir <Módulo>/Migrations
 ```
 
-Os testes da API sobem um Postgres com Testcontainers: o Docker precisa estar rodando. A connection string
-local vai em User Secrets (`dotnet user-secrets set ConnectionStrings:ToggleForge "..." --project
-src/ToggleForge.Api`), nunca no repositório.
+Os testes da API sobem um Postgres com Testcontainers: o Docker precisa estar rodando. O build do console
+roda `npm ci` e o Tailwind, então o Node também precisa estar instalado. A connection string local vai em
+User Secrets (`dotnet user-secrets set ConnectionStrings:ToggleForge "..." --project src/ToggleForge.Api`),
+nunca no repositório.
 
 ## Layout
 
 - `src/ToggleForge.Evaluation`: núcleo de avaliação. netstandard2.1 com C# 9 (compatível com Unity),
   sem `PackageReference` nem `ProjectReference` (ADR 0001).
+- `src/ToggleForge.Console`: o console do Marco 3, Blazor WebAssembly servido pela API na mesma origem
+  (ADR 0009). Não referencia nenhum projeto de `src/`: fala com a API só por HTTP, com records próprios.
+  O CSS sai do Tailwind via npm no build (ADR 0003); `wwwroot/css/` é gerado.
 - `src/ToggleForge.Domain`, `Application`, `Infrastructure` e `Api`: a API do Marco 2, em camadas, com os
   módulos Access, Authoring e Delivery como namespaces; cada módulo tem o próprio `DbContext` e schema
   (ADR 0005). Migrations em `Infrastructure/<Módulo>/Migrations`, geradas e nunca editadas à mão.
@@ -37,6 +41,9 @@ src/ToggleForge.Api`), nunca no repositório.
   - `Api.Tests`: integração ponta a ponta com Postgres real, cobrindo `Application`, `Infrastructure` e
     `Api`. Toda resposta é conferida contra `docs/api/openapi.yaml`, e os testes de arquitetura guardam as
     fronteiras entre módulos. Cada teste cria as próprias contas e organizações, sem dados compartilhados.
+    As jornadas do console (`ConsoleJourneyTests`) rodam num Chromium headless pelo Playwright, contra a
+    API num Kestrel em HTTPS (`BrowserHost`); o Chromium é baixado na primeira execução.
+  - `Console.Tests`: componentes e cliente da API do console com bUnit, contra uma API em stub.
 - `samples/`: demonstrações executáveis.
 - `tools/rollout-vectors`: oráculo Python do algoritmo de rollout (ADR 0002).
 - `docs/api`: canvas de capacidades, ameaças e o contrato `openapi.yaml` (ADR 0004).

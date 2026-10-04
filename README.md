@@ -15,7 +15,7 @@ O plano de produto está em [`ToggleForge.md`](ToggleForge.md), e as decisões d
 |---|---|---|
 | 1 — Núcleo | Avaliação booleana, contexto, rollout percentual e fallback | ✅ Concluído |
 | 2 — API persistente | Rascunho, publicação, rollback, autenticação e isolamento | ✅ Concluído |
-| 3 — Console | Editor, simulador, publicação e histórico (Blazor + Tailwind) | Planejado |
+| 3 — Console | Editor, simulador, publicação e histórico (Blazor + Tailwind) | Em andamento |
 | 4 — SDK e configurações | Sincronização, cache, JSON e app demonstrativo | Planejado |
 | 5 — Unity e segmentação | Adaptador, jogo simples e regras por atributos | Planejado |
 
@@ -79,10 +79,18 @@ dotnet run --project src/ToggleForge.Api -- --purge-idempotency-records   # job 
 dotnet run --project src/ToggleForge.Api
 ```
 
+## Console (Marco 3)
+
+Blazor WebAssembly com Tailwind, servido pela própria API na mesma origem (ADR 0009): o console é só mais
+um cliente de `/api/v1`, com o cookie de sessão e o token antiforgery. Com a API rodando, ele abre na raiz
+(`https://localhost:<porta>/`). O tracer bullet cobre entrar, listar e criar projetos e adicionar flags ao
+rascunho de um ambiente.
+
 ## Desenvolvimento
 
-Requisitos: .NET SDK 10.0.400, Docker (os testes da API sobem um Postgres com Testcontainers) e
-Python 3.9+ (só para o oráculo de vetores).
+Requisitos: .NET SDK 10.0.400, Docker (os testes da API sobem um Postgres com Testcontainers), Node 24
+(o build do console gera o CSS com o Tailwind) e Python 3.9+ (só para o oráculo de vetores). As jornadas do
+console baixam um Chromium do Playwright na primeira execução.
 
 ```bash
 dotnet build ToggleForge.slnx -c Release
@@ -97,10 +105,12 @@ python3 tools/rollout-vectors/generate.py --check
 | `src/ToggleForge.Domain` | Regras de Access, Authoring e Delivery, sem framework |
 | `src/ToggleForge.Application` | Casos de uso e portas de persistência |
 | `src/ToggleForge.Infrastructure` | EF Core e Npgsql, um `DbContext` e um schema por módulo, Identity |
-| `src/ToggleForge.Api` | Minimal APIs, autenticação e Problem Details |
+| `src/ToggleForge.Api` | Minimal APIs, autenticação e Problem Details; serve o console |
+| `src/ToggleForge.Console` | Console Blazor WebAssembly com Tailwind |
 | `tests/ToggleForge.Evaluation.Tests` | xUnit v3 no Microsoft.Testing.Platform, com vetores de referência |
 | `tests/ToggleForge.Domain.Tests` | Regras de negócio, sem banco |
-| `tests/ToggleForge.Api.Tests` | Integração com Postgres real, contrato, segurança e arquitetura |
+| `tests/ToggleForge.Api.Tests` | Integração com Postgres real, contrato, segurança, arquitetura e jornadas do console no navegador |
+| `tests/ToggleForge.Console.Tests` | Componentes e cliente do console com bUnit |
 | `samples/ToggleForge.RolloutDemo` | Simulação de rollout em etapas |
 | `tools/rollout-vectors` | Implementação de referência do algoritmo em Python |
 | `docs/` | ADRs, especificação do rollout, contrato e ameaças da API |
