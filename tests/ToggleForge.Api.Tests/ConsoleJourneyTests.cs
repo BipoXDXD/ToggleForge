@@ -269,7 +269,7 @@ public sealed class ConsoleJourneyTests(ApiFactory api, Browser browser) : IClas
         await page.Locator("#flag-key").FillAsync("new-shop");
         await page.GetByRole(AriaRole.Button, new() { Name = "Add to draft" }).ClickAsync();
 
-        await Expect(page.GetByRole(AriaRole.Alert)).ToBeVisibleAsync();
+        await Expect(page.GetByRole(AriaRole.Alert)).ToContainTextAsync("The draft already has a flag with this key.");
         await Expect(page.GetByRole(AriaRole.Button, new() { Name = "Add to draft" })).ToBeFocusedAsync();
     }
 
@@ -286,7 +286,8 @@ public sealed class ConsoleJourneyTests(ApiFactory api, Browser browser) : IClas
         await page.Locator("#flag-key").FillAsync("Shop Config");
         await page.GetByRole(AriaRole.Button, new() { Name = "Add to draft" }).ClickAsync();
 
-        await Expect(page.Locator("#flag-key-error")).ToBeVisibleAsync();
+        await Expect(page.Locator("#flag-key-error")).ToContainTextAsync(
+            "Keys have 1 to 64 characters from [a-z0-9._-] and start with a letter or digit.");
         await Expect(page.Locator("#flag-key")).ToBeFocusedAsync();
     }
 
