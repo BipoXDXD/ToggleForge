@@ -13,7 +13,6 @@ public sealed class ConsoleContrastTests(ApiFactory api, Browser browser) : ICla
 {
     private const double ControlBorderMinimum = 3.0;
     private const double TextMinimum = 4.5;
-    private const int MaxTabStops = 60;
 
     private BrowserHost? _host;
 
@@ -38,7 +37,7 @@ public sealed class ConsoleContrastTests(ApiFactory api, Browser browser) : ICla
 
         await OpenAsync(page, owner, consolePage);
         var borders = await ContrastProbe.FieldBordersAsync(page);
-        var stops = await TabThroughAsync(page);
+        var stops = await ContrastProbe.TabStopsAsync(page);
 
         Assert.NotEmpty(borders);
         Assert.All(borders, field => Assert.True(field.Ratio >= ControlBorderMinimum, $"{field.Control}: {field.Ratio:F2}:1"));
@@ -233,37 +232,5 @@ public sealed class ConsoleContrastTests(ApiFactory api, Browser browser) : ICla
             default:
                 throw new ArgumentOutOfRangeException(nameof(consolePage), consolePage, "No such console page in this test.");
         }
-    }
-
-    /// <summary>Tab a partir do começo da página até o foco sair dela ou voltar a um elemento já visto.</summary>
-    /// <remarks>
-    /// Um <c>blur</c> não basta: o Chromium continua o Tab de onde o foco estava, e as paradas antes dele (a chave, no
-    /// formulário com JSON escolhido) ficariam de fora. O ponto de partida é um elemento fora da ordem do Tab
-    /// (<c>tabindex=-1</c>) no começo do <c>body</c>.
-    /// </remarks>
-    private static async Task<IReadOnlyList<FocusOutline>> TabThroughAsync(IPage page)
-    {
-        await page.EvaluateAsync("""
-            () => {
-              const start = document.createElement('span');
-              start.tabIndex = -1;
-              document.body.prepend(start);
-              start.focus();
-            }
-            """);
-        var stops = new List<FocusOutline>();
-        for (var tab = 0; tab < MaxTabStops; tab++)
-        {
-            await page.Keyboard.PressAsync("Tab");
-            if (await ContrastProbe.ActiveOutlineAsync(page) is not { Seen: false } stop)
-            {
-                return stops;
-            }
-
-            stops.Add(stop);
-        }
-
-        throw new InvalidOperationException(
-            $"Tab did not leave the page after {MaxTabStops} stops: {string.Join(", ", stops.Select(stop => stop.Element))}");
     }
 }

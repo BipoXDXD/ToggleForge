@@ -14,6 +14,8 @@ namespace ToggleForge.Api.Tests.Support;
 /// </remarks>
 public static class ContrastProbe
 {
+    private const int MaxTabStops = 60;
+
     private const string Library = """
         const probe = (() => {
           const canvas = document.createElement('canvas');
@@ -95,13 +97,46 @@ public static class ContrastProbe
     public static Task<double> TextRatioAsync(ILocator element) =>
         element.EvaluateAsync<double>($$"""element => { {{Library}} return probe.textRatio(element); }""");
 
+    /// <summary>Tab a partir do começo da página até o foco sair dela ou voltar a um elemento já visto.</summary>
+    /// <returns>O contorno de foco de cada parada, na ordem do Tab.</returns>
+    /// <remarks>
+    /// Um <c>blur</c> não basta: o Chromium continua o Tab de onde o foco estava, e as paradas antes dele (a chave, no
+    /// formulário com JSON escolhido) ficariam de fora. O ponto de partida é um elemento fora da ordem do Tab
+    /// (<c>tabindex=-1</c>) no começo do <c>body</c>.
+    /// </remarks>
+    public static async Task<IReadOnlyList<FocusOutline>> TabStopsAsync(IPage page)
+    {
+        await page.EvaluateAsync("""
+            () => {
+              const start = document.createElement('span');
+              start.tabIndex = -1;
+              document.body.prepend(start);
+              start.focus();
+            }
+            """);
+        var stops = new List<FocusOutline>();
+        for (var tab = 0; tab < MaxTabStops; tab++)
+        {
+            await page.Keyboard.PressAsync("Tab");
+            if (await ActiveOutlineAsync(page) is not { Seen: false } stop)
+            {
+                return stops;
+            }
+
+            stops.Add(stop);
+        }
+
+        throw new InvalidOperationException(
+            $"Tab did not leave the page after {MaxTabStops} stops: {string.Join(", ", stops.Select(stop => stop.Element))}");
+    }
+
     /// <summary>
     /// O contorno de foco do elemento ativo. Num rádio que esconde o próprio contorno, o do cartão (<c>label</c>) que
     /// o contém, que mostra o foco inteiro (os tipos do "New flag"); os outros rádios mostram o contorno global.
     /// </summary>
     /// <returns>Nulo quando o foco está no <c>body</c> (o Tab saiu da página).</returns>
     /// <remarks>Guarda na página os elementos já vistos, para dizer quando o Tab deu a volta.</remarks>
-    public static async Task<FocusOutline?> ActiveOutlineAsync(IPage page) =>
+    private static async Task<FocusOutline?> ActiveOutlineAsync(IPage page) =>
         JsonSerializer.Deserialize<FocusOutline?>(await page.EvaluateAsync<string>($$"""
             () => {
               {{Library}}
