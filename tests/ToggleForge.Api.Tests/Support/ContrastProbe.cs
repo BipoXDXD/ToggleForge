@@ -104,8 +104,12 @@ public static class ContrastProbe
     public static Task<double> TextRatioAsync(ILocator element) =>
         element.EvaluateAsync<double>($$"""element => { {{Library}} return probe.textRatio(element); }""");
 
-    /// <summary>Tab a partir do começo da página até o foco sair dela ou voltar a um elemento já visto.</summary>
+    /// <summary>Tab a partir do começo da página até o foco sair dela.</summary>
     /// <returns>O contorno de foco de cada parada, na ordem do Tab.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// O foco voltou a um elemento já visto (uma armadilha de teclado, WCAG 2.1.2) ou não saiu da página: as paradas
+    /// depois dele ficariam sem medir.
+    /// </exception>
     /// <remarks>
     /// Um <c>blur</c> não basta: o Chromium continua o Tab de onde o foco estava, e as paradas antes dele (a chave, no
     /// formulário com JSON escolhido) ficariam de fora. O ponto de partida é um elemento fora da ordem do Tab
@@ -125,9 +129,15 @@ public static class ContrastProbe
         for (var tab = 0; tab < MaxTabStops; tab++)
         {
             await page.Keyboard.PressAsync("Tab");
-            if (await ActiveOutlineAsync(page) is not { Seen: false } stop)
+            if (await ActiveOutlineAsync(page) is not { } stop)
             {
                 return stops;
+            }
+
+            if (stop.Seen)
+            {
+                throw new InvalidOperationException(
+                    $"Tab came back to {stop.Element} instead of leaving the page after: {string.Join(", ", stops.Select(seen => seen.Element))}");
             }
 
             stops.Add(stop);
@@ -142,7 +152,7 @@ public static class ContrastProbe
     /// o contém, que mostra o foco inteiro (os tipos do "New flag"); os outros rádios mostram o contorno global.
     /// </summary>
     /// <returns>Nulo quando o foco está no <c>body</c> (o Tab saiu da página).</returns>
-    /// <remarks>Guarda na página os elementos já vistos, para dizer quando o Tab deu a volta.</remarks>
+    /// <remarks>Guarda na página os elementos já vistos, para dizer quando o Tab volta a um deles.</remarks>
     private static async Task<FocusOutline?> ActiveOutlineAsync(IPage page) =>
         JsonSerializer.Deserialize<FocusOutline?>(await page.EvaluateAsync<string>($$"""
             () => {
@@ -171,5 +181,5 @@ public sealed record ControlContrast(string Control, double Ratio);
 
 /// <param name="Element">O elemento focado, para a mensagem de falha.</param>
 /// <param name="Width">Em pixels CSS.</param>
-/// <param name="Seen">O elemento já tinha sido focado nesta página: o Tab deu a volta.</param>
+/// <param name="Seen">O elemento já tinha sido focado nesta página: o Tab não saiu do lugar ou deu a volta.</param>
 public sealed record FocusOutline(string Element, string Style, double Width, bool Seen);

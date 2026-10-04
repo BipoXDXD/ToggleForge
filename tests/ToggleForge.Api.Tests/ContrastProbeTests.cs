@@ -68,6 +68,36 @@ public sealed class ContrastProbeTests(Browser browser) : IClassFixture<Browser>
         Assert.Equal(1.0, ratio, 2);
     }
 
+    [Fact]
+    public async Task The_tab_walk_stops_at_every_field_and_ends_when_the_focus_leaves_the_page()
+    {
+        await using var context = await browser.NewContextAsync(_nowhere);
+        var page = await OpenAsync(context, """<body><input id="first"><input id="second"></body>""");
+
+        var stops = await ContrastProbe.TabStopsAsync(page);
+
+        Assert.Equal(["input#first", "input#second"], stops.Select(stop => stop.Element));
+    }
+
+    // Um campo que segura o Tab deixaria o resto da página sem medir; a sonda acusa em vez de aprovar o que viu.
+    [Fact]
+    public async Task A_field_that_keeps_the_tab_fails_the_walk()
+    {
+        await using var context = await browser.NewContextAsync(_nowhere);
+        var page = await OpenAsync(context, """
+            <body>
+              <input id="first"><input id="trap"><input id="never-reached">
+              <script>
+                document.getElementById('trap').addEventListener('keydown', e => { if (e.key === 'Tab') e.preventDefault(); });
+              </script>
+            </body>
+            """);
+
+        var walk = await Assert.ThrowsAsync<InvalidOperationException>(() => ContrastProbe.TabStopsAsync(page));
+
+        Assert.Contains("input#trap", walk.Message, StringComparison.Ordinal);
+    }
+
     private static async Task<IPage> OpenAsync(IBrowserContext context, string html)
     {
         var page = await context.NewPageAsync();
