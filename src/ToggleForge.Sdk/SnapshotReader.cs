@@ -8,12 +8,15 @@ namespace ToggleForge.Sdk
 {
     /// <summary>
     /// Lê o JSON de <c>GET /sdk/v1/snapshot</c> à mão, sem desserialização por reflection, que o stripping do
-    /// IL2CPP quebraria (ADR 0010). Campo desconhecido é ignorado, porque builds antigos do jogo continuam no ar
-    /// quando o contrato cresce; qualquer campo usado que esteja errado recusa o snapshot inteiro.
+    /// IL2CPP quebraria (ADR 0010). Campo desconhecido é ignorado, e flag de um tipo que este SDK não conhece
+    /// também (ADR 0011), porque builds antigos do jogo continuam no ar quando o contrato cresce; qualquer campo
+    /// usado que esteja errado recusa o snapshot inteiro.
     /// </summary>
     internal static class SnapshotReader
     {
         internal const string Algorithm = "toggleforge.rollout.v1";
+
+        private const string BooleanType = "boolean";
 
         // Folgado de propósito: o snapshot de hoje tem três níveis, mas as configurações JSON vão aninhar mais, e um
         // SDK já publicado num jogo não se corrige. O teto só barra JSON patológico (ADR 0010).
@@ -58,28 +61,50 @@ namespace ToggleForge.Sdk
             return flags is null ? null : new ConfigurationSnapshot(projectKey, environmentKey, version, flags);
         }
 
-        /// <returns>Nulo se alguma flag for inválida ou se uma chave se repetir.</returns>
+        /// <returns>
+        /// Nulo se alguma flag for inválida ou se uma chave se repetir, mesmo numa flag de tipo que este SDK não
+        /// conhece: a chave é comum a todos os tipos.
+        /// </returns>
         private static List<BooleanFlag>? ReadFlags(JArray items)
         {
             var flags = new List<BooleanFlag>(items.Count);
             var keys = new HashSet<FlagKey>();
             foreach (var item in items)
             {
-                if (item is not JObject entry || ReadFlag(entry) is not { } flag || !keys.Add(flag.Key))
+                if (item is not JObject entry || !FlagKey.TryParse(Text(entry, "key"), out var key) || !keys.Add(key))
                 {
                     return null;
                 }
 
-                flags.Add(flag);
+                switch (KindOf(entry))
+                {
+                    case FlagKind.Boolean when ReadBooleanFlag(key, entry) is { } flag:
+                        flags.Add(flag);
+                        break;
+                    case FlagKind.Newer:
+                        // Publicada depois deste SDK: só ela fica de fora, e o jogo recebe o próprio valor padrão
+                        // para ela.
+                        break;
+                    default:
+                        return null;
+                }
             }
 
             return flags;
         }
 
-        private static BooleanFlag? ReadFlag(JObject flag)
+        /// <remarks>Sem <c>type</c> a flag é booleana: os snapshots anteriores à ADR 0011 não o tinham.</remarks>
+        private static FlagKind KindOf(JObject flag) => flag["type"] switch
         {
-            if (!FlagKey.TryParse(Text(flag, "key"), out var key)
-                || Boolean(flag, "enabled") is not { } enabled
+            null => FlagKind.Boolean,
+            JValue { Type: JTokenType.String, Value: BooleanType } => FlagKind.Boolean,
+            JValue { Type: JTokenType.String } => FlagKind.Newer,
+            _ => FlagKind.Malformed,
+        };
+
+        private static BooleanFlag? ReadBooleanFlag(FlagKey key, JObject flag)
+        {
+            if (Boolean(flag, "enabled") is not { } enabled
                 || Boolean(flag, "onValue") is not { } onValue
                 || Boolean(flag, "offValue") is not { } offValue
                 || Integer(flag, "rolloutBasisPoints") is not { } basisPoints
@@ -103,5 +128,15 @@ namespace ToggleForge.Sdk
         /// <remarks>Inteiro maior que <see cref="long"/> chega como BigInteger e é recusado.</remarks>
         private static long? Integer(JObject source, string name) =>
             source[name] is JValue { Type: JTokenType.Integer, Value: long value } ? value : null;
+
+        private enum FlagKind
+        {
+            Boolean,
+
+            /// <summary>Um tipo que este SDK não conhece, publicado depois dele.</summary>
+            Newer,
+
+            Malformed,
+        }
     }
 }

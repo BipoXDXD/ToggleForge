@@ -96,6 +96,8 @@ O que já existe e pesa na escolha:
 - **O snapshot inteiro é recusado** se o `algorithm` for desconhecido, se faltar ou estiver errado um campo
   que o SDK usa, ou se uma flag for inválida. Nesse caso o SDK mantém o snapshot anterior e registra a falha.
   Nada de snapshot pela metade. Campo que o SDK não usa, como `publishedAt`, não é conferido.
+  Uma flag de um tipo que este SDK não conhece não é inválida: ela é ignorada, e o resto do snapshot vale
+  (ADR 0011).
 - **Profundidade máxima de 64 níveis no JSON.** O snapshot de hoje tem três, mas as configurações JSON vão
   aninhar mais, e um SDK publicado num jogo não se corrige depois. A API deve impor às configurações um teto
   bem abaixo desse.
