@@ -12,6 +12,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/ToggleForge.Api.Tests/ToggleForge.Api.Tests.csproj" />
+    <Project Path="tests/ToggleForge.Console.Tests/ToggleForge.Console.Tests.csproj" />
     <Project Path="tests/ToggleForge.Domain.Tests/ToggleForge.Domain.Tests.csproj" />
     <Project Path="tests/ToggleForge.Evaluation.Tests/ToggleForge.Evaluation.Tests.csproj" />
   </Folder>

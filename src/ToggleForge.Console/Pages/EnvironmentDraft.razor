@@ -1,0 +1,168 @@
+@page "/organizations/{OrganizationId:guid}/projects/{ProjectKey}/environments/{EnvironmentKey}"
+@inherits ConsolePage
+@inject ConsoleApi Api
+@inject SessionState Session
+
+<PageTitle>@ProjectKey · @EnvironmentKey · ToggleForge</PageTitle>
+
+<nav class="text-sm text-slate-500" aria-label="Breadcrumb">
+    <a href="organizations/@OrganizationId/projects" class="hover:text-slate-700 hover:underline">Projects</a>
+    <span aria-hidden="true"> / </span>
+    <span class="text-slate-700">@(_project?.Name ?? ProjectKey)</span>
+</nav>
+
+@if (_loadProblem is not null)
+{
+    <div class="mt-6"><ProblemMessage Problem="_loadProblem" /></div>
+}
+else if (_project is null || _draft is null)
+{
+    <p class="mt-6 text-sm text-slate-500">Loading the draft…</p>
+}
+else
+{
+    <h1 class="mt-2 text-2xl font-semibold tracking-tight">@_project.Name</h1>
+
+    <div class="mt-6 flex gap-2 border-b border-slate-200" role="tablist" aria-label="Environments">
+        @foreach (var environment in _project.Environments)
+        {
+            var current = environment.Key == EnvironmentKey;
+            <a href="@EnvironmentPath(environment.Key)" role="tab" aria-selected="@(current ? "true" : "false")"
+               class="@(current ? "border-indigo-600 text-indigo-700" : "border-transparent text-slate-500 hover:text-slate-700") -mb-px border-b-2 px-3 py-2 text-sm font-medium">
+                @environment.Name
+            </a>
+        }
+    </div>
+
+    <section class="mt-6" aria-labelledby="draft-flags">
+        <h2 id="draft-flags" class="text-lg font-semibold">Draft flags</h2>
+        @if (_draft.Flags.Count == 0)
+        {
+            <p class="mt-3 text-sm text-slate-600">No flags in this draft yet.</p>
+        }
+        else
+        {
+            <div class="mt-3 overflow-hidden rounded-lg border border-slate-200 bg-white">
+            <table class="w-full text-left text-sm">
+                <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                    <tr>
+                        <th scope="col" class="px-4 py-2">Flag</th>
+                        <th scope="col" class="px-4 py-2">State</th>
+                        <th scope="col" class="px-4 py-2">Rollout</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200">
+                    @foreach (var flag in _draft.Flags)
+                    {
+                        <tr>
+                            <td class="px-4 py-2 font-mono">@flag.Key</td>
+                            <td class="px-4 py-2">@(flag.Enabled ? "Enabled" : "Disabled")</td>
+                            <td class="px-4 py-2">@RolloutShare.Format(flag.RolloutBasisPoints)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            </div>
+        }
+    </section>
+
+    @if (Session.MembershipIn(OrganizationId) is { CanEditDrafts: true })
+    {
+        <section class="mt-10 max-w-lg" aria-labelledby="new-flag">
+            <h2 id="new-flag" class="text-lg font-semibold">New flag</h2>
+            <form class="mt-4 space-y-4" @onsubmit="CreateFlagAsync" @onsubmit:preventDefault>
+                <label class="block">
+                    <span class="text-sm font-medium text-slate-700">Key</span>
+                    <input required maxlength="64" @bind="_flagKey"
+                           class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm focus:border-indigo-500 focus:outline-none" />
+                </label>
+                <label class="block">
+                    <span class="text-sm font-medium text-slate-700">Rollout (%)</span>
+                    <input type="number" required min="0" max="100" step="0.01" @bind="_rolloutPercent"
+                           class="mt-1 block w-40 rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none" />
+                </label>
+                <label class="flex items-center gap-2">
+                    <input type="checkbox" @bind="_enabled" class="h-4 w-4 rounded border-slate-300" />
+                    <span class="text-sm text-slate-700">Enabled</span>
+                </label>
+                <ProblemMessage Problem="_createProblem" />
+                <button type="submit" disabled="@_submitting"
+                        class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60">
+                    Add to draft
+                </button>
+            </form>
+        </section>
+    }
+}
+
+@code {
+    private static readonly Problem _invalidRollout = new(
+        "/problems/invalid-rollout", "Invalid rollout", 400, "Enter a rollout between 0 and 100, with at most two decimals.");
+
+    private Project? _project;
+    private Draft? _draft;
+    private Problem? _loadProblem;
+    private Problem? _createProblem;
+    private string _flagKey = string.Empty;
+    private decimal _rolloutPercent;
+    private bool _enabled = true;
+    private bool _submitting;
+
+    [Parameter]
+    public Guid OrganizationId { get; set; }
+
+    [Parameter]
+    public string ProjectKey { get; set; } = string.Empty;
+
+    [Parameter]
+    public string EnvironmentKey { get; set; } = string.Empty;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _project = null;
+        _draft = null;
+        _loadProblem = null;
+        var project = Api.GetProjectAsync(OrganizationId, ProjectKey, Leaving);
+        var draft = Api.GetDraftAsync(OrganizationId, ProjectKey, EnvironmentKey, Leaving);
+        var (loadedProject, loadedDraft) = (await project, await draft);
+        if (!loadedProject.Succeeded)
+        {
+            _loadProblem = loadedProject.Problem;
+        }
+        else if (!loadedDraft.Succeeded)
+        {
+            _loadProblem = loadedDraft.Problem;
+        }
+        else
+        {
+            (_project, _draft) = (loadedProject.Value, loadedDraft.Value);
+        }
+    }
+
+    private async Task CreateFlagAsync()
+    {
+        _createProblem = null;
+        if (!RolloutShare.TryToBasisPoints(_rolloutPercent, out var basisPoints))
+        {
+            _createProblem = _invalidRollout;
+            return;
+        }
+
+        _submitting = true;
+        // O console do tracer bullet só cria flags booleanas comuns: incluído recebe true, excluído recebe false.
+        var flag = await Api.CreateFlagAsync(
+            OrganizationId, ProjectKey, EnvironmentKey, new FlagCreation(_flagKey, _enabled, OnValue: true, OffValue: false, basisPoints), Leaving);
+        _submitting = false;
+        if (!flag.Succeeded)
+        {
+            _createProblem = flag.Problem;
+            return;
+        }
+
+        _draft = _draft! with { Flags = [.. _draft.Flags, flag.Value] };
+        (_flagKey, _rolloutPercent, _enabled) = (string.Empty, 0, true);
+    }
+
+    private string EnvironmentPath(string environmentKey) =>
+        $"organizations/{OrganizationId}/projects/{Uri.EscapeDataString(ProjectKey)}/environments/{Uri.EscapeDataString(environmentKey)}";
+}

@@ -1,0 +1,22 @@
+@page "/"
+@inject SessionState Session
+@inject NavigationManager Navigation
+
+<PageTitle>ToggleForge</PageTitle>
+
+@if (Session.Current is { Organizations.Count: 0 })
+{
+    <h1 class="text-xl font-semibold">No organization yet</h1>
+    <p class="mt-2 text-sm text-slate-600">Ask an owner of your studio to add you to its organization.</p>
+}
+
+@code {
+    protected override void OnInitialized()
+    {
+        // O MainLayout só desenha a página depois de a sessão existir.
+        if (Session.Current?.Organizations is [var first, ..])
+        {
+            Navigation.NavigateTo($"organizations/{first.OrganizationId}/projects", replace: true);
+        }
+    }
+}

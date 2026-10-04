@@ -1,0 +1,112 @@
+@page "/organizations/{OrganizationId:guid}/projects"
+@inherits ConsolePage
+@inject ConsoleApi Api
+@inject SessionState Session
+@inject NavigationManager Navigation
+
+<PageTitle>Projects · ToggleForge</PageTitle>
+
+<h1 class="text-2xl font-semibold tracking-tight">Projects</h1>
+
+@if (_loadProblem is not null)
+{
+    <div class="mt-6"><ProblemMessage Problem="_loadProblem" /></div>
+}
+else if (_projects is null)
+{
+    <p class="mt-6 text-sm text-slate-500">Loading projects…</p>
+}
+else if (_projects.Count == 0)
+{
+    <p class="mt-6 text-sm text-slate-600">No projects yet.</p>
+}
+else
+{
+    <ul class="mt-6 divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white" aria-label="Projects">
+        @foreach (var project in _projects)
+        {
+            <li>
+                <a href="@EnvironmentPath(project, project.Environments.FirstOrDefault())" class="flex items-center justify-between px-5 py-4 hover:bg-slate-50">
+                    <span>
+                        <span class="block font-medium text-slate-900">@project.Name</span>
+                        <span class="block font-mono text-xs text-slate-500">@project.Key</span>
+                    </span>
+                    <span class="text-xs text-slate-500">@project.Environments.Count environments</span>
+                </a>
+            </li>
+        }
+    </ul>
+}
+
+@if (Session.MembershipIn(OrganizationId) is { CanCreateProjects: true })
+{
+    <section class="mt-10 max-w-lg" aria-labelledby="new-project">
+        <h2 id="new-project" class="text-lg font-semibold">New project</h2>
+        <form class="mt-4 space-y-4" @onsubmit="CreateProjectAsync" @onsubmit:preventDefault>
+            <label class="block">
+                <span class="text-sm font-medium text-slate-700">Name</span>
+                <input required maxlength="100" @bind="_name"
+                       class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none" />
+            </label>
+            <label class="block">
+                <span class="text-sm font-medium text-slate-700">Key</span>
+                <input required maxlength="64" @bind="_key" aria-describedby="project-key-hint"
+                       class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm focus:border-indigo-500 focus:outline-none" />
+                <span id="project-key-hint" class="mt-1 block text-xs text-slate-500">Lowercase letters, digits, dots, dashes and underscores. It never changes.</span>
+            </label>
+            <ProblemMessage Problem="_createProblem" />
+            <button type="submit" disabled="@_submitting"
+                    class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60">
+                Create project
+            </button>
+        </form>
+    </section>
+}
+
+@code {
+    private IReadOnlyList<Project>? _projects;
+    private Problem? _loadProblem;
+    private Problem? _createProblem;
+    private string _name = string.Empty;
+    private string _key = string.Empty;
+    private bool _submitting;
+
+    [Parameter]
+    public Guid OrganizationId { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _projects = null;
+        _loadProblem = null;
+        var projects = await Api.ListProjectsAsync(OrganizationId, Leaving);
+        if (projects.Succeeded)
+        {
+            _projects = projects.Value;
+        }
+        else
+        {
+            _loadProblem = projects.Problem;
+        }
+    }
+
+    private async Task CreateProjectAsync()
+    {
+        _submitting = true;
+        _createProblem = null;
+        var project = await Api.CreateProjectAsync(OrganizationId, new ProjectCreation(_key, _name), Leaving);
+        _submitting = false;
+        if (project.Succeeded)
+        {
+            Navigation.NavigateTo(EnvironmentPath(project.Value, project.Value.Environments.FirstOrDefault()));
+        }
+        else
+        {
+            _createProblem = project.Problem;
+        }
+    }
+
+    private string EnvironmentPath(Project project, ProjectEnvironment? environment) =>
+        environment is null
+            ? $"organizations/{OrganizationId}/projects"
+            : $"organizations/{OrganizationId}/projects/{Uri.EscapeDataString(project.Key)}/environments/{Uri.EscapeDataString(environment.Key)}";
+}
