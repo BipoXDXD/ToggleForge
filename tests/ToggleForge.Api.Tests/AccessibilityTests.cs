@@ -31,6 +31,9 @@ public sealed class AccessibilityTests(ApiFactory api, Browser browser) : IClass
         "scrollable-region-focusable",
     ];
 
+    private const int PhoneWidth = 320;
+    private const int PhoneHeight = 800;
+
     private BrowserHost? _host;
 
     private BrowserHost Host => _host ?? throw new InvalidOperationException("The host has not started.");
@@ -86,6 +89,23 @@ public sealed class AccessibilityTests(ApiFactory api, Browser browser) : IClass
         await ClickThroughToAsync(page, owner, journeyPage);
 
         await Expect(page.Locator("h1")).ToBeFocusedAsync();
+    }
+
+    [Theory]
+    [MemberData(nameof(JourneyPages))]
+    public async Task No_journey_page_scrolls_sideways_on_a_phone(string journeyPage)
+    {
+        using var owner = await ConsoleClient.SignUpAsync(api, emailPrefix: "studio-owner-with-a-long-address");
+        Assert.True(owner.Email.Length > 60, owner.Email);
+        await using var context = await browser.NewContextAsync(Host.Address);
+        var page = await context.NewPageAsync();
+        await page.SetViewportSizeAsync(PhoneWidth, PhoneHeight);
+
+        await OpenAsync(page, owner, journeyPage);
+        var widths = await page.EvaluateAsync<int[]>("() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]");
+        var (scrollWidth, clientWidth) = (widths[0], widths[1]);
+
+        Assert.True(scrollWidth <= clientWidth, $"{journeyPage}: scrollWidth {scrollWidth} > clientWidth {clientWidth}");
     }
 
     public async ValueTask DisposeAsync()

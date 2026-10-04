@@ -26,7 +26,7 @@ else if (_environment is null || _publication is null)
 }
 else
 {
-    <p class="mt-1 text-sm text-slate-600">
+    <p class="mt-1 text-sm text-slate-600 wrap-anywhere">
         @PublicationText.Origin(_publication.Origin, _publication.RestoredVersion) by @_publication.PublishedBy.Email,
         @PublicationText.When(_publication.PublishedAt)
     </p>
