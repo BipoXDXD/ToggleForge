@@ -5,8 +5,8 @@ public sealed class ConfigurationSnapshotTests
     [Fact]
     public void TryGetFlag_finds_a_published_flag_by_key()
     {
-        var newShop = Flag("new-shop");
-        var snapshot = SnapshotWith(newShop, Flag("battle-pass"));
+        var newShop = BooleanFlagWith("new-shop");
+        var snapshot = SnapshotWith(newShop, BooleanFlagWith("battle-pass"));
 
         Assert.True(snapshot.TryGetFlag(FlagKey.Parse("new-shop"), out var found));
         Assert.Same(newShop, found);
@@ -15,7 +15,7 @@ public sealed class ConfigurationSnapshotTests
     [Fact]
     public void TryGetFlag_reports_an_unknown_key()
     {
-        var snapshot = SnapshotWith(Flag("new-shop"));
+        var snapshot = SnapshotWith(BooleanFlagWith("new-shop"));
 
         Assert.False(snapshot.TryGetFlag(FlagKey.Parse("battle-pass"), out var found));
         Assert.Null(found);
@@ -24,7 +24,7 @@ public sealed class ConfigurationSnapshotTests
     [Fact]
     public void Rejects_duplicate_flag_keys()
     {
-        var duplicate = Flag("new-shop");
+        var duplicate = BooleanFlagWith("new-shop");
 
         var error = Assert.Throws<ArgumentException>(() => SnapshotWith(duplicate, duplicate));
 
@@ -37,7 +37,7 @@ public sealed class ConfigurationSnapshotTests
         var config = new JsonFlag(
             FlagKey.Parse("new-shop"), true, "{}", "{}", new PercentageRollout(RolloutPercentage.All, NewShopFlag.Seed));
 
-        var error = Assert.Throws<ArgumentException>(() => SnapshotWith(Flag("new-shop"), config));
+        var error = Assert.Throws<ArgumentException>(() => SnapshotWith(BooleanFlagWith("new-shop"), config));
 
         Assert.Equal("flags", error.ParamName);
     }
@@ -64,7 +64,7 @@ public sealed class ConfigurationSnapshotTests
     [Fact]
     public void Keeps_its_flags_when_the_source_list_changes()
     {
-        var flags = new List<BooleanFlag> { Flag("new-shop") };
+        var flags = new List<BooleanFlag> { BooleanFlagWith("new-shop") };
         var snapshot = new ConfigurationSnapshot(NewShopFlag.Project, NewShopFlag.Environment, 1, flags);
 
         flags.Clear();
@@ -72,7 +72,7 @@ public sealed class ConfigurationSnapshotTests
         Assert.True(snapshot.TryGetFlag(FlagKey.Parse("new-shop"), out _));
     }
 
-    private static BooleanFlag Flag(string key) =>
+    private static BooleanFlag BooleanFlagWith(string key) =>
         new(
             FlagKey.Parse(key),
             isEnabled: true,

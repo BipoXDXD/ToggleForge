@@ -93,6 +93,24 @@ public sealed class JsonFlagTests
         Assert.True(result.IsFallback);
     }
 
+    [Theory]
+    [InlineData(false, 10_000)]
+    [InlineData(true, NewShopFlag.ReferencePlayerBucket)]
+    public void A_parser_that_throws_on_the_off_json_falls_back_with_InvalidValue(bool enabled, int basisPoints)
+    {
+        // Desligada ou com o jogador fora do rollout: o OffValue também passa pelo parser.
+        var flag = ShopConfig(enabled, RolloutPercentage.FromBasisPoints(basisPoints));
+        string? received = null;
+
+        var result = flag.Evaluate<string>(
+            NewShopFlag.Project, NewShopFlag.Environment, ReferencePlayer(), DefaultValue,
+            json => { received = json; throw new FormatException("bad"); });
+
+        Assert.Equal(OffJson, received);
+        Assert.Equal((DefaultValue, EvaluationReason.InvalidValue, (int?)null), (result.Value, result.Reason, result.Bucket));
+        Assert.True(result.IsFallback);
+    }
+
     private static JsonFlag ShopConfig(bool enabled, RolloutPercentage percentage) =>
         new(NewShopFlag.Key, enabled, OnJson, OffJson, Rollout(percentage));
 
