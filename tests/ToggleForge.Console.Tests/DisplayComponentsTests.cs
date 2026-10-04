@@ -18,6 +18,21 @@ public sealed class DisplayComponentsTests
         Assert.Equal(shown, badge.Find("[data-testid=flag-type]").TextContent);
     }
 
+    // Um valor de 4 KiB indentado passa da altura do bloco: quem só usa o teclado precisa chegar nele para rolar.
+    [Fact]
+    public void An_open_value_scrolls_inside_a_named_group_the_keyboard_reaches()
+    {
+        using var console = new BunitContext();
+
+        var block = console.Render<JsonValueBlock>(parameters => parameters
+            .Add(component => component.Value, Values.Json("""{"discount":0.2}"""))
+            .Add(component => component.Open, true));
+
+        var value = block.Find("details pre");
+        Assert.Equal(["group", "0", "Value, indented"], [value.GetAttribute("role"), value.GetAttribute("tabindex"), value.GetAttribute("aria-label")]);
+        Assert.Contains("overflow-auto", value.ClassList);
+    }
+
     [Fact]
     public void A_preview_shows_the_start_of_the_value_and_keeps_all_of_it_in_its_title()
     {

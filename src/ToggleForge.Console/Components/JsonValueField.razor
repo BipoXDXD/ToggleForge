@@ -69,8 +69,9 @@
             @switch (analysis)
             {
                 case JsonAnalysis.Invalid { Position: { } position }:
+                    @* A linha longa rola, e o tabindex deixa o teclado chegar nela (WCAG 2.1.1), como no JsonValueBlock. *@
                     <p data-testid="syntax-summary"><strong class="font-semibold">Not valid JSON</strong> at line @position.Line, column @position.Column.</p>
-                    <pre class="mt-1 overflow-x-auto font-mono text-xs leading-5 text-red-900"><span class="text-red-700">@Gutter(position.Line.ToString(System.Globalization.CultureInfo.InvariantCulture))</span>@position.LineText@("\n")<span class="text-red-700">@Gutter(string.Empty.PadLeft(position.Line.ToString(System.Globalization.CultureInfo.InvariantCulture).Length))</span>@position.Caret</pre>
+                    <pre role="group" tabindex="0" aria-label="Line with the error" class="mt-1 overflow-x-auto font-mono text-xs leading-5 text-red-900"><span class="text-red-700">@Gutter(position.Line.ToString(System.Globalization.CultureInfo.InvariantCulture))</span>@position.LineText@("\n")<span class="text-red-700">@Gutter(string.Empty.PadLeft(position.Line.ToString(System.Globalization.CultureInfo.InvariantCulture).Length))</span>@position.Caret</pre>
                     <p class="mt-1 text-xs">Check for a missing comma or quote just before this point.</p>
                     break;
                 case JsonAnalysis.NotEncodable:

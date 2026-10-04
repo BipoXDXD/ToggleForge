@@ -355,6 +355,22 @@ public sealed class FlagEditorPageTests
         Assert.All(gutters, gutter => Assert.Single(gutter.ClassList, name => name.StartsWith("text-", StringComparison.Ordinal)));
     }
 
+    // Uma linha longa passa da largura do quadro (o textarea não quebra linha): o trecho rola, e o teclado chega nele.
+    [Fact]
+    public void The_line_with_a_syntax_error_scrolls_inside_a_named_group_the_keyboard_reaches()
+    {
+        var api = ShopConfigRead();
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+
+        page.Find("#on-value").Input("{\"a\": 1 \"b\": 2}");
+
+        var excerpt = page.Find("#on-value-syntax pre");
+        Assert.Equal(["group", "0", "Line with the error"], [excerpt.GetAttribute("role"), excerpt.GetAttribute("tabindex"), excerpt.GetAttribute("aria-label")]);
+        Assert.Contains("overflow-x-auto", excerpt.ClassList);
+    }
+
     [Fact]
     public void Typing_a_value_does_not_raise_an_alert()
     {
