@@ -6,8 +6,8 @@ namespace ToggleForge.SdkDemo;
 
 /// <summary>
 /// A história do Marco 4 contada com o SDK de verdade: rede caindo, ampliação do rollout, resposta fora de ordem,
-/// reinício com o cache em disco, cache expirado e uma configuração JSON lida com a classe do jogo. Cada passo confere o que promete; se algo não acontecer, o
-/// processo termina com erro, e o smoke test do CI falha.
+/// reinício com o cache em disco, cache expirado e uma configuração JSON lida com a classe do jogo. Cada passo
+/// confere o que promete; se algo não acontecer, o processo termina com erro, e o smoke test do CI falha.
 /// </summary>
 internal static class ScriptedTour
 {
@@ -123,7 +123,8 @@ internal static class ScriptedTour
         var shop = game.EvaluateJson(ShopConfigFlag, _players[0], ShopConfig.Closed, LoggingFailures(ShopConfig.Parse));
         Show(ShopConfigFlag, shop, shop.Value.ToString());
         Expect(
-            shop.Reason == EvaluationReason.Included && shop.Value.Discount == 0.2m && shop.Value.FeaturedItems.SequenceEqual(["sword", "shield"]),
+            shop.Reason == EvaluationReason.Included && shop.Source == SnapshotSource.Server && shop.SnapshotVersion == 3
+                && shop.Value.Discount == 0.2m && shop.Value.FeaturedItems.SequenceEqual(["sword", "shield"]),
             "o jogo lê a configuração com a própria classe, sem recompilar");
         var refused = game.EvaluateJson(ShopConfigFlag, _players[0], defaultValue: -1, LoggingFailures(json => int.Parse(json, CultureInfo.InvariantCulture)));
         Show(ShopConfigFlag, refused, refused.Value.ToString(CultureInfo.InvariantCulture));
