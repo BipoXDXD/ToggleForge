@@ -130,7 +130,8 @@ O que já existe e pesa na escolha:
   - 401 e 403 (credencial revogada ou recusada) mantêm o cache e tentam de novo no teto do backoff.
 - **`RefreshAsync`:** sincroniza na hora, por exemplo quando o jogo volta do segundo plano. Para o jogo não furar
   o ritmo que protege a API, ele não sai antes de 15 s da última tentativa, do prazo de um `Retry-After` ou do
-  teto depois de um 401/403. Nesses casos devolve `Skipped` sem chamar o servidor.
+  teto depois de um 401/403. Nesses casos devolve `Skipped` sem chamar o servidor. O teto depois de um 401/403 é o
+  mesmo do laço: o maior entre o intervalo e o backoff máximo.
 - **Encerramento:** `DisposeAsync` cancela o laço, inclusive uma sincronização em andamento, e espera ele
   terminar. `Dispose` só cancela, para o `OnDestroy` da Unity, que não pode esperar. Um cliente descartado não
   inicia de novo.

@@ -101,6 +101,14 @@ public sealed class SyncScheduleTests
     {
         var attempt = new SyncAttempt(outcome, status, retryAfterSeconds is { } seconds ? TimeSpan.FromSeconds(seconds) : null);
 
-        Assert.Equal(TimeSpan.FromSeconds(expectedSeconds), SyncSchedule.PauseBeforeRefresh(attempt));
+        Assert.Equal(TimeSpan.FromSeconds(expectedSeconds), _everyMinute.PauseBeforeRefresh(attempt));
     }
+
+    [Theory]
+    [InlineData(3600, 401, 3600)]
+    [InlineData(3600, 403, 3600)]
+    [InlineData(60, 401, 600)]
+    [InlineData(60, 403, 600)]
+    public void A_refresh_after_a_refused_credential_waits_the_same_ceiling_as_the_loop(int intervalSeconds, int status, int expectedSeconds) =>
+        Assert.Equal(TimeSpan.FromSeconds(expectedSeconds), new SyncSchedule(TimeSpan.FromSeconds(intervalSeconds)).PauseBeforeRefresh(new SyncAttempt(SyncOutcome.Failed, status)));
 }

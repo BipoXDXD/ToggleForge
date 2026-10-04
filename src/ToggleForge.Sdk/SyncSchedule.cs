@@ -45,13 +45,14 @@ namespace ToggleForge.Sdk
 
         /// <summary>
         /// Quanto um <c>RefreshAsync</c> pedido pelo jogo espera depois de uma tentativa: o piso do intervalo, ou o
-        /// prazo que o servidor deu, para o jogo não furar o ritmo que protege a API.
+        /// prazo que o servidor deu, para o jogo não furar o ritmo que protege a API. Depois de uma credencial
+        /// recusada, o mesmo teto do laço.
         /// </summary>
-        public static TimeSpan PauseBeforeRefresh(SyncAttempt attempt)
+        public TimeSpan PauseBeforeRefresh(SyncAttempt attempt)
         {
             if (attempt.IsCredentialRefused)
             {
-                return MaxBackoff;
+                return Ceiling;
             }
 
             return attempt.RetryAfter is { } asked && Capped(asked) > ToggleForgeOptions.MinSyncInterval
@@ -61,10 +62,9 @@ namespace ToggleForge.Sdk
 
         private TimeSpan BaseDelay(SyncAttempt attempt, int consecutiveFailures)
         {
-            var ceiling = _interval > MaxBackoff ? _interval : MaxBackoff;
             if (attempt.IsCredentialRefused)
             {
-                return ceiling;
+                return Ceiling;
             }
 
             if (!CountsAsFailure(attempt))
@@ -73,8 +73,11 @@ namespace ToggleForge.Sdk
             }
 
             var doubled = _interval.Ticks * Math.Pow(2, Math.Max(consecutiveFailures, 1) - 1);
-            return doubled >= ceiling.Ticks ? ceiling : TimeSpan.FromTicks((long)doubled);
+            return doubled >= Ceiling.Ticks ? Ceiling : TimeSpan.FromTicks((long)doubled);
         }
+
+        // Um intervalo maior que o backoff máximo nunca é encurtado por uma falha.
+        private TimeSpan Ceiling => _interval > MaxBackoff ? _interval : MaxBackoff;
 
         private static TimeSpan Jittered(TimeSpan delay, double sample) =>
             TimeSpan.FromTicks((long)(delay.Ticks * (1 - Jitter + (2 * Jitter * sample))));
