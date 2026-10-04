@@ -147,6 +147,8 @@ O que já existe e pesa na escolha:
   - O limite de corpo é o nativo do servidor (`RequestSizeLimit` nas duas rotas), aplicado pelo Kestrel na leitura
     do binding. O 413 chega vazio ao `UseStatusCodePages` e vira Problem Details lá. O TestServer não aplica o
     limite, então os testes de 413 rodam num Kestrel.
+  - Com `Content-Length` a fronteira é exata; um corpo chunked pode levar 413 um pouco antes dos 32 KiB (o spike
+    da Tarefa 9 viu 413 com 32.767 bytes), então o cliente que chega perto do teto deve mandar `Content-Length`.
   - `null` no PATCH é recusado no campo, porque no merge patch ele apagaria o valor; uma flag JSON só recebe o JSON
     `null` na criação.
   - Um corpo que o binding recusa aponta só o campo de topo (`/onValue`), sem as chaves escolhidas pelo cliente

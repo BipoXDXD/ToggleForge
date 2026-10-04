@@ -1128,7 +1128,9 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
     PayloadTooLarge:
-      description: The body is over the limit of the operation (`/problems/payload-too-large`); nothing was saved.
+      description: >-
+        The body is over the limit of the operation (`/problems/payload-too-large`); nothing was saved. A chunked
+        body, sent without Content-Length, can get 413 slightly before the limit.
       content:
         application/problem+json:
           schema:
