@@ -13,7 +13,7 @@
             <div class="max-w-lg space-y-4">
                 <div>
                     <label for="flag-key" class="block text-sm font-medium text-slate-700">Key</label>
-                    <input id="flag-key" @ref="_key" required maxlength="64" @bind="_newFlag.Key" @bind:after="() => ClearFieldError(FieldErrors.Key)"
+                    <input id="flag-key" @ref="_key" required maxlength="64" @bind="_newFlag.Key" @bind:after="() => _form.Clear(FieldErrors.Key)"
                            aria-invalid="@(KeyError is null ? null : "true")" aria-describedby="@(KeyError is null ? null : "flag-key-error")"
                            class="tf-field w-full font-mono" />
                     <FieldError Id="flag-key-error" Message="@KeyError" />
@@ -58,13 +58,13 @@
             {
                 <div class="max-w-4xl pt-4">
                     <JsonValuesInput @ref="_values"
-                                     @bind-OnValueText="_newFlag.OnValueText" @bind-OnValueText:after="() => ClearFieldError(FieldErrors.OnValue)"
-                                     @bind-OffValueText="_newFlag.OffValueText" @bind-OffValueText:after="() => ClearFieldError(FieldErrors.OffValue)"
-                                     RolloutPercent="_newFlag.RolloutPercent" Enabled="_newFlag.Enabled" Errors="_fieldErrors" TooLarge="_valuesTooLarge" />
+                                     @bind-OnValueText="_newFlag.OnValueText" @bind-OnValueText:after="() => _form.Clear(FieldErrors.OnValue)"
+                                     @bind-OffValueText="_newFlag.OffValueText" @bind-OffValueText:after="() => _form.Clear(FieldErrors.OffValue)"
+                                     RolloutPercent="_newFlag.RolloutPercent" Enabled="_newFlag.Enabled" Errors="_form.Fields" TooLarge="_form.ValuesTooLarge" />
                 </div>
             }
             <div class="max-w-lg">
-                <ProblemMessage Problem="_problem" Heading="@ProblemHeading" />
+                <ProblemMessage Problem="_form.Problem" Heading="@_form.Heading" />
             </div>
             <button type="submit" @ref="_addButton" disabled="@_submitting"
                     class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60">
@@ -78,13 +78,8 @@
     // Alvo de foco que não é campo: o botão de envio, para onde o membro estava quando clicou.
     private const string AddButton = "add-to-draft";
 
-    // A ordem dos campos na página: o foco vai para o primeiro que tiver erro.
-    private static readonly string[] _pageOrder = [FieldErrors.Key, FieldErrors.Rollout, FieldErrors.OnValue, FieldErrors.OffValue];
-
     private NewFlag _newFlag = new();
-    private Problem? _problem;
-    private FieldErrors _fieldErrors = new();
-    private bool _valuesTooLarge;
+    private readonly FlagFormState _form = new();
     private bool _submitting;
     private ElementReference _key;
     private ElementReference _rollout;
@@ -102,15 +97,13 @@
     [Parameter]
     public EventCallback Created { get; set; }
 
-    private string? KeyError => _fieldErrors.For(FieldErrors.Key);
+    private string? KeyError => _form.Fields.For(FieldErrors.Key);
 
-    private string? RolloutError => _fieldErrors.For(FieldErrors.Rollout);
-
-    private string? ProblemHeading => _problem == FormProblems.OutOfJsonRoom ? FormProblems.OutOfJsonRoom.Title : null;
+    private string? RolloutError => _form.Fields.For(FieldErrors.Rollout);
 
     private async Task CreateFlagAsync()
     {
-        (_problem, _fieldErrors, _valuesTooLarge) = (null, new FieldErrors(), false);
+        _form.Reset();
         if (!_newFlag.TryGetCreation(out var creation, out var errors))
         {
             MarkFields(errors);
@@ -169,7 +162,7 @@
                 MarkFields(fields, general);
                 break;
             case System.Net.HttpStatusCode.Conflict when problem.Type == FormProblems.JsonBudgetReachedType:
-                _problem = FormProblems.OutOfJsonRoom;
+                _form.Show(FormProblems.OutOfJsonRoom);
                 break;
             case System.Net.HttpStatusCode.Conflict when problem.Type == FormProblems.FlagTypeLockedType:
                 var keyError = new FieldErrors();
@@ -177,31 +170,19 @@
                 MarkFields(keyError);
                 break;
             case System.Net.HttpStatusCode.RequestEntityTooLarge when FlagTypes.IsJson(sentType):
-                _valuesTooLarge = true;
+                _form.MarkValuesTooLarge();
                 break;
             default:
-                _problem = problem;
+                _form.Show(problem);
                 break;
         }
     }
 
-    // Cada erro fica sob o seu campo, o resumo avisa o leitor de tela (role="alert"), e o foco vai para o primeiro
-    // campo a corrigir, na ordem da página (design spec, 2.2 e 3).
+    // O foco vai para o primeiro campo a corrigir, depois do render que o marca (design spec, 3).
     private void MarkFields(FieldErrors fields, Problem? general = null)
     {
-        _fieldErrors = fields;
-        _problem = general ?? (fields.IsEmpty ? null : FormProblems.FixMarkedFields);
-        _focusAfterRender = _pageOrder.FirstOrDefault(field => fields.For(field) is not null);
-    }
-
-    // O resumo fala dos campos marcados; quando o último deixa de estar, ele já não diz respeito ao formulário.
-    private void ClearFieldError(string field)
-    {
-        _fieldErrors.Clear(field);
-        if (_fieldErrors.IsEmpty && _problem == FormProblems.FixMarkedFields)
-        {
-            _problem = null;
-        }
+        _form.Mark(fields, general);
+        _focusAfterRender = _form.FirstMarkedField;
     }
 
     // Os textos JSON ficam guardados na troca: voltar para JSON antes de enviar devolve o que o membro digitou.

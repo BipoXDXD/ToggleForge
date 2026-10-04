@@ -82,9 +82,9 @@ else
         {
             <div class="pt-4">
                 <JsonValuesInput @ref="_values"
-                                 @bind-OnValueText="_edit.OnValueText" @bind-OnValueText:after="() => ClearFieldError(FieldErrors.OnValue)"
-                                 @bind-OffValueText="_edit.OffValueText" @bind-OffValueText:after="() => ClearFieldError(FieldErrors.OffValue)"
-                                 RolloutPercent="_edit.RolloutPercent" Enabled="_edit.Enabled" Errors="_fieldErrors" TooLarge="_valuesTooLarge" />
+                                 @bind-OnValueText="_edit.OnValueText" @bind-OnValueText:after="() => _form.Clear(FieldErrors.OnValue)"
+                                 @bind-OffValueText="_edit.OffValueText" @bind-OffValueText:after="() => _form.Clear(FieldErrors.OffValue)"
+                                 RolloutPercent="_edit.RolloutPercent" Enabled="_edit.Enabled" Errors="_form.Fields" TooLarge="_form.ValuesTooLarge" />
             </div>
         }
         else
@@ -97,7 +97,7 @@ else
                         <option value="false">false</option>
                     </select>
                 </label>
-                <FieldError Id="on-value-error" Message="@_fieldErrors.For(FieldErrors.OnValue)" />
+                <FieldError Id="on-value-error" Message="@_form.Fields.For(FieldErrors.OnValue)" />
             </div>
             <div>
                 <label class="block">
@@ -107,11 +107,11 @@ else
                         <option value="false">false</option>
                     </select>
                 </label>
-                <FieldError Id="off-value-error" Message="@_fieldErrors.For(FieldErrors.OffValue)" />
+                <FieldError Id="off-value-error" Message="@_form.Fields.For(FieldErrors.OffValue)" />
             </div>
         }
 
-        <ProblemMessage Problem="_problem" Heading="@ProblemHeading" />
+        <ProblemMessage Problem="_form.Problem" Heading="@_form.Heading" />
         @if (_saved)
         {
             <p role="status" class="text-sm text-emerald-700">Saved to the draft. Games get it with the next publication.</p>
@@ -159,9 +159,7 @@ else
     private Versioned<Flag>? _flag;
     private FlagEdit? _edit;
     private Problem? _loadProblem;
-    private Problem? _problem;
-    private FieldErrors _fieldErrors = new();
-    private bool _valuesTooLarge;
+    private FlagFormState _form = new();
     private string? _gone;
     private bool _saved;
     private bool _busy;
@@ -186,14 +184,11 @@ else
     private string DraftPath =>
         $"organizations/{OrganizationId}/projects/{Uri.EscapeDataString(ProjectKey)}/environments/{Uri.EscapeDataString(EnvironmentKey)}";
 
-    private string? RolloutError => _fieldErrors.For(FieldErrors.Rollout);
-
-    private string? ProblemHeading => _problem == FormProblems.OutOfJsonRoom ? FormProblems.OutOfJsonRoom.Title : null;
+    private string? RolloutError => _form.Fields.For(FieldErrors.Rollout);
 
     protected override async Task OnParametersSetAsync()
     {
-        (_flag, _edit, _loadProblem, _problem, _gone, _saved, _fieldErrors, _valuesTooLarge) =
-            (null, null, null, null, null, false, new FieldErrors(), false);
+        (_flag, _edit, _loadProblem, _gone, _saved, _form) = (null, null, null, null, false, new FlagFormState());
         var flag = await Api.GetFlagAsync(Address, Leaving);
         if (flag.Succeeded)
         {
@@ -211,7 +206,8 @@ else
 
     private async Task SaveAsync()
     {
-        (_problem, _saved, _fieldErrors, _valuesTooLarge) = (null, false, new FieldErrors(), false);
+        _saved = false;
+        _form.Reset();
         if (_flag is not { } flag || _edit is not { } edit)
         {
             return;
@@ -225,7 +221,7 @@ else
 
         if (changes.IsEmpty)
         {
-            _problem = _nothingToSave;
+            _form.Show(_nothingToSave);
             return;
         }
 
@@ -249,7 +245,7 @@ else
             return;
         }
 
-        _problem = null;
+        _form.ClearSummary();
         _busy = true;
         var problem = await Api.DeleteFlagAsync(Address, flag.ETag, Leaving);
         _busy = false;
@@ -277,11 +273,11 @@ else
                 if (current.Succeeded)
                 {
                     Show(current.Value);
-                    _problem = _changedMeanwhile;
+                    _form.Show(_changedMeanwhile);
                 }
                 else
                 {
-                    _problem = current.Problem;
+                    _form.Show(current.Problem);
                 }
 
                 break;
@@ -293,40 +289,29 @@ else
                 await MarkFieldsAsync(fields, general);
                 break;
             case System.Net.HttpStatusCode.Conflict when problem.Type == FormProblems.JsonBudgetReachedType:
-                _problem = FormProblems.OutOfJsonRoom;
+                _form.Show(FormProblems.OutOfJsonRoom);
                 break;
             case System.Net.HttpStatusCode.RequestEntityTooLarge when _flag?.Value.IsJson == true:
-                _valuesTooLarge = true;
+                _form.MarkValuesTooLarge();
                 break;
             default:
-                _problem = problem;
+                _form.Show(problem);
                 break;
         }
     }
 
-    // Cada erro fica sob o seu campo, o resumo avisa o leitor de tela (role="alert"), e o foco vai para o primeiro
-    // campo a corrigir, na ordem da página (design spec, 2.2 e 3).
+    // O foco vai para o primeiro campo a corrigir, na ordem da página (design spec, 3).
     private async Task MarkFieldsAsync(FieldErrors fields, Problem? general = null)
     {
-        _fieldErrors = fields;
-        _problem = general ?? (fields.IsEmpty ? null : FormProblems.FixMarkedFields);
-        if (fields.For(FieldErrors.Rollout) is not null)
+        _form.Mark(fields, general);
+        switch (_form.FirstMarkedField)
         {
-            await _rollout.FocusAsync();
-        }
-        else if (_values is not null && (fields.For(FieldErrors.OnValue) ?? fields.For(FieldErrors.OffValue)) is not null)
-        {
-            await _values.FocusAsync(fields.For(FieldErrors.OnValue) is null ? FieldErrors.OffValue : FieldErrors.OnValue);
-        }
-    }
-
-    // O resumo fala dos campos marcados; quando o último deixa de estar, ele já não diz respeito ao formulário.
-    private void ClearFieldError(string field)
-    {
-        _fieldErrors.Clear(field);
-        if (_fieldErrors.IsEmpty && _problem == FormProblems.FixMarkedFields)
-        {
-            _problem = null;
+            case FieldErrors.Rollout:
+                await _rollout.FocusAsync();
+                break;
+            case FieldErrors.OnValue or FieldErrors.OffValue when _values is not null:
+                await _values.FocusAsync(_form.FirstMarkedField);
+                break;
         }
     }
 
