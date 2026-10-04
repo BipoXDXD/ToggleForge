@@ -14,6 +14,18 @@ internal static class ApiSecurityHeaders
     public const string ApiContentSecurityPolicy = "default-src 'none'; frame-ancestors 'none'";
 
     private const string ReferrerPolicy = "Referrer-Policy";
+    private const string PermissionsPolicy = "Permissions-Policy";
+    private const string CrossOriginResourcePolicy = "Cross-Origin-Resource-Policy";
+
+    /// <summary>O console não usa nenhum desses recursos; negá-los tira de um script injetado o acesso a eles.</summary>
+    private const string DeniedBrowserFeatures = "camera=(), microphone=(), geolocation=(), payment=(), usb=()";
+
+    /// <summary>
+    /// O CORP só vale para cargas no-cors (img, script, iframe de outra origem); um fetch com CORS não passa por
+    /// ele. O SDK fica de fora porque quem o lê é o jogo, fora do navegador ou num build WebGL de outra origem, e
+    /// a restrição ali não protege nada que a credencial já não proteja.
+    /// </summary>
+    private static readonly PathString _sdkPath = new("/sdk");
 
     /// <summary>
     /// Um ano, o valor comum depois que o HTTPS está estável; o TLS termina no ingress gerenciado desde o primeiro
@@ -40,7 +52,7 @@ internal static class ApiSecurityHeaders
         {
             context.Response.OnStarting(() =>
             {
-                AddTo(context.Response.Headers);
+                AddTo(context.Request, context.Response.Headers);
                 if (hsts is not null && PinsHttps(context.Request, hsts))
                 {
                     context.Response.Headers.StrictTransportSecurity = $"max-age={(long)hsts.MaxAge.TotalSeconds}";
@@ -57,11 +69,17 @@ internal static class ApiSecurityHeaders
     private static bool PinsHttps(HttpRequest request, HstsOptions hsts) =>
         request.IsHttps && !hsts.ExcludedHosts.Contains(request.Host.Host, StringComparer.OrdinalIgnoreCase);
 
-    private static void AddTo(IHeaderDictionary headers)
+    private static void AddTo(HttpRequest request, IHeaderDictionary headers)
     {
         headers.XContentTypeOptions = "nosniff";
         headers.XFrameOptions = "DENY";
         headers[ReferrerPolicy] = "no-referrer";
+        headers[PermissionsPolicy] = DeniedBrowserFeatures;
+        if (!request.Path.StartsWithSegments(_sdkPath))
+        {
+            headers[CrossOriginResourcePolicy] = "same-origin";
+        }
+
         if (!headers.ContainsKey(HeaderNames.ContentSecurityPolicy))
         {
             headers.ContentSecurityPolicy = ApiContentSecurityPolicy;

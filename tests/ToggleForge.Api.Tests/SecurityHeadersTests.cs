@@ -43,6 +43,45 @@ public sealed class SecurityHeadersTests(ApiFactory api)
         Assert.Equal(ApiPolicy, Assert.Single(response.Headers.GetValues("Content-Security-Policy")));
     }
 
+    /// <summary>Só a própria origem embute uma resposta (img, script) sem CORS; nenhum outro site a carrega no-cors.</summary>
+    [Theory]
+    [InlineData(Paths.AntiforgeryToken)]
+    [InlineData(Paths.Session)]
+    [InlineData("/sign-in")]
+    [InlineData("/_framework/blazor.webassembly.js")]
+    public async Task Responses_outside_the_sdk_load_only_into_the_same_origin(string path)
+    {
+        using var visitor = api.CreateAnonymousClient();
+
+        using var response = await visitor.GetAsync(path, TestContext.Current.CancellationToken);
+
+        Assert.Equal("same-origin", Assert.Single(response.Headers.GetValues("Cross-Origin-Resource-Policy")));
+    }
+
+    /// <summary>O jogo lê o snapshot fora do navegador ou de outra origem; a rota do SDK não ganha a restrição.</summary>
+    [Fact]
+    public async Task The_sdk_route_does_not_restrict_its_loading_origin()
+    {
+        using var visitor = api.CreateAnonymousClient();
+
+        using var response = await visitor.GetAsync(Paths.Snapshot, TestContext.Current.CancellationToken);
+
+        Assert.False(response.Headers.Contains("Cross-Origin-Resource-Policy"));
+    }
+
+    /// <summary>Uma janela aberta por outro site não ganha referência ao console (window.opener), e vice-versa.</summary>
+    [Theory]
+    [InlineData("/sign-in")]
+    [InlineData("/index.html")]
+    public async Task The_console_page_keeps_its_browsing_context_to_itself(string path)
+    {
+        using var visitor = api.CreateAnonymousClient();
+
+        using var response = await visitor.GetAsync(path, TestContext.Current.CancellationToken);
+
+        Assert.Equal("same-origin", Assert.Single(response.Headers.GetValues("Cross-Origin-Opener-Policy")));
+    }
+
     /// <summary>O exception handler limpa os headers da resposta antes de escrever o 500; os de segurança voltam.</summary>
     [Fact]
     public async Task An_unexpected_error_keeps_the_headers()
@@ -66,5 +105,8 @@ public sealed class SecurityHeadersTests(ApiFactory api)
         Assert.Equal("nosniff", Assert.Single(response.Headers.GetValues("X-Content-Type-Options")));
         Assert.Equal("DENY", Assert.Single(response.Headers.GetValues("X-Frame-Options")));
         Assert.Equal("no-referrer", Assert.Single(response.Headers.GetValues("Referrer-Policy")));
+        Assert.Equal(
+            "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+            Assert.Single(response.Headers.GetValues("Permissions-Policy")));
     }
 }
