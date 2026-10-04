@@ -337,6 +337,24 @@ public sealed class FlagEditorPageTests
         Assert.Empty(page.FindAll("#on-value-syntax[role]"));
     }
 
+    // O número da linha é texto: red-700 (#c10007) sobre o red-50 (#fef2f2) do quadro dá 5,9:1, acima dos 4,5:1 da
+    // WCAG 1.4.3; o red-400 de antes dava 2,6:1.
+    [Fact]
+    public void The_line_number_of_a_syntax_error_has_the_contrast_of_text()
+    {
+        var api = ShopConfigRead();
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+
+        page.Find("#on-value").Input("{\n  \"discount\": 0.2\n  \"items\": []\n}");
+
+        var gutters = page.FindAll("#on-value-syntax pre > span");
+        Assert.Equal(["3 │ ", "  │ "], gutters.Select(gutter => gutter.TextContent));
+        Assert.All(gutters, gutter => Assert.Contains("text-red-700", gutter.ClassList));
+        Assert.All(gutters, gutter => Assert.Single(gutter.ClassList, name => name.StartsWith("text-", StringComparison.Ordinal)));
+    }
+
     [Fact]
     public void Typing_a_value_does_not_raise_an_alert()
     {

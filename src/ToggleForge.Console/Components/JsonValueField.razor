@@ -70,7 +70,7 @@
             {
                 case JsonAnalysis.Invalid { Position: { } position }:
                     <p data-testid="syntax-summary"><strong class="font-semibold">Not valid JSON</strong> at line @position.Line, column @position.Column.</p>
-                    <pre class="mt-1 overflow-x-auto font-mono text-xs leading-5 text-red-900"><span class="text-red-400">@Gutter(position.Line.ToString(System.Globalization.CultureInfo.InvariantCulture))</span>@position.LineText@("\n")<span class="text-red-400">@Gutter(string.Empty.PadLeft(position.Line.ToString(System.Globalization.CultureInfo.InvariantCulture).Length))</span>@position.Caret</pre>
+                    <pre class="mt-1 overflow-x-auto font-mono text-xs leading-5 text-red-900"><span class="text-red-700">@Gutter(position.Line.ToString(System.Globalization.CultureInfo.InvariantCulture))</span>@position.LineText@("\n")<span class="text-red-700">@Gutter(string.Empty.PadLeft(position.Line.ToString(System.Globalization.CultureInfo.InvariantCulture).Length))</span>@position.Caret</pre>
                     <p class="mt-1 text-xs">Check for a missing comma or quote just before this point.</p>
                     break;
                 case JsonAnalysis.NotEncodable:
@@ -153,7 +153,8 @@
         _ => string.Empty,
     };
 
-    // A linha com o número e um ^ sob a coluna, como um compilador mostraria; a margem é mais clara, como no design.
+    // A linha com o número e um ^ sob a coluna, como um compilador mostraria. A margem é mais clara que a linha, como no
+    // design, mas continua texto: red-700 sobre red-50 dá 5,9:1 (WCAG 1.4.3 pede 4,5:1).
     private static string Gutter(string number) => $"{number} │ ";
 
     private static (string Bar, string Text) MeterStyle(MeterLevel level) => level switch
