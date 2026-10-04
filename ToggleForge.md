@@ -44,7 +44,7 @@ O rollout usa um hash determinístico versionado, com codificação canônica do
 | Área | Base inicial | Motivo ou alternativa |
 | --- | --- | --- |
 | Backend | C# e ASP.NET Core em .NET 10 | Controllers ou Minimal APIs conforme preferência |
-| Frontend | Blazor Web App, componentes Razor e Tailwind CSS | Decidido em `docs/adr/0003-frontend-blazor-tailwind.md`; render mode fica para o Marco 3 |
+| Frontend | Blazor Web App, componentes Razor e Tailwind CSS | Decidido em `docs/adr/0003-frontend-blazor-tailwind.md`; render mode WebAssembly na mesma origem da API (`docs/adr/0009-render-mode-do-console.md`) |
 | Persistência | EF Core com PostgreSQL | Dapper ou SQL explícito podem entrar em consultas específicas |
 | Autenticação | ASP.NET Core Identity para o painel | OIDC com provedor externo pode substituir ou complementar |
 | SDK | Núcleo em C# compatível com .NET Standard 2.1 | Adaptador Unity validado na versão e plataformas escolhidas |

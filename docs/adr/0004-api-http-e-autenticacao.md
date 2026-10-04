@@ -85,8 +85,8 @@ credencial só lê o snapshot publicado do próprio ambiente, porque é extraív
   manter o bucket do rollout estável.
 - Sem `MapIdentityApi`, login, logout e cadastro são código nosso sobre o `SignInManager`, com rate
   limit e resposta igual para conta existente e inexistente.
-- O console do Marco 3 precisa buscar e reenviar o token antiforgery; se ele rodar no mesmo processo em
-  modo Interactive Server, a decisão será revista na ADR do render mode.
+- O console do Marco 3 precisa buscar e reenviar o token antiforgery. Ele roda no navegador, em
+  WebAssembly na mesma origem, e usa o cookie como qualquer cliente (ADR 0009).
 
 ## Compliance
 
