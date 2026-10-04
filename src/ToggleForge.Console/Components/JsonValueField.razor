@@ -23,7 +23,7 @@
     <p id="@($"{Id}-audience")" class="text-xs text-slate-500">@Audience</p>
     <textarea @ref="_area" id="@Id" rows="8" wrap="off" spellcheck="false" autocomplete="off" autocapitalize="off"
               placeholder="@Placeholder" value="@Text" @oninput="ChangeAsync"
-              aria-invalid="@(invalid ? "true" : null)" aria-describedby="@DescribedBy(showsSyntax, error is not null)"
+              aria-invalid="@(invalid ? "true" : null)" aria-describedby="@DescribedBy(analysis, showsSyntax, error is not null)"
               class="tf-field mt-2 w-full resize-y font-mono text-[13px] leading-5 text-slate-800"></textarea>
 
     @switch (analysis)
@@ -59,7 +59,7 @@
 
     @*
         Só o nível do medidor, não a contagem nem a sintaxe: o leitor de tela fala na troca de estado, e a validação ao
-        digitar não interrompe (design spec, 3); o erro de sintaxe é lido pelo aria-describedby.
+        digitar não interrompe (design spec, 3); o resumo e a dica do erro de sintaxe são lidos pelo aria-describedby.
     *@
     <p id="@($"{Id}-live")" aria-live="polite" class="sr-only">@LiveText(analysis)</p>
 
@@ -70,18 +70,18 @@
             {
                 case JsonAnalysis.Invalid { Position: { } position }:
                     @* A linha longa rola, e o tabindex deixa o teclado chegar nela (WCAG 2.1.1), como no JsonValueBlock. *@
-                    <p data-testid="syntax-summary"><strong class="font-semibold">Not valid JSON</strong> at line @position.Line, column @position.Column.</p>
+                    <p id="@($"{Id}-syntax-summary")" data-testid="syntax-summary"><strong class="font-semibold">Not valid JSON</strong> at line @position.Line, column @position.Column.</p>
                     <pre role="group" tabindex="0" aria-label="Line with the error" class="mt-1 overflow-x-auto font-mono text-xs leading-5 text-red-900"><span class="text-red-700">@Gutter(position.Line.ToString(System.Globalization.CultureInfo.InvariantCulture))</span>@position.LineText@("\n")<span class="text-red-700">@Gutter(string.Empty.PadLeft(position.Line.ToString(System.Globalization.CultureInfo.InvariantCulture).Length))</span>@position.Caret</pre>
-                    <p class="mt-1 text-xs">Check for a missing comma or quote just before this point.</p>
+                    <p id="@($"{Id}-syntax-hint")" class="mt-1 text-xs">Check for a missing comma or quote just before this point.</p>
                     break;
                 case JsonAnalysis.NotEncodable:
-                    <p data-testid="syntax-summary"><strong class="font-semibold">Not valid JSON:</strong> a character in it cannot be encoded.</p>
+                    <p id="@($"{Id}-syntax-summary")" data-testid="syntax-summary"><strong class="font-semibold">Not valid JSON:</strong> a character in it cannot be encoded.</p>
                     break;
                 case JsonAnalysis.Invalid:
-                    <p data-testid="syntax-summary"><strong class="font-semibold">Not valid JSON:</strong> a \u escape in it stands for half a character and needs its pair.</p>
+                    <p id="@($"{Id}-syntax-summary")" data-testid="syntax-summary"><strong class="font-semibold">Not valid JSON:</strong> a \u escape in it stands for half a character and needs its pair.</p>
                     break;
                 default:
-                    <p data-testid="syntax-summary">@FlagFields.TooDeep</p>
+                    <p id="@($"{Id}-syntax-summary")" data-testid="syntax-summary">@FlagFields.TooDeep</p>
                     break;
             }
         </div>
@@ -131,12 +131,19 @@
     private Task FormatAsync() =>
         JsonText.Analyze(Text) is JsonAnalysis.Valid valid ? TextChanged.InvokeAsync(valid.Value.Indented()) : Task.CompletedTask;
 
-    private string DescribedBy(bool showsSyntax, bool hasError)
+    // O resumo e a dica, não o quadro inteiro: na descrição, o aria-label do trecho com a linha tomaria o lugar dela
+    // (accname 1.2, passo 2D). O trecho continua nomeado para quem chega nele pelo Tab.
+    private string DescribedBy(JsonAnalysis analysis, bool showsSyntax, bool hasError)
     {
         var ids = new List<string> { $"{Id}-audience", $"{Id}-size" };
         if (showsSyntax)
         {
-            ids.Add($"{Id}-syntax");
+            ids.Add($"{Id}-syntax-summary");
+        }
+
+        if (analysis is JsonAnalysis.Invalid { Position: not null })
+        {
+            ids.Add($"{Id}-syntax-hint");
         }
 
         if (hasError)

@@ -333,8 +333,42 @@ public sealed class FlagEditorPageTests
         Assert.Equal("Size appears once the JSON is valid.", page.Find("#on-value-size").TextContent);
         var area = page.Find("#on-value");
         Assert.Equal("true", area.GetAttribute("aria-invalid"));
-        Assert.Equal("on-value-audience on-value-size on-value-syntax", area.GetAttribute("aria-describedby"));
+        Assert.Equal("on-value-audience on-value-size on-value-syntax-summary on-value-syntax-hint", area.GetAttribute("aria-describedby"));
         Assert.Empty(page.FindAll("#on-value-syntax[role]"));
+    }
+
+    // Na descrição, o aria-label de um descendente toma o lugar do conteúdo dele (accname 1.2, passo 2D): apontar para o
+    // quadro inteiro faria o leitor de tela dizer "Line with the error" no lugar da linha.
+    [Fact]
+    public void The_syntax_error_describes_the_field_without_the_label_of_the_excerpt()
+    {
+        var api = ShopConfigRead();
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+
+        page.Find("#on-value").Input("{\n  \"discount\": 0.2\n  \"items\": []\n}");
+
+        var described = page.Find("#on-value").GetAttribute("aria-describedby")?.Split(' ') ?? [];
+        Assert.NotEmpty(described);
+        Assert.All(described, id => Assert.Single(page.FindAll($"#{id}")));
+        Assert.All(described, id => Assert.Empty(page.FindAll($"#{id}[aria-label], #{id} [aria-label]")));
+    }
+
+    // Sem linha a mostrar não há dica: o campo não aponta para um id que não existe.
+    [Fact]
+    public void A_syntax_error_without_a_line_describes_the_field_with_its_summary_only()
+    {
+        var api = ShopConfigRead();
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+
+        page.Find("#on-value").Input("\"\\uD800\"");
+
+        Assert.Equal("on-value-audience on-value-size on-value-syntax-summary", page.Find("#on-value").GetAttribute("aria-describedby"));
+        Assert.Equal(
+            "Not valid JSON: a \\u escape in it stands for half a character and needs its pair.", page.Find("#on-value-syntax-summary").TextContent);
     }
 
     // O número da linha é texto: red-700 (#c10007) sobre o red-50 (#fef2f2) do quadro dá 5,9:1, acima dos 4,5:1 da
