@@ -902,7 +902,6 @@ public sealed class FlagEditorPageTests
     // Uma string JSON com exatamente esse tamanho em bytes depois de compactada: as aspas contam.
     private static string StringOfBytes(int bytes) => $"\"{new string('a', bytes - 2)}\"";
 
-    // O bUnit põe o valor de um <textarea> ligado por value= no atributo; o helper aceita também o conteúdo.
     private static string MeterOf(AngleSharp.Dom.IElement meter) => string.Join(' ', meter.QuerySelectorAll("p > span").Select(MessageOf));
 
     private static StubApi ShopConfigRead() =>

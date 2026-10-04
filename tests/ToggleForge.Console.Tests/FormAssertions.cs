@@ -6,6 +6,7 @@ namespace ToggleForge.Console.Tests;
 /// <summary>Como os testes leem os campos de um formulário do console: texto, mensagem de erro e foco.</summary>
 internal static class FormAssertions
 {
+    // O bUnit põe o valor de um <textarea> ligado por value= no atributo; o helper aceita também o conteúdo.
     public static string TextOf(AngleSharp.Dom.IElement area) => area.GetAttribute("value") ?? area.TextContent;
 
     // O ⚠ é só reforço visual (aria-hidden); a mensagem é o resto.

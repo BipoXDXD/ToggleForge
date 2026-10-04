@@ -120,7 +120,8 @@
     /// <summary>
     /// Nada foi gravado, e o formulário fica como o membro o deixou, para ele corrigir. Erro de campo vai para o
     /// campo; corpo grande demais, para os valores, que são o que cresce; o teto JSON do rascunho ganha o texto do
-    /// console; o resto (chave repetida, teto de 200 flags) vai para a mensagem geral com o texto da API.
+    /// console; o resto (chave já usada no rascunho, <c>key-taken</c>, e o teto de 200 flags) vai para a mensagem geral
+    /// com o texto da API.
     /// </summary>
     /// <remarks>O mesmo switch do <c>FlagEditor.ExplainAsync</c>, sem o 412 e o 404; fica repetido até uma terceira tela.</remarks>
     private async Task ExplainAsync(Problem problem)
