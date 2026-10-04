@@ -55,15 +55,40 @@ internal static class ScriptedTour
     {
         var credential = SdkCredential.Parse("tfsdk_demo-scripted-tour-credential-not-a-secret1");
         var tour = new Tour(new SimulatedServer(Flag, Seed), new FileSnapshotStore(cacheDirectory, credential), new DemoClock());
+        IntroduceTheTour();
+
+        await FirstOpeningWithoutNetworkAsync(tour);
+        var atTenPercent = await NetworkReturnsWithTheFirstPublicationAsync(tour);
+        await WidenTheRolloutAsync(tour, atTenPercent);
+        await IgnoreALateResponseAsync(tour);
+        await ReopenWithoutNetworkAsync(tour);
+        StayOfflinePastTheCacheAge(tour);
+        await ConfirmTheCacheWithNotModifiedAsync(tour);
+        await ReadTheShopConfigAsync(tour);
+        await tour.Game.DisposeAsync();
+
+        Console.WriteLine();
+        Console.WriteLine("Tudo conferido.");
+    }
+
+    private static void IntroduceTheTour()
+    {
         Console.WriteLine("ToggleForge: demonstração do SDK (Marco 4)");
         Console.WriteLine(string.Create(_culture, $"Flag {Flag}, {PlayerCount:N0} jogadores, cache em disco com idade máxima de {_maxCacheAge.TotalDays} dias"));
+    }
 
+    private static async Task FirstOpeningWithoutNetworkAsync(Tour tour)
+    {
         Step(1, "Primeira abertura, sem rede");
         await tour.Game.StartAsync();
         var first = tour.Game.EvaluateBoolean(Flag, _players[0], defaultValue: false);
         Show(first);
         Expect(first.Source == SnapshotSource.None && first.Reason == EvaluationReason.SnapshotMissing, "sem rede e sem cache, o jogo usa os próprios valores padrão");
+    }
 
+    /// <returns>Os índices dos jogadores incluídos na v1.</returns>
+    private static async Task<HashSet<int>> NetworkReturnsWithTheFirstPublicationAsync(Tour tour)
+    {
         Step(2, "A rede volta: o estúdio publica a v1 com 10%");
         tour.Server.IsOnline = true;
         tour.Server.Publish(rolloutBasisPoints: 1_000);
@@ -71,7 +96,11 @@ internal static class ScriptedTour
         var atTenPercent = Included(tour.Game);
         Show(tour, atTenPercent);
         Expect(atTenPercent.Count == IncludedAtTenPercent, $"a v1 inclui {IncludedAtTenPercent} jogadores");
+        return atTenPercent;
+    }
 
+    private static async Task WidenTheRolloutAsync(Tour tour, HashSet<int> atTenPercent)
+    {
         Step(3, "O estúdio amplia para 25% (v2)");
         tour.Server.Publish(rolloutBasisPoints: 2_500);
         Expect(await tour.SyncAsync() == SyncOutcome.Updated && tour.Version == 2, "a v2 chega na sincronização seguinte");
@@ -81,27 +110,39 @@ internal static class ScriptedTour
         Console.WriteLine(string.Create(_culture, $"   perdidos desde a v1: {lost}"));
         Expect(atQuarter.Count == IncludedAtQuarter, $"a v2 inclui {IncludedAtQuarter} jogadores");
         Expect(lost == 0, "ampliar o rollout não tira ninguém que já estava incluído");
+    }
 
+    private static async Task IgnoreALateResponseAsync(Tour tour)
+    {
         Step(4, "Uma resposta atrasada com a v1 chega depois da v2");
         tour.Server.DeliverLateOnce(version: 1);
         var late = await tour.SyncAsync();
         Console.WriteLine($"   {late}: o jogo continua na v{tour.Version}");
         Expect(late == SyncOutcome.OutOfOrder && tour.Version == 2, "a ordem vem da versão da publicação, nunca da chegada");
+    }
 
+    private static async Task ReopenWithoutNetworkAsync(Tour tour)
+    {
         Step(5, "O jogador fecha o jogo e abre de novo, sem rede");
         tour.Server.IsOnline = false;
         await tour.ReopenGameAsync();
         var restarted = tour.Game.EvaluateBoolean(Flag, _players[0], defaultValue: false);
         Show(restarted);
         Expect(restarted.Value && restarted.Source == SnapshotSource.Cache && restarted.SnapshotVersion == 2, "o snapshot do disco vale enquanto a rede não volta");
+    }
 
+    private static void StayOfflinePastTheCacheAge(Tour tour)
+    {
         var offline = _maxCacheAge + TimeSpan.FromDays(1);
         Step(6, $"{offline.TotalDays} dias sem rede");
         tour.Clock.Advance(offline);
         var expired = tour.Game.EvaluateBoolean(Flag, _players[0], defaultValue: false);
         Show(expired);
         Expect(expired.Reason == EvaluationReason.SnapshotExpired && expired.IsFallback, $"depois de {_maxCacheAge.TotalDays} dias sem confirmação, o jogo volta aos valores padrão");
+    }
 
+    private static async Task ConfirmTheCacheWithNotModifiedAsync(Tour tour)
+    {
         Step(7, "A rede volta: o servidor confirma a v2 com 304");
         tour.Server.IsOnline = true;
         var confirmed = await tour.SyncAsync();
@@ -111,7 +152,10 @@ internal static class ScriptedTour
         Expect(
             tour.Server.LastStatusCode == 304 && confirmed == SyncOutcome.NotModified && back.Value && back.Source == SnapshotSource.Server && back.SnapshotVersion == 2,
             "a ETag guardada no disco rende um 304, que confirma o snapshot sem baixá-lo de novo");
+    }
 
+    private static async Task ReadTheShopConfigAsync(Tour tour)
+    {
         Step(8, $"O estúdio publica a configuração JSON {ShopConfigFlag} (v3)");
         tour.Server.Publish(rolloutBasisPoints: 2_500, jsonFlag: (ShopConfigFlag, ShopConfigJson));
         Expect(await tour.SyncAsync() == SyncOutcome.Updated && tour.Version == 3, "a v3 chega na sincronização seguinte");
@@ -124,10 +168,28 @@ internal static class ScriptedTour
         var refused = tour.Game.EvaluateJson(ShopConfigFlag, _players[0], defaultValue: -1, LoggingFailures(json => int.Parse(json, CultureInfo.InvariantCulture)));
         Show(ShopConfigFlag, refused, refused.Value.ToString(CultureInfo.InvariantCulture));
         Expect(refused.Value == -1 && refused.Reason == EvaluationReason.InvalidValue, "um parser que recusa o valor não derruba o jogo: ele recebe o próprio valor padrão");
-        await tour.Game.DisposeAsync();
+    }
 
+    private static void Step(int number, string title)
+    {
         Console.WriteLine();
-        Console.WriteLine("Tudo conferido.");
+        Console.WriteLine($"{number}. {title}");
+    }
+
+    private static void Show(FlagResult<bool> result) => Console.WriteLine($"   {FlagResultText.Describe(Flag, result)}");
+
+    private static void Show(Tour tour, HashSet<int> included) =>
+        Console.WriteLine(string.Create(_culture, $"   v{tour.Version}: incluídos {included.Count:N0} de {PlayerCount:N0} ({(decimal)included.Count / PlayerCount:P1})"));
+
+    private static void Show<T>(string flagKey, FlagResult<T> result, string value) =>
+        Console.WriteLine($"   {FlagResultText.Describe(flagKey, result, value)}");
+
+    private static void Expect(bool held, string promise)
+    {
+        if (!held)
+        {
+            throw new BrokenPromiseException(promise);
+        }
     }
 
     private static HashSet<int> Included(ToggleForgeClient game) =>
@@ -149,28 +211,6 @@ internal static class ScriptedTour
             throw;
         }
     };
-
-    private static void Step(int number, string title)
-    {
-        Console.WriteLine();
-        Console.WriteLine($"{number}. {title}");
-    }
-
-    private static void Show(FlagResult<bool> result) => Console.WriteLine($"   {FlagResultText.Describe(Flag, result)}");
-
-    private static void Show<T>(string flagKey, FlagResult<T> result, string value) =>
-        Console.WriteLine($"   {FlagResultText.Describe(flagKey, result, value)}");
-
-    private static void Show(Tour tour, HashSet<int> included) =>
-        Console.WriteLine(string.Create(_culture, $"   v{tour.Version}: incluídos {included.Count:N0} de {PlayerCount:N0} ({(decimal)included.Count / PlayerCount:P1})"));
-
-    private static void Expect(bool held, string promise)
-    {
-        if (!held)
-        {
-            throw new BrokenPromiseException(promise);
-        }
-    }
 
     private sealed class BrokenPromiseException(string promise) : Exception(promise);
 
@@ -213,4 +253,3 @@ internal static class ScriptedTour
         }
     }
 }
-
