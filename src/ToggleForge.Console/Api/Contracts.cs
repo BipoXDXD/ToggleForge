@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace ToggleForge.Console.Api;
 
 // Só os campos que o console usa de cada schema de docs/api/openapi.yaml (ADR 0009). Campo novo na API é
@@ -23,7 +25,12 @@ public sealed record ProjectEnvironment(string Key, string Name, long? CurrentVe
 
 public sealed record Draft(long Revision, IReadOnlyList<Flag> Flags);
 
-public sealed record Flag(string Key, bool Enabled, int RolloutBasisPoints);
+/// <param name="OnValue">O valor de quem cai no rollout.</param>
+/// <param name="OffValue">O valor de quem fica fora e de todos quando a flag está desligada.</param>
+public sealed record Flag(string Key, bool Enabled, bool OnValue, bool OffValue, int RolloutBasisPoints);
+
+/// <summary>Onde uma flag mora: organização, projeto, ambiente e a chave dela no rascunho.</summary>
+public sealed record FlagAddress(Guid OrganizationId, string ProjectKey, string EnvironmentKey, string FlagKey);
 
 public sealed record Credentials(string Email, string Password);
 
@@ -31,7 +38,15 @@ public sealed record ProjectCreation(string Key, string Name);
 
 public sealed record FlagCreation(string Key, bool Enabled, bool OnValue, bool OffValue, int RolloutBasisPoints);
 
+/// <summary>Merge patch: só os campos que mudaram vão para a API, e campo nulo nem é enviado.</summary>
+public sealed record FlagModification(bool? Enabled = null, bool? OnValue = null, bool? OffValue = null, int? RolloutBasisPoints = null)
+{
+    // Não vai no corpo: a API recusa campo que não conhece (proteção contra mass assignment).
+    [JsonIgnore]
+    public bool IsEmpty => this == new FlagModification();
+}
+
 /// <summary>Um recurso com a ETag que a API devolveu junto; é o valor do If-Match ao alterá-lo.</summary>
-public sealed record Versioned<T>(T Value, string? ETag);
+public sealed record Versioned<T>(T Value, string ETag);
 
 internal sealed record AntiforgeryToken(string Token);

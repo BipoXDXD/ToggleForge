@@ -1,0 +1,258 @@
+@page "/organizations/{OrganizationId:guid}/projects/{ProjectKey}/environments/{EnvironmentKey}/flags/{FlagKey}"
+@inherits ConsolePage
+@inject ConsoleApi Api
+@inject SessionState Session
+@inject NavigationManager Navigation
+
+<PageTitle>@FlagKey · @ProjectKey · ToggleForge</PageTitle>
+
+<nav class="text-sm text-slate-500" aria-label="Breadcrumb">
+    <a href="organizations/@OrganizationId/projects" class="hover:text-slate-700 hover:underline">Projects</a>
+    <span aria-hidden="true"> / </span>
+    <a href="@DraftPath" class="hover:text-slate-700 hover:underline">@ProjectKey · @EnvironmentKey</a>
+</nav>
+
+<h1 class="mt-2 font-mono text-2xl font-semibold tracking-tight">@FlagKey</h1>
+
+@if (_gone is not null)
+{
+    <p class="mt-6 text-sm text-slate-600">@_gone</p>
+    <a href="@DraftPath" class="mt-4 inline-block text-sm font-medium text-indigo-700 hover:underline">Back to the draft</a>
+}
+else if (_loadProblem is not null)
+{
+    <div class="mt-6"><ProblemMessage Problem="_loadProblem" /></div>
+}
+else if (_flag is null || _edit is null)
+{
+    <p class="mt-6 text-sm text-slate-500">Loading the flag…</p>
+}
+else if (Session.MembershipIn(OrganizationId) is not { CanEditDrafts: true })
+{
+    <dl class="mt-6 grid max-w-lg grid-cols-2 gap-y-3 text-sm">
+        <dt class="text-slate-500">State</dt>
+        <dd>@(_flag.Value.Enabled ? "Enabled" : "Disabled")</dd>
+        <dt class="text-slate-500">Rollout</dt>
+        <dd>@RolloutShare.Format(_flag.Value.RolloutBasisPoints)</dd>
+        <dt class="text-slate-500">Value for included players</dt>
+        <dd>@BooleanText(_flag.Value.OnValue)</dd>
+        <dt class="text-slate-500">Value for everyone else</dt>
+        <dd>@BooleanText(_flag.Value.OffValue)</dd>
+    </dl>
+}
+else
+{
+    <form class="mt-6 max-w-lg space-y-4" @onsubmit="SaveAsync" @onsubmit:preventDefault>
+        <label class="flex items-center gap-2">
+            <input type="checkbox" @bind="_edit.Enabled" class="h-4 w-4 rounded border-slate-300" />
+            <span class="text-sm text-slate-700">Enabled</span>
+        </label>
+        <label class="block">
+            <span class="text-sm font-medium text-slate-700">Rollout (%)</span>
+            <input type="number" required min="0" max="100" step="0.01" @bind="_edit.RolloutPercent"
+                   class="mt-1 block w-40 rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none" />
+        </label>
+        <label class="block">
+            <span class="text-sm font-medium text-slate-700">Value for included players</span>
+            <select value="@BooleanText(_edit.OnValue)" @onchange="choice => _edit.OnValue = IsTrue(choice)"
+                    class="mt-1 block w-40 rounded-md border border-slate-300 px-3 py-2 text-sm">
+                <option value="true">true</option>
+                <option value="false">false</option>
+            </select>
+        </label>
+        <label class="block">
+            <span class="text-sm font-medium text-slate-700">Value for everyone else</span>
+            <select value="@BooleanText(_edit.OffValue)" @onchange="choice => _edit.OffValue = IsTrue(choice)"
+                    class="mt-1 block w-40 rounded-md border border-slate-300 px-3 py-2 text-sm">
+                <option value="true">true</option>
+                <option value="false">false</option>
+            </select>
+        </label>
+
+        <ProblemMessage Problem="_problem" />
+        @if (_saved)
+        {
+            <p role="status" class="text-sm text-emerald-700">Saved to the draft. Games get it with the next publication.</p>
+        }
+
+        <div class="flex items-center gap-3">
+            <button type="submit" disabled="@_busy"
+                    class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60">
+                Save
+            </button>
+            <button type="button" disabled="@_busy" @onclick="() => _confirmingRemoval = true"
+                    class="rounded-md px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60">
+                Remove from draft
+            </button>
+        </div>
+    </form>
+
+    @if (_confirmingRemoval)
+    {
+        <section role="alertdialog" aria-labelledby="remove-title" class="mt-6 max-w-lg rounded-md border border-red-200 bg-red-50 px-4 py-3">
+            <h2 id="remove-title" class="text-sm font-semibold text-red-800">Remove @FlagKey from the draft?</h2>
+            <p class="mt-1 text-sm text-red-800">Games keep receiving it until the next publication. Creating the key again later gives it a new rollout.</p>
+            <div class="mt-3 flex gap-3">
+                <button type="button" disabled="@_busy" @onclick="RemoveAsync"
+                        class="rounded-md bg-red-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-60">
+                    Remove
+                </button>
+                <button type="button" @onclick="() => _confirmingRemoval = false"
+                        class="rounded-md px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-100">
+                    Keep it
+                </button>
+            </div>
+        </section>
+    }
+}
+
+@code {
+    private static readonly Problem _invalidRollout = new(
+        "/problems/invalid-rollout", "Invalid rollout", 400, "Enter a rollout between 0 and 100, with at most two decimals.");
+
+    private static readonly Problem _nothingToSave = new(
+        "/problems/nothing-to-save", "Nothing to save", 400, "Nothing to save: these are already the values in the draft.");
+
+    private static readonly Problem _changedMeanwhile = new(
+        "/problems/flag-changed", "The flag changed", 412,
+        "Someone changed this flag after you opened it. These are its current values; make your change again.");
+
+    private Versioned<Flag>? _flag;
+    private FlagEdit? _edit;
+    private Problem? _loadProblem;
+    private Problem? _problem;
+    private string? _gone;
+    private bool _saved;
+    private bool _busy;
+    private bool _confirmingRemoval;
+
+    [Parameter]
+    public Guid OrganizationId { get; set; }
+
+    [Parameter]
+    public string ProjectKey { get; set; } = string.Empty;
+
+    [Parameter]
+    public string EnvironmentKey { get; set; } = string.Empty;
+
+    [Parameter]
+    public string FlagKey { get; set; } = string.Empty;
+
+    private FlagAddress Address => new(OrganizationId, ProjectKey, EnvironmentKey, FlagKey);
+
+    private string DraftPath =>
+        $"organizations/{OrganizationId}/projects/{Uri.EscapeDataString(ProjectKey)}/environments/{Uri.EscapeDataString(EnvironmentKey)}";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        (_flag, _edit, _loadProblem, _problem, _gone, _saved) = (null, null, null, null, null, false);
+        var flag = await Api.GetFlagAsync(Address, Leaving);
+        if (flag.Succeeded)
+        {
+            Show(flag.Value);
+        }
+        else if (flag.Problem.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            _gone = "This flag is not in the draft.";
+        }
+        else
+        {
+            _loadProblem = flag.Problem;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        (_problem, _saved) = (null, false);
+        if (_flag is not { } flag || _edit is not { } edit)
+        {
+            return;
+        }
+
+        if (!edit.TryGetChanges(flag.Value, out var changes))
+        {
+            _problem = _invalidRollout;
+            return;
+        }
+
+        if (changes.IsEmpty)
+        {
+            _problem = _nothingToSave;
+            return;
+        }
+
+        _busy = true;
+        var saved = await Api.UpdateFlagAsync(Address, flag.ETag, changes, Leaving);
+        _busy = false;
+        if (saved.Succeeded)
+        {
+            Show(saved.Value);
+            _saved = true;
+            return;
+        }
+
+        await ExplainAsync(saved.Problem);
+    }
+
+    private async Task RemoveAsync()
+    {
+        if (_flag is not { } flag)
+        {
+            return;
+        }
+
+        _problem = null;
+        _busy = true;
+        var problem = await Api.DeleteFlagAsync(Address, flag.ETag, Leaving);
+        _busy = false;
+        _confirmingRemoval = false;
+        if (problem is null)
+        {
+            Navigation.NavigateTo(DraftPath);
+            return;
+        }
+
+        await ExplainAsync(problem);
+    }
+
+    /// <summary>
+    /// 412: alguém mudou a flag depois da leitura, e nada foi gravado. Os valores atuais substituem o formulário,
+    /// para o membro decidir de novo sobre eles, em vez de sobrescrever a mudança do outro às cegas.
+    /// </summary>
+    private async Task ExplainAsync(Problem problem)
+    {
+        switch (problem.StatusCode)
+        {
+            case System.Net.HttpStatusCode.PreconditionFailed:
+                var current = await Api.GetFlagAsync(Address, Leaving);
+                if (current.Succeeded)
+                {
+                    Show(current.Value);
+                    _problem = _changedMeanwhile;
+                }
+                else
+                {
+                    _problem = current.Problem;
+                }
+
+                break;
+            case System.Net.HttpStatusCode.NotFound:
+                _gone = "This flag left the draft after you opened it.";
+                break;
+            default:
+                _problem = problem;
+                break;
+        }
+    }
+
+    private void Show(Versioned<Flag> flag)
+    {
+        _flag = flag;
+        _edit = FlagEdit.Of(flag.Value);
+    }
+
+    // O @bind formata bool como "True"/"False", que não casa com as opções: o texto segue o JSON do contrato.
+    private static string BooleanText(bool value) => value ? "true" : "false";
+
+    private static bool IsTrue(ChangeEventArgs choice) => choice.Value as string == "true";
+}

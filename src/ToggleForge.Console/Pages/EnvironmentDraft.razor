@@ -55,7 +55,7 @@ else
                     @foreach (var flag in _draft.Flags)
                     {
                         <tr>
-                            <td class="px-4 py-2 font-mono">@flag.Key</td>
+                            <td class="px-4 py-2"><a href="@FlagPath(flag.Key)" class="font-mono text-indigo-700 hover:underline">@flag.Key</a></td>
                             <td class="px-4 py-2">@(flag.Enabled ? "Enabled" : "Disabled")</td>
                             <td class="px-4 py-2">@RolloutShare.Format(flag.RolloutBasisPoints)</td>
                         </tr>
@@ -165,4 +165,6 @@ else
 
     private string EnvironmentPath(string environmentKey) =>
         $"organizations/{OrganizationId}/projects/{Uri.EscapeDataString(ProjectKey)}/environments/{Uri.EscapeDataString(environmentKey)}";
+
+    private string FlagPath(string flagKey) => $"{EnvironmentPath(EnvironmentKey)}/flags/{Uri.EscapeDataString(flagKey)}";
 }
