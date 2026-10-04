@@ -131,9 +131,10 @@ var newShop = client.EvaluateBoolean("new-shop", EvaluationContext.ForPlayer(Pla
 
 O app demonstrativo conta essa história com o SDK de verdade. Sem argumentos, ele roda um roteiro autocontido,
 contra um servidor simulado: primeira abertura sem rede, publicação a 10%, ampliação a 25% sem perder ninguém,
-resposta atrasada descartada, reinício sem rede com o cache, oito dias offline e a volta da rede com um 304.
+resposta atrasada descartada, reinício sem rede com o cache, o cache vencido depois de dias offline e a volta da rede com um 304.
 Cada passo confere o que promete, e o CI roda o roteiro como smoke test. Com `--live`, ele conecta numa API
-rodando e mostra a flag mudar a cada publicação ou rollback feito pelo console.
+rodando e mostra a flag mudar a cada publicação ou rollback feito pelo console; fora do localhost, só por
+HTTPS, para a credencial não trafegar em texto claro.
 
 ```bash
 dotnet run --project samples/ToggleForge.SdkDemo

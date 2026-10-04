@@ -17,12 +17,28 @@ internal static class LiveMode
     /// <returns>O código de saída do processo.</returns>
     public static async Task<int> RunAsync(string flagKey, string playerId)
     {
-        if (!Uri.TryCreate(Environment.GetEnvironmentVariable(UrlVariable), UriKind.Absolute, out var apiUrl)
-            || !SdkCredential.TryParse(Environment.GetEnvironmentVariable(CredentialVariable), out var credential)
-            || !PlayerId.TryParse(playerId, out var player))
+        if (!Uri.TryCreate(Environment.GetEnvironmentVariable(UrlVariable), UriKind.Absolute, out var apiUrl))
         {
-            Console.Error.WriteLine($"Defina {UrlVariable} (a raiz da API) e {CredentialVariable} (a credencial do ambiente, tfsdk_...).");
-            return 2;
+            Console.Error.WriteLine($"Defina {UrlVariable} com a raiz da API, por exemplo https://toggleforge.example.com/.");
+            return ExitCodes.InvalidInput;
+        }
+
+        if (!KeepsCredentialPrivate(apiUrl))
+        {
+            Console.Error.WriteLine($"{UrlVariable} precisa de https; http só vale para localhost, porque a credencial iria em texto claro.");
+            return ExitCodes.InvalidInput;
+        }
+
+        if (!SdkCredential.TryParse(Environment.GetEnvironmentVariable(CredentialVariable), out var credential))
+        {
+            Console.Error.WriteLine($"Defina {CredentialVariable} com a credencial do ambiente (tfsdk_...), copiada do console.");
+            return ExitCodes.InvalidInput;
+        }
+
+        if (!PlayerId.TryParse(playerId, out var player))
+        {
+            Console.Error.WriteLine($"O jogador \"{playerId}\" não é um identificador válido.");
+            return ExitCodes.InvalidInput;
         }
 
         using var stop = new CancellationTokenSource();
@@ -39,13 +55,30 @@ internal static class LiveMode
             new FileSnapshotStore(cacheDirectory, credential),
             new ToggleForgeOptions { SyncInterval = ToggleForgeOptions.MinSyncInterval });
         Console.WriteLine($"ToggleForge ao vivo: {flagKey} para {playerId} em {apiUrl}. Ctrl+C encerra.");
-        await game.StartAsync(stop.Token);
+        Console.WriteLine($"Cache em {cacheDirectory}");
+        try
+        {
+            await game.StartAsync(stop.Token);
+        }
+        catch (OperationCanceledException) when (stop.IsCancellationRequested)
+        {
+            return ExitCodes.Success;
+        }
 
+        await ShowChangesAsync(game, flagKey, player, stop.Token);
+        return ExitCodes.Success;
+    }
+
+    private static bool KeepsCredentialPrivate(Uri apiUrl) =>
+        apiUrl.Scheme == Uri.UriSchemeHttps || (apiUrl.Scheme == Uri.UriSchemeHttp && apiUrl.IsLoopback);
+
+    /// <summary>Uma linha a cada mudança de valor, motivo, origem ou versão, até o Ctrl+C.</summary>
+    private static async Task ShowChangesAsync(ToggleForgeClient game, string flagKey, PlayerId player, CancellationToken stop)
+    {
         string? last = null;
         while (!stop.IsCancellationRequested)
         {
-            var result = game.EvaluateBoolean(flagKey, EvaluationContext.ForPlayer(player), defaultValue: false);
-            var line = $"{flagKey} = {(result.Value ? "true" : "false")} ({result.Reason}, {result.Source}{(result.SnapshotVersion is { } version ? $", v{version}" : string.Empty)})";
+            var line = FlagResultText.Describe(flagKey, game.EvaluateBoolean(flagKey, EvaluationContext.ForPlayer(player), defaultValue: false));
             if (line != last)
             {
                 Console.WriteLine($"{DateTimeOffset.Now:HH:mm:ss}  {line}");
@@ -54,14 +87,12 @@ internal static class LiveMode
 
             try
             {
-                await Task.Delay(_displayEvery, stop.Token);
+                await Task.Delay(_displayEvery, stop);
             }
             catch (OperationCanceledException)
             {
-                break;
+                return;
             }
         }
-
-        return 0;
     }
 }

@@ -13,17 +13,32 @@ internal static class ScriptedTour
 {
     private const int PlayerCount = 10_000;
     private const string Flag = "new-shop";
+    private const string Seed = "seed-demo";
+
+    // Calculados pelo oráculo Python do rollout v1 (tools/rollout-vectors) com esta flag, esta semente e os
+    // jogadores player-1 a player-10000; outro número quer dizer que o algoritmo, que é contrato público, mudou.
+    private const int IncludedAtTenPercent = 981;
+    private const int IncludedAtQuarter = 2_446;
 
     private static readonly CultureInfo _culture = CultureInfo.GetCultureInfo("pt-BR");
+    private static readonly TimeSpan _maxCacheAge = new ToggleForgeOptions().MaxCacheAge;
     private static readonly List<EvaluationContext> _players =
         Enumerable.Range(1, PlayerCount).Select(n => EvaluationContext.ForPlayer(PlayerId.Parse($"player-{n}"))).ToList();
 
-    public static async Task RunAsync()
+    /// <returns>O código de saída do processo: 1 se uma promessa não se confirmou.</returns>
+    public static async Task<int> RunAsync()
     {
         var cacheDirectory = Path.Combine(Path.GetTempPath(), "toggleforge-sdk-demo", Guid.NewGuid().ToString("N"));
         try
         {
             await TellAsync(cacheDirectory);
+            return ExitCodes.Success;
+        }
+        catch (BrokenPromiseException broken)
+        {
+            Console.Error.WriteLine();
+            Console.Error.WriteLine($"A demonstração não se confirmou: {broken.Message}.");
+            return ExitCodes.BrokenPromise;
         }
         finally
         {
@@ -37,11 +52,11 @@ internal static class ScriptedTour
     private static async Task TellAsync(string cacheDirectory)
     {
         var clock = new DemoClock();
-        var server = new SimulatedServer();
-        var credential = SdkCredential.Parse("tfsdk_demo" + new string('x', 39));
+        var server = new SimulatedServer(Flag, Seed);
+        var credential = SdkCredential.Parse("tfsdk_demo-scripted-tour-credential-not-a-secret1");
         var store = new FileSnapshotStore(cacheDirectory, credential);
         Console.WriteLine("ToggleForge: demonstração do SDK (Marco 4)");
-        Console.WriteLine(string.Create(_culture, $"Flag {Flag}, {PlayerCount:N0} jogadores, cache em disco com idade máxima de 7 dias"));
+        Console.WriteLine(string.Create(_culture, $"Flag {Flag}, {PlayerCount:N0} jogadores, cache em disco com idade máxima de {_maxCacheAge.TotalDays} dias"));
 
         var game = new ToggleForgeClient(server, store, timeProvider: clock);
         Step(1, "Primeira abertura, sem rede");
@@ -53,17 +68,19 @@ internal static class ScriptedTour
         Step(2, "A rede volta: o estúdio publica a v1 com 10%");
         server.IsOnline = true;
         server.Publish(rolloutBasisPoints: 1_000);
-        Expect(await SyncAsync(game, clock) == SyncOutcome.Updated, "a v1 chega na sincronização seguinte");
+        Expect(await SyncAsync(game, clock) == SyncOutcome.Updated && Version(game) == 1, "a v1 chega na sincronização seguinte");
         var atTenPercent = Included(game);
         Show(game, atTenPercent);
+        Expect(atTenPercent.Count == IncludedAtTenPercent, $"a v1 inclui {IncludedAtTenPercent} jogadores");
 
         Step(3, "O estúdio amplia para 25% (v2)");
         server.Publish(rolloutBasisPoints: 2_500);
-        await SyncAsync(game, clock);
+        Expect(await SyncAsync(game, clock) == SyncOutcome.Updated && Version(game) == 2, "a v2 chega na sincronização seguinte");
         var atQuarter = Included(game);
         var lost = atTenPercent.Except(atQuarter).Count();
         Show(game, atQuarter);
         Console.WriteLine(string.Create(_culture, $"   perdidos desde a v1: {lost}"));
+        Expect(atQuarter.Count == IncludedAtQuarter, $"a v2 inclui {IncludedAtQuarter} jogadores");
         Expect(lost == 0, "ampliar o rollout não tira ninguém que já estava incluído");
 
         Step(4, "Uma resposta atrasada com a v1 chega depois da v2");
@@ -79,21 +96,24 @@ internal static class ScriptedTour
         await game.StartAsync();
         var restarted = game.EvaluateBoolean(Flag, _players[0], defaultValue: false);
         Show(restarted);
-        Expect(restarted.Source == SnapshotSource.Cache && restarted.SnapshotVersion == 2, "o snapshot do disco vale enquanto a rede não volta");
+        Expect(restarted.Value && restarted.Source == SnapshotSource.Cache && restarted.SnapshotVersion == 2, "o snapshot do disco vale enquanto a rede não volta");
 
-        Step(6, "Oito dias sem rede");
-        clock.Advance(TimeSpan.FromDays(8));
+        var offline = _maxCacheAge + TimeSpan.FromDays(1);
+        Step(6, $"{offline.TotalDays} dias sem rede");
+        clock.Advance(offline);
         var expired = game.EvaluateBoolean(Flag, _players[0], defaultValue: false);
         Show(expired);
-        Expect(expired.Reason == EvaluationReason.SnapshotExpired && expired.IsFallback, "depois de 7 dias sem confirmação, o jogo volta aos valores padrão");
+        Expect(expired.Reason == EvaluationReason.SnapshotExpired && expired.IsFallback, $"depois de {_maxCacheAge.TotalDays} dias sem confirmação, o jogo volta aos valores padrão");
 
         Step(7, "A rede volta: o servidor confirma a v2 com 304");
         server.IsOnline = true;
         var confirmed = await SyncAsync(game, clock);
         var back = game.EvaluateBoolean(Flag, _players[0], defaultValue: false);
-        Console.WriteLine($"   {confirmed}");
+        Console.WriteLine($"   {server.LastStatusCode} {confirmed}");
         Show(back);
-        Expect(confirmed == SyncOutcome.NotModified && back.Source == SnapshotSource.Server && back.SnapshotVersion == 2, "um 304 confirma o snapshot guardado sem baixá-lo de novo");
+        Expect(
+            server.LastStatusCode == 304 && confirmed == SyncOutcome.NotModified && back.Value && back.Source == SnapshotSource.Server && back.SnapshotVersion == 2,
+            "a ETag guardada no disco rende um 304, que confirma o snapshot sem baixá-lo de novo");
         await game.DisposeAsync();
 
         Console.WriteLine();
@@ -118,8 +138,7 @@ internal static class ScriptedTour
         Console.WriteLine($"{number}. {title}");
     }
 
-    private static void Show(FlagResult<bool> result) =>
-        Console.WriteLine($"   {Flag} = {(result.Value ? "true" : "false")} ({result.Reason}, {result.Source}{(result.SnapshotVersion is { } version ? $", v{version}" : string.Empty)})");
+    private static void Show(FlagResult<bool> result) => Console.WriteLine($"   {FlagResultText.Describe(Flag, result)}");
 
     private static void Show(ToggleForgeClient game, HashSet<int> included) =>
         Console.WriteLine(string.Create(_culture, $"   v{Version(game)}: incluídos {included.Count:N0} de {PlayerCount:N0} ({(decimal)included.Count / PlayerCount:P1})"));
@@ -128,7 +147,9 @@ internal static class ScriptedTour
     {
         if (!held)
         {
-            throw new InvalidOperationException($"A demonstração não se confirmou: {promise}.");
+            throw new BrokenPromiseException(promise);
         }
     }
+
+    private sealed class BrokenPromiseException(string promise) : Exception(promise);
 }
