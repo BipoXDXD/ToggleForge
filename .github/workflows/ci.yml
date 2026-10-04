@@ -45,6 +45,10 @@ jobs:
       - name: Build
         run: dotnet build ToggleForge.slnx --configuration Release --no-restore
 
+      # A jornada do console dirige um Chromium pelo Playwright; o runner Linux precisa das bibliotecas dele.
+      - name: Instalar o Chromium do Playwright
+        run: pwsh tests/ToggleForge.Api.Tests/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
+
       # global.json seleciona o Microsoft.Testing.Platform; nesse modo a solução vai em --solution.
       - name: Testes
         run: dotnet test --solution ToggleForge.slnx --configuration Release --no-build

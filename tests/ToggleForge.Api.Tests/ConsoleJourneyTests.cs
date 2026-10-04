@@ -1,0 +1,118 @@
+using System.Net;
+using Microsoft.Playwright;
+using ToggleForge.Api.Tests.Support;
+using static Microsoft.Playwright.Assertions;
+
+namespace ToggleForge.Api.Tests;
+
+/// <summary>
+/// O tracer bullet do Marco 3 num navegador de verdade: o console carregado da API, falando com ela pela mesma
+/// origem, com o cookie de sessão e o token antiforgery reais (ADR 0009).
+/// </summary>
+public sealed class ConsoleJourneyTests(ApiFactory api, Browser browser) : IClassFixture<Browser>, IAsyncLifetime
+{
+    private BrowserHost? _host;
+
+    private BrowserHost Host => _host ?? throw new InvalidOperationException("The host has not started.");
+
+    public ValueTask InitializeAsync()
+    {
+        _host = new BrowserHost(api);
+        return ValueTask.CompletedTask;
+    }
+
+    [Fact]
+    public async Task A_member_signs_in_creates_a_project_and_adds_a_flag_to_its_draft()
+    {
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        await using var context = await browser.NewContextAsync(Host.Address);
+        var page = await context.NewPageAsync();
+        var browserErrors = CollectErrors(page);
+
+        await page.GotoAsync("/");
+        await SignInAsync(page, owner.Email, ConsoleClient.Password);
+        await Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Projects" })).ToBeVisibleAsync();
+        await page.GetByLabel("Name").FillAsync("Space Race");
+        await page.GetByLabel("Key").FillAsync("space-race");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Create project" }).ClickAsync();
+        await Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Space Race" })).ToBeVisibleAsync();
+        await page.GetByLabel("Key").FillAsync("new-shop");
+        await page.GetByLabel("Rollout (%)").FillAsync("25");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Add to draft" }).ClickAsync();
+
+        var row = page.GetByRole(AriaRole.Row).Filter(new() { HasText = "new-shop" });
+        await Expect(row).ToContainTextAsync("Enabled");
+        await Expect(row).ToContainTextAsync("25%");
+        var draft = await owner.GetDraftAsync("space-race");
+        var flag = Assert.Single(draft.Json["flags"]!.AsArray())!;
+        Assert.Equal("new-shop", flag["key"]!.GetValue<string>());
+        Assert.Equal(2_500, flag["rolloutBasisPoints"]!.GetValue<int>());
+        Assert.True(browserErrors.Count == 0, string.Join(" | ", browserErrors));
+    }
+
+    [Fact]
+    public async Task A_visitor_without_session_signs_in_and_returns_to_the_page_asked_for()
+    {
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        Assert.Equal(HttpStatusCode.Created, (await owner.CreateProjectAsync("space-race")).Status);
+        await using var context = await browser.NewContextAsync(Host.Address);
+        var page = await context.NewPageAsync();
+
+        await page.GotoAsync($"/organizations/{owner.OrganizationId}/projects/space-race/environments/prod");
+        await Expect(page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex("/sign-in\\?returnUrl="));
+        await SignInAsync(page, owner.Email, ConsoleClient.Password);
+
+        await Expect(page.GetByRole(AriaRole.Tab, new() { Name = "Production" })).ToHaveAttributeAsync("aria-selected", "true");
+        Assert.EndsWith($"/organizations/{owner.OrganizationId}/projects/space-race/environments/prod", page.Url, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_wrong_password_keeps_the_visitor_on_the_sign_in_page()
+    {
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        await using var context = await browser.NewContextAsync(Host.Address);
+        var page = await context.NewPageAsync();
+
+        await page.GotoAsync("/sign-in");
+        await SignInAsync(page, owner.Email, "not the password");
+
+        await Expect(page.GetByRole(AriaRole.Alert)).ToHaveTextAsync("The email or the password is wrong.");
+        Assert.EndsWith("/sign-in", page.Url, StringComparison.Ordinal);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_host is not null)
+        {
+            await _host.DisposeAsync();
+        }
+    }
+
+    private static async Task SignInAsync(IPage page, string email, string password)
+    {
+        await page.GetByLabel("Email").FillAsync(email);
+        await page.GetByLabel("Password").FillAsync(password);
+        await page.GetByRole(AriaRole.Button, new() { Name = "Sign in" }).ClickAsync();
+    }
+
+    /// <summary>
+    /// Erros de script, violações da CSP e arquivos do console que não carregaram aparecem só no console do
+    /// navegador. O status das chamadas à API fica de fora: o 401 de quem ainda não entrou faz parte do fluxo, e
+    /// a interface é que mostra se a resposta foi tratada.
+    /// </summary>
+    private static List<string> CollectErrors(IPage page)
+    {
+        var errors = new List<string>();
+        page.Console += (_, message) =>
+        {
+            var apiCallStatus = message.Text.StartsWith("Failed to load resource", StringComparison.Ordinal)
+                && new Uri(message.Location).AbsolutePath.StartsWith("/api/", StringComparison.Ordinal);
+            if (message.Type == "error" && !apiCallStatus)
+            {
+                errors.Add($"{message.Text} at {message.Location}");
+            }
+        };
+        page.PageError += (_, error) => errors.Add(error);
+        return errors;
+    }
+}
