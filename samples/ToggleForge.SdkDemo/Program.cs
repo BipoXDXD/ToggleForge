@@ -11,7 +11,7 @@ switch (args)
     case []:
         return await ScriptedTour.RunAsync();
     case ["--live", .. var live] when live.Length <= MaxLiveArguments:
-        return await LiveMode.RunAsync(live.ElementAtOrDefault(0) ?? DefaultLiveFlag, live.ElementAtOrDefault(1) ?? DefaultLivePlayer);
+        return await LiveMode.RunAsync(live.ElementAtOrDefault(0) ?? DefaultLiveFlag, live.ElementAtOrDefault(1) ?? DefaultLivePlayer, LiveReadings.Boolean);
     default:
         Console.Error.WriteLine(Usage);
         return ExitCodes.InvalidInput;
