@@ -1,4 +1,6 @@
 using System.Net;
+using System.Text;
+using System.Text.Json;
 using ToggleForge.Api.Tests.Support;
 
 namespace ToggleForge.Api.Tests;
@@ -13,6 +15,9 @@ public sealed class LimitTests(ApiFactory api)
     private const int MaxActiveCredentials = 5;
     private const int MaxEnvironments = 10;
     private const int Racers = 4;
+    private const int JsonBudgetBytes = 128 * 1024;
+    private const int FullValueBytes = 4 * 1024;
+    private const string JsonBudgetReached = "/problems/json-budget-reached";
 
     [Fact]
     public async Task The_21st_project_of_an_organization_conflicts()
@@ -111,5 +116,56 @@ public sealed class LimitTests(ApiFactory api)
         var draft = await editor.GetDraftAsync("space-race");
         Assert.Equal(Racers, draft.Json["flags"]!.AsArray().Count);
         Assert.Equal(1 + Racers, draft.Json["revision"]!.GetValue<long>());
+    }
+
+    /// <summary>Canvas D4: o teto do rascunho é invariante do ambiente, travado na edição.</summary>
+    [Fact]
+    public async Task Concurrent_creations_cannot_exceed_the_environment_json_budget()
+    {
+        using var editor = await ConsoleClient.SignUpAsync(api);
+        await editor.CreateProjectAsync("space-race");
+        await editor.FillJsonBudgetAsync("space-race", JsonBudgetBytes - (2 * FullValueBytes));
+        var fullValue = ConsoleClient.JsonTextOf(FullValueBytes);
+
+        var responses = await Task.WhenAll(Enumerable.Range(1, Racers).Select(racer =>
+            editor.CreateJsonFlagAsync("space-race", $"racer-{racer}", fullValue, fullValue)));
+
+        Assert.Single(responses, response => response.Status == HttpStatusCode.Created);
+        Assert.All(responses.Where(response => response.Status != HttpStatusCode.Created), response => Assert.Equal(JsonBudgetReached, response.ProblemType));
+        Assert.Equal(JsonBudgetBytes, JsonBytesOf(await editor.GetDraftAsync("space-race")));
+    }
+
+    /// <summary>A ETag é por flag: só o lock do ambiente impede que edições de flags diferentes passem juntas do teto.</summary>
+    [Fact]
+    public async Task Concurrent_changes_cannot_exceed_the_environment_json_budget()
+    {
+        using var editor = await ConsoleClient.SignUpAsync(api);
+        await editor.CreateProjectAsync("space-race");
+        var racers = new List<(string Key, string? ETag)>();
+        for (var racer = 1; racer <= Racers; racer++)
+        {
+            var created = await editor.CreateJsonFlagAsync("space-race", $"racer-{racer}", "0", "0");
+            racers.Add(($"racer-{racer}", created.Header("ETag")));
+        }
+
+        const int Growth = FullValueBytes - 1;
+        await editor.FillJsonBudgetAsync("space-race", JsonBudgetBytes - (2 * Racers) - Growth);
+        var patch = $$"""{"onValue":{{ConsoleClient.JsonTextOf(FullValueBytes)}}}""";
+
+        var responses = await Task.WhenAll(racers.Select(racer => editor.UpdateFlagAsync("space-race", racer.Key, racer.ETag, patch)));
+
+        Assert.Single(responses, response => response.Status == HttpStatusCode.OK);
+        Assert.All(responses.Where(response => response.Status != HttpStatusCode.OK), response => Assert.Equal(JsonBudgetReached, response.ProblemType));
+        Assert.Equal(JsonBudgetBytes, JsonBytesOf(await editor.GetDraftAsync("space-race")));
+    }
+
+    /// <summary>A soma dos valores das flags json do rascunho, como o servidor os escreve (compactos).</summary>
+    private static int JsonBytesOf(ApiResponse draft)
+    {
+        using var body = JsonDocument.Parse(draft.Body);
+        return body.RootElement.GetProperty("flags").EnumerateArray()
+            .Where(flag => flag.GetProperty("type").GetString() == "json")
+            .Sum(flag => Encoding.UTF8.GetByteCount(flag.GetProperty("onValue").GetRawText())
+                + Encoding.UTF8.GetByteCount(flag.GetProperty("offValue").GetRawText()));
     }
 }

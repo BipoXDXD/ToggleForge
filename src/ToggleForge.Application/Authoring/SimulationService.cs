@@ -41,16 +41,24 @@ public sealed class SimulationService(
             version,
             simulated
                 .OrderBy(flag => flag.Key.Value, StringComparer.Ordinal)
-                .Select(flag => SimulationResultView.Of(flag.Key, Evaluate(flag, locator, player)))
+                .Select(flag => Evaluate(flag, locator, player))
                 .ToList());
     }
 
     /// <summary>
-    /// O jogador sempre tem ID, então o valor padrão nunca é usado: só o rollout parcial sem ID cairia
-    /// nele.
+    /// O jogador sempre tem ID e o parser da flag JSON não lança, então o valor padrão nunca é usado: só o rollout
+    /// parcial sem ID ou um parser que falha cairiam nele.
     /// </summary>
-    private static EvaluationResult<bool> Evaluate(PublishedFlag flag, EnvironmentLocator locator, EvaluationContext player) =>
-        flag.ToBooleanFlag().Evaluate(locator.ProjectKey, locator.EnvironmentKey, player, defaultValue: false);
+    private static SimulationResultView Evaluate(PublishedFlag flag, EnvironmentLocator locator, EvaluationContext player) =>
+        flag.ToFlag() switch
+        {
+            BooleanFlag boolean => View(flag, boolean.Evaluate(locator.ProjectKey, locator.EnvironmentKey, player, defaultValue: false), value => value ? "true" : "false"),
+            JsonFlag json => View(flag, json.Evaluate(locator.ProjectKey, locator.EnvironmentKey, player, defaultValue: "null", text => text), text => text),
+            var unknown => throw new InvalidOperationException($"Unknown flag '{unknown.GetType().Name}'."),
+        };
+
+    private static SimulationResultView View<T>(PublishedFlag flag, EvaluationResult<T> result, Func<T, string> json) =>
+        new(flag.Key, flag.Settings.Type, json(result.Value), result.Reason, result.Bucket);
 
     private async Task<Result<List<PublishedFlag>>> DraftFlagsAsync(EnvironmentLocator locator, CancellationToken cancellationToken) =>
         await environments.FindAsync(locator, cancellationToken) is { } environment

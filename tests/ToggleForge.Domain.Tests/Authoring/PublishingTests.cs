@@ -52,7 +52,7 @@ public sealed class PublishingTests
         var reviewedRevision = environment.DraftRevision;
         Flags.Add(environment, "battle-pass");
 
-        var published = environment.Publish(reviewedRevision, summary: null, _editor, _now, current: null);
+        var published = environment.Publish(reviewedRevision, summary: null, _editor, _now, current: null, PublishedFlagTypes.None);
 
         Assert.False(published.TryGetValue(out _, out var failure));
         Assert.Equal(AuthoringFailures.DraftChanged, failure);
@@ -64,7 +64,7 @@ public sealed class PublishingTests
     {
         var environment = Flags.NewEnvironment();
 
-        var published = environment.Publish(environment.DraftRevision, summary: null, _editor, _now, current: null);
+        var published = environment.Publish(environment.DraftRevision, summary: null, _editor, _now, current: null, PublishedFlagTypes.None);
 
         Assert.False(published.TryGetValue(out _, out var failure));
         Assert.Equal(AuthoringFailures.NothingToPublish, failure);
@@ -77,7 +77,7 @@ public sealed class PublishingTests
         Flags.Add(environment, "new-shop");
         var first = Publish(environment, current: null);
 
-        var published = environment.Publish(environment.DraftRevision, summary: null, _editor, _now, first);
+        var published = environment.Publish(environment.DraftRevision, summary: null, _editor, _now, first, PublishedFlagTypes.None);
 
         Assert.False(published.TryGetValue(out _, out var failure));
         Assert.Equal(AuthoringFailures.NothingToPublish, failure);
@@ -92,12 +92,12 @@ public sealed class PublishingTests
         Publish(environment, current: null);
 
         Assert.Throws<InvalidOperationException>(
-            () => environment.Publish(environment.DraftRevision, summary: null, _editor, _now, current: null));
+            () => environment.Publish(environment.DraftRevision, summary: null, _editor, _now, current: null, PublishedFlagTypes.None));
     }
 
     private static Publication Publish(ProjectEnvironment environment, Publication? current, ChangeSummary? summary = null)
     {
-        var published = environment.Publish(environment.DraftRevision, summary, _editor, _now, current);
+        var published = environment.Publish(environment.DraftRevision, summary, _editor, _now, current, PublishedFlagTypes.None);
         Assert.True(published.TryGetValue(out var publication, out var failure), failure?.Detail);
         return publication;
     }

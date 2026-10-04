@@ -56,11 +56,8 @@ public sealed record PublicationPage(IReadOnlyList<PublicationSummaryView> Items
 /// <summary><see cref="Version"/> é a publicação simulada; nula quando foi o rascunho.</summary>
 public sealed record SimulationView(long? Version, IReadOnlyList<SimulationResultView> Results);
 
-public sealed record SimulationResultView(FlagKey FlagKey, bool Value, EvaluationReason Reason, int? Bucket)
-{
-    internal static SimulationResultView Of(FlagKey key, EvaluationResult<bool> result) =>
-        new(key, result.Value, result.Reason, result.Bucket);
-}
+/// <summary><see cref="Value"/> é o valor avaliado em texto JSON, também numa flag booleana.</summary>
+public sealed record SimulationResultView(FlagKey FlagKey, FlagType Type, string Value, EvaluationReason Reason, int? Bucket);
 
 /// <summary>O que o SDK recebe: nada além do necessário para avaliar.</summary>
 public sealed record SnapshotView(

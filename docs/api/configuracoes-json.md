@@ -22,11 +22,12 @@ Os mesmos de `autoria-e-publicacao.md`. O que muda para cada um:
 
 | Passo | Entradas | Sucesso | Falhas | Operação |
 |---|---|---|---|---|
-| Criar flag JSON | ambiente, chave, tipo `json`, ativa, valor ligado, valor desligado, percentual | flag no rascunho com os valores compactados; seed gerada pelo servidor | as da flag booleana; valor que não é JSON; chave duplicada num objeto; mais de 8 níveis; mais de 4 KiB compactado; número fora do `double`; soma do ambiente acima de 128 KiB | Criar flag |
+| Criar flag JSON | ambiente, chave, tipo `json`, ativa, valor ligado, valor desligado, percentual | flag no rascunho com os valores compactados; seed gerada pelo servidor | as da flag booleana; valor que não é JSON; chave duplicada num objeto; mais de 8 níveis; mais de 4 KiB compactado; número fora do `double`; soma do ambiente acima de 128 KiB; chave já publicada no ambiente com o outro tipo | Criar flag |
 | Alterar flag JSON | flag, revisão vista, campos alterados | flag alterada, nova revisão | as da flag booleana; valor do tipo errado; tentativa de mudar o tipo; os limites acima | Alterar flag |
 
 Sem o tipo, a flag nasce booleana, como hoje. O tipo não muda depois da criação: um build publicado lê a flag
-com uma classe dele.
+com uma classe dele. Pelo mesmo motivo, a chave publicada num ambiente fica com o tipo ali para sempre: apagar a
+flag não libera o tipo, e outro tipo pede uma chave nova.
 
 ### 2. Simular um jogador (Editor, Viewer)
 
@@ -51,18 +52,23 @@ Um SDK antigo que encontra um tipo que não conhece ignora aquela flag e segue c
    dentro. Assim o console e o jogo não fazem um parse duplo.
 3. **Compactação no servidor.** O valor volta compacto, com a ordem das chaves preservada; quem edita
    reformata.
-4. **O teto do ambiente é conflito de estado.** Passar dos 128 KiB é 409 `limit-reached`, como passar de 200
-   flags. Um valor acima de 4 KiB é erro de entrada, 400 no campo.
+4. **O teto do ambiente é conflito de estado.** Passar dos 128 KiB é 409 `json-budget-reached`, um tipo
+   próprio, separado do `limit-reached` das 200 flags, para o console explicar o erro sem adivinhar. Um valor
+   acima de 4 KiB é erro de entrada, 400 no campo.
+5. **O tipo travado também é conflito de estado.** Recriar ou republicar uma chave com o outro tipo é 409
+   `flag-type-locked`, e o `detail` diz a chave e o tipo já publicado, para o console sugerir uma chave nova.
 
 ## Ameaças (STRIDE)
 
 | # | Ameaça | Mitigação | Teste que prova |
 |---|---|---|---|
 | T4 | O cliente troca o tipo de uma flag publicada e quebra builds antigos (mass assignment) | `type` só na criação; o DTO de alteração recusa o campo | `Changing_the_type_of_a_flag_is_rejected_and_nothing_is_saved` |
+| T4r | Residual de T4: a chave publicada é apagada e recriada com o outro tipo, ou um rollback volta à versão com o outro tipo | A chave publicada mantém o tipo no ambiente (ADR 0011): a FK de `publication_flags` para `published_flag_types` (ambiente, chave, tipo), gravada na transação da publicação, segura o invariante; o lock do ambiente faz a disputa responder 409, e não 500; 409 `flag-type-locked` na criação, no publish e no rollback (salvaguarda que a API não alcança), com 404 antes para outra organização; o `TypeMismatch` do núcleo segue como defesa do jogo | `Recreating_a_published_key_with_another_type_gets_409_and_nothing_is_saved`, `Publishing_a_draft_that_holds_a_key_with_another_type_gets_409_and_publishes_nothing`, `Racing_a_publication_against_recreating_the_key_with_another_type_never_publishes_both_types`, `The_database_refuses_a_published_flag_with_another_type_than_its_key_was_published_with`, `The_database_refuses_changing_the_type_a_key_was_published_with`, `The_database_keeps_one_published_type_per_key_and_environment`, `A_member_of_another_organization_gets_404_not_the_type_a_key_was_published_with`, no domínio `Rolling_back_to_a_key_with_another_type_than_published_fails_and_keeps_the_draft` e, na Evaluation, `A_json_flag_asked_as_boolean_falls_back_with_TypeMismatch` |
 | T5 | O console e o jogo leem valores diferentes do mesmo JSON | Recusar chave duplicada e número fora do `double`; compactar no servidor; o SDK recusa o snapshot com chave repetida ou valor que um parser comum não leria. **Risco residual aceito:** a fração passa pelo `double` e chega ao jogo como o `double` mais próximo (mais de 17 dígitos arredondam) | `A_duplicated_key_is_rejected_at_any_depth`, `A_number_out_of_double_range_is_rejected`, `A_key_repeated_inside_a_json_value_refuses_the_snapshot` e `A_json_value_a_standard_parser_would_not_read_refuses_the_snapshot` |
 | T6 | Um valor JSON injeta script no console (XSS) | Blazor codifica a saída; nada de `MarkupString` com valor do usuário | `A_json_value_with_markup_is_shown_as_text` |
 | I7 | O estúdio põe um segredo numa configuração, e ele chega a todo jogador | **Aceito**: a credencial sai do build (`ToggleForge.md`, seção 11). O editor avisa que o valor é público para quem tem o jogo | `The_json_editor_warns_that_values_reach_every_player` |
-| D3 | Um JSON gigante ou profundo pesa na API, no banco e em cada download | 32 KiB por corpo, 4 KiB e 8 níveis por valor, 128 KiB por ambiente | Testes on/off point em cada limite e `A_body_over_32_KiB_gets_413` |
-| D4 | Duas criações simultâneas passam juntas do teto do ambiente | O teto é invariante do aggregate, gravado com a revisão do rascunho | `Concurrent_creations_cannot_exceed_the_environment_json_budget` |
+| I8 | Um valor JSON gravado vaza para o log quando a reidratação falha | Mensagens de conversão só com o tipo e o tamanho, no rascunho e na publicação; o ponteiro de um corpo inválido para no campo de topo, sem as chaves do valor | `A_corrupted_json_value_never_reaches_the_logs_or_the_response`, `A_corrupted_published_json_value_never_reaches_the_logs_or_the_response` e `A_canary_in_a_repeated_key_never_reaches_the_logs_or_the_response` |
+| D3 | Um JSON gigante ou profundo pesa na API, no banco e em cada download | 32 KiB por corpo (aplicado pelo Kestrel), 4 KiB e 8 níveis por valor, 128 KiB por ambiente | Testes on/off point em cada limite, `A_body_over_32_KiB_gets_413` e `A_chunked_body_over_32_KiB_gets_413` |
+| D4 | Duas criações ou edições simultâneas passam juntas do teto do ambiente | O teto é invariante do aggregate, protegido pelo `FOR NO KEY UPDATE` do ambiente na edição | `Concurrent_creations_cannot_exceed_the_environment_json_budget` e `Concurrent_changes_cannot_exceed_the_environment_json_budget` |
 | D5 | Um tipo de flag novo derruba todos os builds antigos | O SDK ignora a flag de tipo desconhecido em vez de recusar o snapshot | `A_flag_of_an_unknown_type_is_skipped_and_the_rest_still_applies` |
 | D6 | Um parser do jogo que lança derruba o jogo | O núcleo captura a exceção e devolve o valor padrão com `InvalidValue` | `A_parser_that_throws_falls_back_with_InvalidValue` e, no SDK, `A_parser_that_throws_gives_the_game_its_default_with_InvalidValue` |

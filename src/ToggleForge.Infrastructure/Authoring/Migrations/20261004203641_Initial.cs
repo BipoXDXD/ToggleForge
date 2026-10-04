@@ -68,8 +68,9 @@ namespace ToggleForge.Infrastructure.Authoring.Migrations
                     key = table.Column<string>(type: "text", nullable: false),
                     environment_id = table.Column<Guid>(type: "uuid", nullable: false),
                     is_enabled = table.Column<bool>(type: "boolean", nullable: false),
-                    on_value = table.Column<bool>(type: "boolean", nullable: false),
-                    off_value = table.Column<bool>(type: "boolean", nullable: false),
+                    type = table.Column<string>(type: "text", nullable: false),
+                    on_value = table.Column<string>(type: "json", nullable: false),
+                    off_value = table.Column<string>(type: "json", nullable: false),
                     rollout = table.Column<int>(type: "integer", nullable: false),
                     seed = table.Column<string>(type: "text", nullable: false),
                     changed_at_revision = table.Column<long>(type: "bigint", nullable: false)
@@ -77,8 +78,11 @@ namespace ToggleForge.Infrastructure.Authoring.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("pk_draft_flags", x => new { x.environment_id, x.key });
+                    table.CheckConstraint("ck_draft_flags_boolean_values", "type <> 'boolean' or (json_typeof(on_value) = 'boolean' and json_typeof(off_value) = 'boolean')");
                     table.CheckConstraint("ck_draft_flags_key", "key ~ '^[a-z0-9][a-z0-9._-]{0,63}$'");
                     table.CheckConstraint("ck_draft_flags_rollout", "rollout between 0 and 10000");
+                    table.CheckConstraint("ck_draft_flags_type", "type in ('boolean', 'json')");
+                    table.CheckConstraint("ck_draft_flags_value_bytes", "octet_length(on_value::text) <= 4096 and octet_length(off_value::text) <= 4096");
                     table.ForeignKey(
                         name: "fk_draft_flags_environments_environment_id",
                         column: x => x.environment_id,
@@ -110,6 +114,30 @@ namespace ToggleForge.Infrastructure.Authoring.Migrations
                     table.CheckConstraint("ck_publications_version", "version >= 1");
                     table.ForeignKey(
                         name: "fk_publications_environments_environment_id",
+                        column: x => x.environment_id,
+                        principalSchema: "authoring",
+                        principalTable: "environments",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "published_flag_types",
+                schema: "authoring",
+                columns: table => new
+                {
+                    environment_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    key = table.Column<string>(type: "text", nullable: false),
+                    type = table.Column<string>(type: "text", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_published_flag_types", x => new { x.environment_id, x.key });
+                    table.UniqueConstraint("ak_published_flag_types_environment_id_key_type", x => new { x.environment_id, x.key, x.type });
+                    table.CheckConstraint("ck_published_flag_types_key", "key ~ '^[a-z0-9][a-z0-9._-]{0,63}$'");
+                    table.CheckConstraint("ck_published_flag_types_type", "type in ('boolean', 'json')");
+                    table.ForeignKey(
+                        name: "fk_published_flag_types_environments_environment_id",
                         column: x => x.environment_id,
                         principalSchema: "authoring",
                         principalTable: "environments",
@@ -151,16 +179,20 @@ namespace ToggleForge.Infrastructure.Authoring.Migrations
                     environment_id = table.Column<Guid>(type: "uuid", nullable: false),
                     version = table.Column<long>(type: "bigint", nullable: false),
                     is_enabled = table.Column<bool>(type: "boolean", nullable: false),
-                    on_value = table.Column<bool>(type: "boolean", nullable: false),
-                    off_value = table.Column<bool>(type: "boolean", nullable: false),
+                    type = table.Column<string>(type: "text", nullable: false),
+                    on_value = table.Column<string>(type: "json", nullable: false),
+                    off_value = table.Column<string>(type: "json", nullable: false),
                     rollout_basis_points = table.Column<int>(type: "integer", nullable: false),
                     seed = table.Column<string>(type: "text", nullable: false)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("pk_publication_flags", x => new { x.environment_id, x.version, x.key });
+                    table.CheckConstraint("ck_publication_flags_boolean_values", "type <> 'boolean' or (json_typeof(on_value) = 'boolean' and json_typeof(off_value) = 'boolean')");
                     table.CheckConstraint("ck_publication_flags_key", "key ~ '^[a-z0-9][a-z0-9._-]{0,63}$'");
                     table.CheckConstraint("ck_publication_flags_rollout", "rollout_basis_points between 0 and 10000");
+                    table.CheckConstraint("ck_publication_flags_type", "type in ('boolean', 'json')");
+                    table.CheckConstraint("ck_publication_flags_value_bytes", "octet_length(on_value::text) <= 4096 and octet_length(off_value::text) <= 4096");
                     table.ForeignKey(
                         name: "fk_publication_flags_publications_environment_id_version",
                         columns: x => new { x.environment_id, x.version },
@@ -168,6 +200,13 @@ namespace ToggleForge.Infrastructure.Authoring.Migrations
                         principalTable: "publications",
                         principalColumns: new[] { "environment_id", "version" },
                         onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "fk_publication_flags_published_flag_types",
+                        columns: x => new { x.environment_id, x.key, x.type },
+                        principalSchema: "authoring",
+                        principalTable: "published_flag_types",
+                        principalColumns: new[] { "environment_id", "key", "type" },
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateIndex(
@@ -189,6 +228,12 @@ namespace ToggleForge.Infrastructure.Authoring.Migrations
                 table: "projects",
                 columns: new[] { "organization_id", "key" },
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_publication_flags_environment_id_key_type",
+                schema: "authoring",
+                table: "publication_flags",
+                columns: new[] { "environment_id", "key", "type" });
         }
 
         /// <inheritdoc />
@@ -208,6 +253,10 @@ namespace ToggleForge.Infrastructure.Authoring.Migrations
 
             migrationBuilder.DropTable(
                 name: "publications",
+                schema: "authoring");
+
+            migrationBuilder.DropTable(
+                name: "published_flag_types",
                 schema: "authoring");
 
             migrationBuilder.DropTable(

@@ -10,6 +10,9 @@ public sealed class ProjectEnvironment
 {
     public const int MaxFlags = 200;
 
+    /// <summary>Teto, em bytes UTF-8, da soma dos valores das flags JSON do rascunho (ADR 0011).</summary>
+    public const int MaxJsonBytes = 128 * 1024;
+
     private const long InitialDraftRevision = 1;
 
     private readonly List<DraftFlag> _flags = [];
@@ -43,20 +46,32 @@ public sealed class ProjectEnvironment
     internal static ProjectEnvironment Create(Guid projectId, EnvironmentKey key, DisplayName name) =>
         new(Guid.NewGuid(), projectId, key, name, InitialDraftRevision, currentVersion: null);
 
-    public Result<DraftFlag> AddFlag(FlagKey key, FlagSettings settings, RolloutSeed seed)
+    /// <param name="publishedTypes">Os tipos já publicados neste ambiente: a chave publicada não volta com outro tipo.</param>
+    public Result<DraftFlag> AddFlag(FlagKey key, FlagSettings settings, RolloutSeed seed, PublishedFlagTypes publishedTypes)
     {
         ArgumentNullException.ThrowIfNull(key);
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(seed);
+        ArgumentNullException.ThrowIfNull(publishedTypes);
 
         if (_flags.Any(flag => flag.Key == key))
         {
             return AuthoringFailures.FlagKeyTaken;
         }
 
+        if (publishedTypes.Refuse(key, settings.Type) is { } typeLocked)
+        {
+            return typeLocked;
+        }
+
         if (_flags.Count >= MaxFlags)
         {
             return AuthoringFailures.FlagLimitReached;
+        }
+
+        if (JsonBytes + JsonBytesOf(settings) > MaxJsonBytes)
+        {
+            return AuthoringFailures.JsonBudgetReached;
         }
 
         DraftRevision++;
@@ -78,10 +93,19 @@ public sealed class ProjectEnvironment
             return failure;
         }
 
-        var settings = change.ApplyTo(flag.Settings);
+        if (!change.ApplyTo(flag.Settings).TryGetValue(out var settings, out var invalid))
+        {
+            return invalid;
+        }
+
         if (settings == flag.Settings)
         {
             return flag;
+        }
+
+        if (JsonBytes - JsonBytesOf(flag.Settings) + JsonBytesOf(settings) > MaxJsonBytes)
+        {
+            return AuthoringFailures.JsonBudgetReached;
         }
 
         DraftRevision++;
@@ -109,9 +133,17 @@ public sealed class ProjectEnvironment
         return DraftComparison.Changes(DraftContent(), current?.Flags ?? []);
     }
 
+    /// <param name="publishedTypes">Os tipos já publicados neste ambiente, que a nova publicação precisa manter.</param>
     public Result<Publication> Publish(
-        long reviewedDraftRevision, ChangeSummary? summary, Guid publishedBy, DateTimeOffset publishedAt, Publication? current)
+        long reviewedDraftRevision,
+        ChangeSummary? summary,
+        Guid publishedBy,
+        DateTimeOffset publishedAt,
+        Publication? current,
+        PublishedFlagTypes publishedTypes)
     {
+        ArgumentNullException.ThrowIfNull(publishedTypes);
+
         if (reviewedDraftRevision != DraftRevision)
         {
             return AuthoringFailures.DraftChanged;
@@ -122,6 +154,12 @@ public sealed class ProjectEnvironment
             return AuthoringFailures.NothingToPublish;
         }
 
+        var content = DraftContent();
+        if (publishedTypes.Refuse(content) is { } typeLocked)
+        {
+            return typeLocked;
+        }
+
         var publication = new Publication(
             Id,
             (CurrentVersion ?? 0) + 1,
@@ -130,7 +168,7 @@ public sealed class ProjectEnvironment
             PublicationOrigin.Publication,
             restoredVersion: null,
             summary,
-            DraftContent());
+            content);
         CurrentVersion = publication.Version;
         return publication;
     }
@@ -138,7 +176,8 @@ public sealed class ProjectEnvironment
     /// <summary>
     /// Publica de novo o conteúdo de <paramref name="target"/>, nula quando a versão pedida não existe, e troca
     /// o rascunho por ele, para a próxima publicação não reaplicar a mudança revertida. Mudanças não publicadas
-    /// só são descartadas com <paramref name="discardDraftChanges"/>.
+    /// só são descartadas com <paramref name="discardDraftChanges"/>. O rollback também cria uma publicação, então
+    /// mantém os tipos de <paramref name="publishedTypes"/>.
     /// </summary>
     public Result<Publication> RollBack(
         Publication? target,
@@ -146,8 +185,11 @@ public sealed class ProjectEnvironment
         bool discardDraftChanges,
         Guid rolledBackBy,
         DateTimeOffset rolledBackAt,
-        Publication? current)
+        Publication? current,
+        PublishedFlagTypes publishedTypes)
     {
+        ArgumentNullException.ThrowIfNull(publishedTypes);
+
         if (target is null)
         {
             return AuthoringFailures.RollbackTargetNotFound;
@@ -170,6 +212,11 @@ public sealed class ProjectEnvironment
             return AuthoringFailures.DraftHasPendingChanges;
         }
 
+        if (publishedTypes.Refuse(target.Flags) is { } typeLocked)
+        {
+            return typeLocked;
+        }
+
         var rollback = new Publication(
             Id,
             current.Version + 1,
@@ -183,6 +230,11 @@ public sealed class ProjectEnvironment
         CurrentVersion = rollback.Version;
         return rollback;
     }
+
+    /// <summary>Os bytes de valores JSON do rascunho; o lock do ambiente na edição impede que dois editores passem juntos do teto.</summary>
+    private int JsonBytes => _flags.Sum(flag => JsonBytesOf(flag.Settings));
+
+    private static int JsonBytesOf(FlagSettings settings) => settings.Values is JsonValues json ? json.ByteCount : 0;
 
     private Result<DraftFlag> FindFlag(FlagKey key, long expectedRevision)
     {

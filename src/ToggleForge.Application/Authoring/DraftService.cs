@@ -42,17 +42,22 @@ public sealed class DraftService(
 
     public async Task<Result<FlagView>> CreateFlagAsync(
         Guid memberId, EnvironmentLocator locator, FlagKey key, FlagSettings settings, CancellationToken cancellationToken) =>
-        (await EditAsync(memberId, locator, environment => environment.AddFlag(key, settings, RolloutSeeds.Generate()), cancellationToken))
+        (await EditAsync(
+            memberId,
+            locator,
+            async (environment, ct) => environment.AddFlag(
+                key, settings, RolloutSeeds.Generate(), await publications.FindPublishedTypesAsync(environment.Id, ct)),
+            cancellationToken))
         .Map(FlagView.Of);
 
     public async Task<Result<FlagView>> ChangeFlagAsync(
         Guid memberId, EnvironmentLocator locator, FlagKey key, long expectedRevision, FlagChange change, CancellationToken cancellationToken) =>
-        (await EditAsync(memberId, locator, environment => environment.ChangeFlag(key, expectedRevision, change), cancellationToken))
+        (await EditAsync(memberId, locator, (environment, _) => Task.FromResult(environment.ChangeFlag(key, expectedRevision, change)), cancellationToken))
         .Map(FlagView.Of);
 
     public async Task<Result<FlagView>> RemoveFlagAsync(
         Guid memberId, EnvironmentLocator locator, FlagKey key, long expectedRevision, CancellationToken cancellationToken) =>
-        (await EditAsync(memberId, locator, environment => environment.RemoveFlag(key, expectedRevision), cancellationToken))
+        (await EditAsync(memberId, locator, (environment, _) => Task.FromResult(environment.RemoveFlag(key, expectedRevision)), cancellationToken))
         .Map(FlagView.Of);
 
     /// <summary>Leitura do rascunho: 404 para quem não é membro e para o ambiente que não existe.</summary>
@@ -74,7 +79,10 @@ public sealed class DraftService(
     /// domínio decide o resto.
     /// </summary>
     private async Task<Result<DraftFlag>> EditAsync(
-        Guid memberId, EnvironmentLocator locator, Func<ProjectEnvironment, Result<DraftFlag>> edit, CancellationToken cancellationToken)
+        Guid memberId,
+        EnvironmentLocator locator,
+        Func<ProjectEnvironment, CancellationToken, Task<Result<DraftFlag>>> edit,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(locator);
 
@@ -94,7 +102,7 @@ public sealed class DraftService(
             return forbidden;
         }
 
-        if (!edit(environment).TryGetValue(out var flag, out failure))
+        if (!(await edit(environment, cancellationToken)).TryGetValue(out var flag, out failure))
         {
             return failure;
         }

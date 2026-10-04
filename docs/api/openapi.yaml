@@ -430,7 +430,11 @@ paths:
       summary: Create a flag in the draft
       description: |
         Owner and editor only: viewers get 403. The server generates the rollout seed.
-        409 `key-taken` when the key exists in the draft; 409 `limit-reached` at 200 flags.
+        409 `key-taken` when the key exists in the draft; 409 `limit-reached` at 200 flags; 409
+        `json-budget-reached` when the flag would take the draft over 128 KiB of json values; 409
+        `flag-type-locked` when the key was already published in this environment with the other type (the
+        detail names the key and the published type). Deleting a flag does not free its type: a different type
+        needs a new key. Bodies over 32 KiB get 413 `payload-too-large`.
       parameters:
         - $ref: '#/components/parameters/Antiforgery'
       requestBody:
@@ -508,6 +512,11 @@ paths:
       description: |
         Owner and editor only. Absent fields keep their value; `null` is rejected because no field can
         be cleared. The key and the seed never change.
+        409 `json-budget-reached` when the change would take the draft over 128 KiB of json values. The type of a
+        flag never changes: `type` is an unknown field here, so a change never gets `flag-type-locked`. Bodies
+        over 32 KiB get 413 `payload-too-large`.
+        A json flag can get the JSON `null` as a value only when it is created: in a merge patch `null` means
+        removing the field, and no field of a flag can be removed.
       parameters:
         - $ref: '#/components/parameters/Antiforgery'
         - $ref: '#/components/parameters/IfMatch'
@@ -535,6 +544,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '412':
           $ref: '#/components/responses/PreconditionFailed'
         '413':
@@ -664,6 +675,8 @@ paths:
         Conflicts (409), told apart by `type`:
         - `draft-changed`: the draft is no longer at `draftRevision`; reload and review again.
         - `nothing-to-publish`: the draft equals the current publication.
+        - `flag-type-locked`: the draft has a key that was published in this environment with another type;
+          the detail names the key and the published type. Nothing is published.
         - `idempotency-key-reused`: the key was used with a different body.
 
         Repeating the request with the same key and body returns the original response.
@@ -753,6 +766,9 @@ paths:
         - `draft-has-pending-changes`: the draft has unpublished changes and `discardDraftChanges` is false.
         - `already-current`: the current version already has the content of `targetVersion` (it may be
           `targetVersion` itself, or an earlier rollback to it).
+        - `flag-type-locked`: `targetVersion` has a key with a type other than the one it was published with in
+          this environment. Every publication keeps the types and the database enforces it, so this is a
+          safeguard that the API does not reach.
         - `idempotency-key-reused`: the key was used with a different body.
       parameters:
         - $ref: '#/components/parameters/Antiforgery'
@@ -1120,7 +1136,9 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
     PayloadTooLarge:
-      description: The body is over the limit of the operation; nothing was saved.
+      description: >-
+        The body is over the limit of the operation (`/problems/payload-too-large`); nothing was saved. A chunked
+        body, sent without Content-Length, can get 413 slightly before the limit.
       content:
         application/problem+json:
           schema:
@@ -1348,6 +1366,22 @@ components:
         hasUnpublishedChanges:
           type: boolean
 
+    FlagType:
+      type: string
+      enum: [boolean, json]
+      description: |
+        Chosen when the flag is created and fixed while the flag exists. Once a key is published in an
+        environment, every later publication of that key in that environment keeps its type, even after the flag
+        is deleted and created again or through a rollback: a different type needs a new key (409
+        `flag-type-locked`, ADR 0011). Other environments are independent.
+
+    FlagValue:
+      description: |
+        `true` or `false` for a boolean flag. Any JSON value for a json flag (`null` only at creation; see
+        updateFlag): at most 4 KiB in UTF-8 once compacted, at most 8 levels deep, no key repeated in an object
+        and every number within the range of a double. The server returns it compacted, with the keys in the
+        order they were sent.
+
     FlagCreation:
       type: object
       additionalProperties: false
@@ -1355,13 +1389,17 @@ components:
       properties:
         key:
           $ref: '#/components/schemas/Key'
+        type:
+          $ref: '#/components/schemas/FlagType'
+          default: boolean
+          description: Defaults to boolean.
         enabled:
           type: boolean
         onValue:
-          type: boolean
+          $ref: '#/components/schemas/FlagValue'
           description: Value for players included in the rollout.
         offValue:
-          type: boolean
+          $ref: '#/components/schemas/FlagValue'
           description: Value for excluded players and when the flag is disabled.
         rolloutBasisPoints:
           $ref: '#/components/schemas/RolloutBasisPoints'
@@ -1374,27 +1412,47 @@ components:
         enabled:
           type: boolean
         onValue:
-          type: boolean
+          description: Cannot be null; in a merge patch null would erase the value.
+          allOf:
+            - $ref: '#/components/schemas/FlagValue'
+            - not:
+                type: 'null'
         offValue:
-          type: boolean
+          description: Cannot be null; in a merge patch null would erase the value.
+          allOf:
+            - $ref: '#/components/schemas/FlagValue'
+            - not:
+                type: 'null'
         rolloutBasisPoints:
           $ref: '#/components/schemas/RolloutBasisPoints'
 
     Flag:
       type: object
       additionalProperties: false
-      required: [key, enabled, onValue, offValue, rolloutBasisPoints]
+      required: [key, type, enabled, onValue, offValue, rolloutBasisPoints]
       properties:
         key:
           $ref: '#/components/schemas/Key'
+        type:
+          $ref: '#/components/schemas/FlagType'
         enabled:
           type: boolean
         onValue:
-          type: boolean
+          $ref: '#/components/schemas/FlagValue'
         offValue:
-          type: boolean
+          $ref: '#/components/schemas/FlagValue'
         rolloutBasisPoints:
           $ref: '#/components/schemas/RolloutBasisPoints'
+      if:
+        properties:
+          type:
+            const: boolean
+      then:
+        properties:
+          onValue:
+            type: boolean
+          offValue:
+            type: boolean
 
     DraftChange:
       type: object
@@ -1479,12 +1537,14 @@ components:
     SimulationResult:
       type: object
       additionalProperties: false
-      required: [flagKey, value, reason, bucket]
+      required: [flagKey, type, value, reason, bucket]
       properties:
         flagKey:
           $ref: '#/components/schemas/Key'
+        type:
+          $ref: '#/components/schemas/FlagType'
         value:
-          type: boolean
+          $ref: '#/components/schemas/FlagValue'
         reason:
           type: string
           enum: [disabled, included, excluded]
@@ -1684,12 +1744,19 @@ components:
       properties:
         key:
           $ref: '#/components/schemas/Key'
+        type:
+          type: string
+          maxLength: 32
+          pattern: '^[a-z][a-z0-9-]{0,31}$'
+          description: |
+            Lower-case name of the flag type; new types may appear. Missing means boolean. Clients must skip a
+            flag whose type they do not know.
         enabled:
           type: boolean
         onValue:
-          type: boolean
+          $ref: '#/components/schemas/FlagValue'
         offValue:
-          type: boolean
+          $ref: '#/components/schemas/FlagValue'
         rolloutBasisPoints:
           $ref: '#/components/schemas/RolloutBasisPoints'
         seed:
@@ -1697,6 +1764,16 @@ components:
           minLength: 1
           maxLength: 64
           pattern: '^[^\u0000-\u001F\u007F-\u009F]*[^\s\u0000-\u001F\u007F-\u009F][^\u0000-\u001F\u007F-\u009F]*$'
+      if:
+        properties:
+          type:
+            const: boolean
+      then:
+        properties:
+          onValue:
+            type: boolean
+          offValue:
+            type: boolean
 
     Problem:
       type: object

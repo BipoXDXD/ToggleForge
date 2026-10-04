@@ -22,7 +22,7 @@ public sealed class KestrelHardeningTests(ApiFactory api) : IAsyncLifetime
     public ValueTask InitializeAsync()
     {
         _host = new BrowserHost(api);
-        _http = _host.CreateHttpClient();
+        _http = _host.CreateTlsClient(new CookieContainer());
         return ValueTask.CompletedTask;
     }
 

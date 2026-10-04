@@ -36,7 +36,7 @@ internal sealed class PublicationRepository(AuthoringDbContext context) : IPubli
                 row.Version,
                 row.PublishedAt,
                 row.PublishedBy,
-                OriginOf(row.Origin),
+                ValueConverters.ParsePublicationOrigin(row.Origin),
                 row.RestoredVersion,
                 SummaryOf(row.Summary)))
             .ToList();
@@ -56,9 +56,24 @@ internal sealed class PublicationRepository(AuthoringDbContext context) : IPubli
         return rows.ToDictionary(row => row.EnvironmentId, ToDomain);
     }
 
-    public void Add(Publication publication)
+    public async Task<PublishedFlagTypes> FindPublishedTypesAsync(Guid environmentId, CancellationToken cancellationToken)
+    {
+        var rows = await context.PublishedFlagTypes
+            .AsNoTracking()
+            .Where(t => t.EnvironmentId == environmentId)
+            .Select(t => new { t.Key, t.Type })
+            .ToListAsync(cancellationToken);
+        return new PublishedFlagTypes(rows.Select(row => KeyValuePair.Create(ValueConverters.ParseFlagKey(row.Key), row.Type)));
+    }
+
+    public void Add(Publication publication, PublishedFlagTypes alreadyPublished)
     {
         ArgumentNullException.ThrowIfNull(publication);
+        ArgumentNullException.ThrowIfNull(alreadyPublished);
+
+        context.PublishedFlagTypes.AddRange(publication.Flags
+            .Where(flag => !alreadyPublished.Contains(flag.Key))
+            .Select(flag => new PublishedFlagTypeRow { EnvironmentId = publication.EnvironmentId, Key = flag.Key.Value, Type = flag.Settings.Type }));
 
         context.Publications.Add(new PublicationRow
         {
@@ -77,8 +92,9 @@ internal sealed class PublicationRepository(AuthoringDbContext context) : IPubli
     {
         Key = flag.Key.Value,
         IsEnabled = flag.Settings.IsEnabled,
-        OnValue = flag.Settings.OnValue,
-        OffValue = flag.Settings.OffValue,
+        Type = flag.Settings.Type,
+        OnValue = flag.Settings.Values.OnValue,
+        OffValue = flag.Settings.Values.OffValue,
         RolloutBasisPoints = flag.Settings.Rollout.BasisPoints,
         Seed = flag.Seed.Value,
     };
@@ -89,19 +105,20 @@ internal sealed class PublicationRepository(AuthoringDbContext context) : IPubli
             row.Version,
             row.PublishedAt,
             row.PublishedBy,
-            OriginOf(row.Origin),
+            ValueConverters.ParsePublicationOrigin(row.Origin),
             row.RestoredVersion,
             SummaryOf(row.Summary),
             row.Flags.OrderBy(flag => flag.Key, StringComparer.Ordinal).Select(ToDomain).ToList());
-
-    private static PublicationOrigin OriginOf(string origin) => Enum.Parse<PublicationOrigin>(origin, ignoreCase: true);
 
     private static ChangeSummary? SummaryOf(string? summary) =>
         summary is null ? null : ValueConverters.ParseChangeSummary(summary);
 
     private static PublishedFlag ToDomain(PublicationFlagRow row) =>
         new(
-            FlagKey.Parse(row.Key),
-            new FlagSettings(row.IsEnabled, row.OnValue, row.OffValue, RolloutPercentage.FromBasisPoints(row.RolloutBasisPoints)),
-            RolloutSeed.Parse(row.Seed));
+            ValueConverters.ParseFlagKey(row.Key),
+            new FlagSettings(
+                row.IsEnabled,
+                FlagValues.Restore(row.Type, row.OnValue, row.OffValue),
+                ValueConverters.ParseRolloutPercentage(row.RolloutBasisPoints)),
+            ValueConverters.ParseRolloutSeed(row.Seed));
 }

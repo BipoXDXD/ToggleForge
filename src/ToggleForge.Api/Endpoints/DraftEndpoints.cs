@@ -1,4 +1,6 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
 using ToggleForge.Api.Authentication;
 using ToggleForge.Api.Contracts;
 using ToggleForge.Api.Http;
@@ -13,7 +15,9 @@ internal static class DraftEndpoints
     public static void MapDraftEndpoints(this RouteGroupBuilder environment)
     {
         environment.MapGet("/draft", GetAsync).WithName("getDraft");
-        environment.MapPost("/draft/flags", CreateFlagAsync).WithName("createFlag").AddEndpointFilter<AntiforgeryFilter>();
+        environment.MapPost("/draft/flags", CreateFlagAsync).WithName("createFlag")
+            .WithMetadata(new RequestSizeLimitAttribute(FlagInput.BodyLimitBytes))
+            .AddEndpointFilter<AntiforgeryFilter>();
     }
 
     private static async Task<Results<Ok<DraftResponse>, JsonHttpResult<ProblemBody>>> GetAsync(
@@ -70,12 +74,44 @@ internal static class DraftEndpoints
     private static FlagSettings? Settings(FlagCreationRequest request, InputErrors errors)
     {
         errors.Require(request.Enabled, "/enabled");
-        errors.Require(request.OnValue, "/onValue");
-        errors.Require(request.OffValue, "/offValue");
+        var type = Type(request.Type, errors);
+        var onValue = FlagInput.Value(request.OnValue, FlagInput.OnValuePointer, errors);
+        var offValue = FlagInput.Value(request.OffValue, FlagInput.OffValuePointer, errors);
         var rollout = Rollout(request.RolloutBasisPoints, errors);
-        return request is { Enabled: { } enabled, OnValue: { } onValue, OffValue: { } offValue } && rollout is not null
-            ? new FlagSettings(enabled, onValue, offValue, rollout)
+        // Só com o tipo e os dois valores lidos: com um deles faltando, o par não tem o que conferir.
+        var values = type is { } flagType && onValue is not null && offValue is not null ? Values(flagType, onValue, offValue, errors) : null;
+        return request.Enabled is { } enabled && values is not null && rollout is not null
+            ? new FlagSettings(enabled, values, rollout)
             : null;
+    }
+
+    /// <summary>Ausente é booleano, para os clientes de antes das flags JSON; <c>null</c> é um tipo inválido.</summary>
+    private static FlagType? Type(JsonElement type, InputErrors errors)
+    {
+        if (type.ValueKind == JsonValueKind.Undefined)
+        {
+            return FlagType.Boolean;
+        }
+
+        if (FlagTypes.TryParse(type, out var parsed))
+        {
+            return parsed;
+        }
+
+        errors.InBody("/type", "Use boolean or json.");
+        return null;
+    }
+
+    private static FlagValues? Values(FlagType type, JsonFlagValue onValue, JsonFlagValue offValue, InputErrors errors)
+    {
+        if (FlagValues.Of(type, onValue, offValue).TryGetValue(out var values, out var failure))
+        {
+            return values;
+        }
+
+        return FlagInput.TryReportValueNotOfFlagType(failure, errors)
+            ? null
+            : throw new InvalidOperationException($"FlagValues.Of failed with the unexpected '{failure.Code}'.");
     }
 
     private static RolloutPercentage? Rollout(int? basisPoints, InputErrors errors) =>

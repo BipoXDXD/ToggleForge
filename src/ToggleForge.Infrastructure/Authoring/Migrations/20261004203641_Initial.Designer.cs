@@ -12,7 +12,7 @@ using ToggleForge.Infrastructure.Authoring;
 namespace ToggleForge.Infrastructure.Authoring.Migrations
 {
     [DbContext(typeof(AuthoringDbContext))]
-    [Migration("20261003130203_Initial")]
+    [Migration("20261004203641_Initial")]
     partial class Initial
     {
         /// <inheritdoc />
@@ -199,6 +199,35 @@ namespace ToggleForge.Infrastructure.Authoring.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ToggleForge.Infrastructure.Authoring.PublishedFlagTypeRow", b =>
+                {
+                    b.Property<Guid>("EnvironmentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("environment_id");
+
+                    b.Property<string>("Key")
+                        .HasColumnType("text")
+                        .HasColumnName("key");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("type");
+
+                    b.HasKey("EnvironmentId", "Key")
+                        .HasName("pk_published_flag_types");
+
+                    b.HasAlternateKey("EnvironmentId", "Key", "Type")
+                        .HasName("ak_published_flag_types_environment_id_key_type");
+
+                    b.ToTable("published_flag_types", "authoring", t =>
+                        {
+                            t.HasCheckConstraint("ck_published_flag_types_key", "key ~ '^[a-z0-9][a-z0-9._-]{0,63}$'");
+
+                            t.HasCheckConstraint("ck_published_flag_types_type", "type in ('boolean', 'json')");
+                        });
+                });
+
             modelBuilder.Entity("ToggleForge.Application.Authoring.IdempotencyRecord", b =>
                 {
                     b.HasOne("ToggleForge.Infrastructure.Authoring.PublicationRow", null)
@@ -236,12 +265,14 @@ namespace ToggleForge.Infrastructure.Authoring.Migrations
                                 .HasColumnType("boolean")
                                 .HasColumnName("is_enabled");
 
-                            b1.Property<bool>("OffValue")
-                                .HasColumnType("boolean")
+                            b1.Property<string>("OffValue")
+                                .IsRequired()
+                                .HasColumnType("json")
                                 .HasColumnName("off_value");
 
-                            b1.Property<bool>("OnValue")
-                                .HasColumnType("boolean")
+                            b1.Property<string>("OnValue")
+                                .IsRequired()
+                                .HasColumnType("json")
                                 .HasColumnName("on_value");
 
                             b1.Property<int>("Rollout")
@@ -253,14 +284,25 @@ namespace ToggleForge.Infrastructure.Authoring.Migrations
                                 .HasColumnType("text")
                                 .HasColumnName("seed");
 
+                            b1.Property<string>("Type")
+                                .IsRequired()
+                                .HasColumnType("text")
+                                .HasColumnName("type");
+
                             b1.HasKey("EnvironmentId", "Key")
                                 .HasName("pk_draft_flags");
 
                             b1.ToTable("draft_flags", "authoring", t =>
                                 {
+                                    t.HasCheckConstraint("ck_draft_flags_boolean_values", "type <> 'boolean' or (json_typeof(on_value) = 'boolean' and json_typeof(off_value) = 'boolean')");
+
                                     t.HasCheckConstraint("ck_draft_flags_key", "key ~ '^[a-z0-9][a-z0-9._-]{0,63}$'");
 
                                     t.HasCheckConstraint("ck_draft_flags_rollout", "rollout between 0 and 10000");
+
+                                    t.HasCheckConstraint("ck_draft_flags_type", "type in ('boolean', 'json')");
+
+                                    t.HasCheckConstraint("ck_draft_flags_value_bytes", "octet_length(on_value::text) <= 4096 and octet_length(off_value::text) <= 4096");
                                 });
 
                             b1.WithOwner()
@@ -298,12 +340,14 @@ namespace ToggleForge.Infrastructure.Authoring.Migrations
                                 .HasColumnType("boolean")
                                 .HasColumnName("is_enabled");
 
-                            b1.Property<bool>("OffValue")
-                                .HasColumnType("boolean")
+                            b1.Property<string>("OffValue")
+                                .IsRequired()
+                                .HasColumnType("json")
                                 .HasColumnName("off_value");
 
-                            b1.Property<bool>("OnValue")
-                                .HasColumnType("boolean")
+                            b1.Property<string>("OnValue")
+                                .IsRequired()
+                                .HasColumnType("json")
                                 .HasColumnName("on_value");
 
                             b1.Property<int>("RolloutBasisPoints")
@@ -315,22 +359,54 @@ namespace ToggleForge.Infrastructure.Authoring.Migrations
                                 .HasColumnType("text")
                                 .HasColumnName("seed");
 
+                            b1.Property<string>("Type")
+                                .IsRequired()
+                                .HasColumnType("text")
+                                .HasColumnName("type");
+
                             b1.HasKey("EnvironmentId", "Version", "Key")
                                 .HasName("pk_publication_flags");
 
+                            b1.HasIndex("EnvironmentId", "Key", "Type")
+                                .HasDatabaseName("ix_publication_flags_environment_id_key_type");
+
                             b1.ToTable("publication_flags", "authoring", t =>
                                 {
+                                    t.HasCheckConstraint("ck_publication_flags_boolean_values", "type <> 'boolean' or (json_typeof(on_value) = 'boolean' and json_typeof(off_value) = 'boolean')");
+
                                     t.HasCheckConstraint("ck_publication_flags_key", "key ~ '^[a-z0-9][a-z0-9._-]{0,63}$'");
 
                                     t.HasCheckConstraint("ck_publication_flags_rollout", "rollout_basis_points between 0 and 10000");
+
+                                    t.HasCheckConstraint("ck_publication_flags_type", "type in ('boolean', 'json')");
+
+                                    t.HasCheckConstraint("ck_publication_flags_value_bytes", "octet_length(on_value::text) <= 4096 and octet_length(off_value::text) <= 4096");
                                 });
 
                             b1.WithOwner()
                                 .HasForeignKey("EnvironmentId", "Version")
                                 .HasConstraintName("fk_publication_flags_publications_environment_id_version");
+
+                            b1.HasOne("ToggleForge.Infrastructure.Authoring.PublishedFlagTypeRow", null)
+                                .WithMany()
+                                .HasForeignKey("EnvironmentId", "Key", "Type")
+                                .HasPrincipalKey("EnvironmentId", "Key", "Type")
+                                .OnDelete(DeleteBehavior.Restrict)
+                                .IsRequired()
+                                .HasConstraintName("fk_publication_flags_published_flag_types");
                         });
 
                     b.Navigation("Flags");
+                });
+
+            modelBuilder.Entity("ToggleForge.Infrastructure.Authoring.PublishedFlagTypeRow", b =>
+                {
+                    b.HasOne("ToggleForge.Domain.Authoring.ProjectEnvironment", null)
+                        .WithMany()
+                        .HasForeignKey("EnvironmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_published_flag_types_environments_environment_id");
                 });
 #pragma warning restore 612, 618
         }

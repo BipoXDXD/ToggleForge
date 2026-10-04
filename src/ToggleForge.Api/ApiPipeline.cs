@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Net.Http.Headers;
@@ -56,6 +57,13 @@ internal static class ApiPipeline
         if (status == StatusCodes.Status415UnsupportedMediaType)
         {
             return UnsupportedContentType().ExecuteAsync(context);
+        }
+
+        // O Kestrel recusa o corpo acima do limite da rota na leitura do binding; o RequestDelegateFactory engole a
+        // exceção (é um IOException) mesmo com ThrowOnBadRequest, e o 413 chega aqui vazio, nunca ao UnexpectedErrors.
+        if (status == StatusCodes.Status413PayloadTooLarge)
+        {
+            return Problems.PayloadTooLarge(context.Features.Get<IHttpMaxRequestBodySizeFeature>()?.MaxRequestBodySize).ExecuteAsync(context);
         }
 
         return Problems.Json(new ProblemBody("about:blank", ReasonPhrases.GetReasonPhrase(status), status)).ExecuteAsync(context);

@@ -33,8 +33,8 @@ public sealed class PublishingService(
         return RecordAsync(
             locator,
             attempt,
-            (environment, current, now, _) => Task.FromResult(
-                environment.Publish(command.ReviewedDraftRevision, command.Summary, memberId, now, current)),
+            (environment, current, publishedTypes, now, _) => Task.FromResult(
+                environment.Publish(command.ReviewedDraftRevision, command.Summary, memberId, now, current, publishedTypes)),
             cancellationToken);
     }
 
@@ -54,13 +54,14 @@ public sealed class PublishingService(
         return RecordAsync(
             locator,
             attempt,
-            async (environment, current, now, ct) => environment.RollBack(
+            async (environment, current, publishedTypes, now, ct) => environment.RollBack(
                 await publications.FindAsync(environment.Id, command.TargetVersion, ct),
                 command.ExpectedCurrentVersion,
                 command.DiscardDraftChanges,
                 memberId,
                 now,
-                current),
+                current,
+                publishedTypes),
             cancellationToken);
     }
 
@@ -115,13 +116,14 @@ public sealed class PublishingService(
         }
 
         var current = await publications.FindAsync(environment, cancellationToken);
+        var publishedTypes = await publications.FindPublishedTypesAsync(environment.Id, cancellationToken);
         var now = clock.GetUtcNowInMicroseconds();
-        if (!(await change(environment, current, now, cancellationToken)).TryGetValue(out var publication, out var failure))
+        if (!(await change(environment, current, publishedTypes, now, cancellationToken)).TryGetValue(out var publication, out var failure))
         {
             return failure;
         }
 
-        publications.Add(publication);
+        publications.Add(publication, publishedTypes);
         idempotency.Add(new IdempotencyRecord(attempt.MemberId, attempt.Key.Value, attempt.Fingerprint, environment.Id, publication.Version, now));
         if (await unitOfWork.SaveChangesAsync(cancellationToken) != SaveOutcome.Saved)
         {
@@ -168,9 +170,16 @@ public sealed class PublishingService(
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
     }
 
-    /// <summary>A mudança no ambiente travado que gera a publicação, dada a publicação em vigor.</summary>
+    /// <summary>
+    /// A mudança no ambiente travado que gera a publicação, dada a publicação em vigor e os tipos já publicados. O
+    /// lock do ambiente garante que nenhuma outra publicação trava um tipo entre a leitura e a gravação.
+    /// </summary>
     private delegate Task<Result<Publication>> PublicationChange(
-        ProjectEnvironment environment, Publication? current, DateTimeOffset now, CancellationToken cancellationToken);
+        ProjectEnvironment environment,
+        Publication? current,
+        PublishedFlagTypes publishedTypes,
+        DateTimeOffset now,
+        CancellationToken cancellationToken);
 
     /// <summary>O que a idempotência compara: quem publica, com qual chave e com qual pedido.</summary>
     private sealed record Attempt(Guid MemberId, IdempotencyKey Key, string Fingerprint);

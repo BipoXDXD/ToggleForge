@@ -68,16 +68,37 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
     }
 
+    /// <summary>SQL direto no banco do teste, para provar as constraints contra dado gravado por fora da aplicação.</summary>
+    public async Task ExecuteSqlAsync(string sql)
+    {
+        await using var connection = new NpgsqlConnection(_postgres.GetConnectionString());
+        await connection.OpenAsync(TestContext.Current.CancellationToken);
+        await using var command = new NpgsqlCommand(sql, connection);
+        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>A primeira coluna da primeira linha de uma consulta direta, para afirmar o que ficou gravado.</summary>
+    public async Task<object?> QueryScalarAsync(string sql)
+    {
+        await using var connection = new NpgsqlConnection(_postgres.GetConnectionString());
+        await connection.OpenAsync(TestContext.Current.CancellationToken);
+        await using var command = new NpgsqlCommand(sql, connection);
+        return await command.ExecuteScalarAsync(TestContext.Current.CancellationToken);
+    }
+
     public override async ValueTask DisposeAsync()
     {
         await base.DisposeAsync();
         await _postgres.DisposeAsync();
     }
 
-    protected override void ConfigureWebHost(IWebHostBuilder builder) => ConfigureTestHost(builder);
+    protected override void ConfigureWebHost(IWebHostBuilder builder) => ConfigureTestHost(builder, Logs);
 
-    /// <summary>A configuração de teste, compartilhada com o <see cref="BrowserHost"/>: mesmo banco, chaves e falsos.</summary>
-    internal void ConfigureTestHost(IWebHostBuilder builder)
+    /// <summary>
+    /// A configuração de teste, compartilhada com o <see cref="BrowserHost"/>: mesmo banco, chaves e falsos. Os logs vão
+    /// para <paramref name="logs"/>.
+    /// </summary>
+    internal void ConfigureTestHost(IWebHostBuilder builder, LogCapture logs)
     {
         builder.UseSetting("ConnectionStrings:ToggleForge", _postgres.GetConnectionString());
         // Todo teste vem do mesmo "IP" e cria contas: os tetos reais ficam para RateLimitTests.
@@ -88,7 +109,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("DataProtection:KeyPath", TestCertificates.Current.KeyPath);
         builder.UseSetting("DataProtection:PreviousCertificatePath", TestCertificates.Next.CertificatePath);
         builder.UseSetting("DataProtection:PreviousKeyPath", TestCertificates.Next.KeyPath);
-        builder.ConfigureLogging(logging => logging.ClearProviders().AddProvider(Logs));
+        builder.ConfigureLogging(logging => logging.ClearProviders().AddProvider(logs));
         builder.ConfigureTestServices(services =>
         {
             services.AddSingleton<TimeProvider>(new HundredNanosecondClock());

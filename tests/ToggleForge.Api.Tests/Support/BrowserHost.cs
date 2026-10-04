@@ -11,13 +11,20 @@ namespace ToggleForge.Api.Tests.Support;
 
 /// <summary>
 /// A API num Kestrel de verdade, em HTTPS, para um navegador carregar o console: o TestServer não abre porta, e
-/// o cookie de sessão <c>__Host-</c> só existe em HTTPS. Usa o mesmo banco e as mesmas chaves do
-/// <see cref="ApiFactory"/>, então uma conta criada por lá entra por aqui.
+/// o cookie de sessão <c>__Host-</c> só existe em HTTPS. Também serve para o que só o servidor faz, como o limite
+/// de tamanho do corpo, que o TestServer ignora. Usa o mesmo banco e as mesmas chaves do <see cref="ApiFactory"/>,
+/// então uma conta criada por lá entra por aqui.
 /// </summary>
 public sealed class BrowserHost : WebApplicationFactory<Program>
 {
     private readonly ApiFactory _api;
     private readonly X509Certificate2 _certificate = SelfSignedTlsCertificate();
+
+    /// <summary>
+    /// Só o que este host registra, separado do <see cref="ApiFactory.Logs"/>: os outros testes rodam em paralelo e
+    /// alguns provocam 500 de propósito.
+    /// </summary>
+    public LogCapture Logs { get; } = new();
 
     public BrowserHost(ApiFactory api)
     {
@@ -30,25 +37,28 @@ public sealed class BrowserHost : WebApplicationFactory<Program>
         (Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()
             ?? throw new InvalidOperationException("Kestrel did not report the address it listens on.")).Addresses.Single());
 
-    /// <summary>Um cliente HTTP de verdade, com cookies, que confia só no certificado deste host.</summary>
-    public HttpClient CreateHttpClient()
-    {
-        var thumbprint = _certificate.Thumbprint;
-        var handler = new SocketsHttpHandler
+    /// <summary>Um cliente HTTP sem navegador para a porta do Kestrel, que confia só no certificado deste host.</summary>
+    public HttpClient CreateTlsClient(CookieContainer cookies) =>
+        new(new SocketsHttpHandler
         {
-            CookieContainer = new CookieContainer(),
-            SslOptions = { RemoteCertificateValidationCallback = (_, certificate, _, _) => certificate?.GetCertHashString() == thumbprint },
+            CookieContainer = cookies,
+            SslOptions = { RemoteCertificateValidationCallback = (_, certificate, _, _) => _certificate.Equals(certificate) },
+        })
+        {
+            BaseAddress = Address,
         };
-        return new HttpClient(handler) { BaseAddress = Address };
-    }
 
-    public override async ValueTask DisposeAsync()
+    protected override void ConfigureWebHost(IWebHostBuilder builder) => _api.ConfigureTestHost(builder, Logs);
+
+    protected override void Dispose(bool disposing)
     {
-        await base.DisposeAsync();
-        _certificate.Dispose();
-    }
+        if (disposing)
+        {
+            _certificate.Dispose();
+        }
 
-    protected override void ConfigureWebHost(IWebHostBuilder builder) => _api.ConfigureTestHost(builder);
+        base.Dispose(disposing);
+    }
 
     /// <summary>O navegador ignora erros de certificado nos testes; o certificado só precisa servir para TLS.</summary>
     private static X509Certificate2 SelfSignedTlsCertificate()

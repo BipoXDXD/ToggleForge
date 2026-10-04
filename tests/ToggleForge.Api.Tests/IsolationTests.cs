@@ -15,7 +15,8 @@ public sealed class IsolationTests(ApiFactory api)
     {
         using var owner = await ConsoleClient.SignUpAsync(api);
         using var intruder = await ConsoleClient.SignUpAsync(api);
-        var revision = await owner.PublishedProjectAsync("space-race");
+        var canary = $"CANARY-{Guid.NewGuid()}";
+        var revision = await PublishedProjectWithSecretAsync(owner, canary);
         var credentialId = (await owner.CreateCredentialAsync("space-race")).Json["id"]!.GetValue<string>();
         var before = await StateAsync(owner);
 
@@ -25,6 +26,60 @@ public sealed class IsolationTests(ApiFactory api)
         Assert.Equal("/problems/not-found", response.ProblemType);
         Assert.DoesNotContain("space-race", response.Body, StringComparison.Ordinal);
         Assert.DoesNotContain("new-shop", response.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain(canary, response.Body, StringComparison.Ordinal);
+        Assert.Equal(before, await StateAsync(owner));
+    }
+
+    /// <summary>O 400 de valor que não serve ao tipo revelaria que a flag existe e é booleana.</summary>
+    [Fact]
+    public async Task A_member_of_another_organization_gets_404_for_a_json_value_that_does_not_fit_the_flag()
+    {
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        using var intruder = await ConsoleClient.SignUpAsync(api);
+        var revision = await owner.PublishedProjectAsync("space-race");
+        var before = await StateAsync(owner);
+
+        var response = await intruder.UpdateFlagAsync("space-race", "new-shop", $"\"{revision}\"", """{"onValue":{}}""", owner.OrganizationId);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.Status);
+        Assert.Equal("/problems/not-found", response.ProblemType);
+        Assert.Equal(before, await StateAsync(owner));
+    }
+
+    /// <summary>O 409 da trava de tipo revelaria que a chave já foi publicada, e com qual tipo.</summary>
+    [Fact]
+    public async Task A_member_of_another_organization_gets_404_not_the_type_a_key_was_published_with()
+    {
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        using var intruder = await ConsoleClient.SignUpAsync(api);
+        var revision = await owner.PublishedProjectAsync("space-race");
+        Assert.Equal(HttpStatusCode.NoContent, (await owner.DeleteFlagAsync("space-race", "new-shop", $"\"{revision}\"")).Status);
+        var before = await StateAsync(owner);
+
+        var response = await intruder.CreateJsonFlagAsync("space-race", "new-shop", """{"a":1}""", "null", organizationId: owner.OrganizationId);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.Status);
+        Assert.Equal("/problems/not-found", response.ProblemType);
+        Assert.DoesNotContain("new-shop", response.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("boolean", response.Body, StringComparison.Ordinal);
+        Assert.Equal(before, await StateAsync(owner));
+    }
+
+    /// <summary>O 409 do teto revelaria quanto o rascunho de outra organização ocupa.</summary>
+    [Fact]
+    public async Task A_member_of_another_organization_gets_404_even_when_the_owner_draft_is_full()
+    {
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        using var intruder = await ConsoleClient.SignUpAsync(api);
+        await owner.CreateProjectAsync("space-race");
+        await owner.FillJsonBudgetAsync("space-race", 128 * 1024);
+        var before = await StateAsync(owner);
+        var fullValue = ConsoleClient.JsonTextOf(4_096);
+
+        var response = await intruder.CreateJsonFlagAsync("space-race", "hijack", fullValue, fullValue, organizationId: owner.OrganizationId);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.Status);
+        Assert.Equal("/problems/not-found", response.ProblemType);
         Assert.Equal(before, await StateAsync(owner));
     }
 
@@ -66,6 +121,18 @@ public sealed class IsolationTests(ApiFactory api)
             "revokeCredential" => client.RevokeCredentialAsync("space-race", credentialId, organizationId: organizationId),
             _ => throw new ArgumentOutOfRangeException(nameof(operation), operation, "Unknown operation."),
         };
+
+    /// <summary>Como <see cref="ConsoleClient.PublishedProjectAsync"/>, mais uma flag json publicada com um canário.</summary>
+    private static async Task<long> PublishedProjectWithSecretAsync(ConsoleClient owner, string canary)
+    {
+        Assert.Equal(HttpStatusCode.Created, (await owner.CreateProjectAsync("space-race")).Status);
+        Assert.Equal(HttpStatusCode.Created, (await owner.CreateFlagAsync("space-race", "new-shop")).Status);
+        var secret = await owner.CreateJsonFlagAsync("space-race", "shop-config", $$"""{"secret":"{{canary}}"}""", "null");
+        Assert.Equal(HttpStatusCode.Created, secret.Status);
+        var revision = ConsoleClient.Revision(secret);
+        Assert.Equal(HttpStatusCode.Created, (await owner.PublishAsync("space-race", revision, ConsoleClient.NewIdempotencyKey())).Status);
+        return revision;
+    }
 
     private static async Task<string> StateAsync(ConsoleClient owner) =>
         (await owner.SendAsync("getSession", HttpMethod.Get, Paths.Session)).Body

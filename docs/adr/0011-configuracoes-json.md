@@ -112,16 +112,47 @@ O que já existe e pesa na escolha:
 
 ### Domínio e banco
 
-- `JsonFlagValue` é um value object que nasce válido, lido com o System.Text.Json do .NET
-  (`AllowDuplicateProperties = false`), sem pacote de terceiro.
+- `JsonFlagValue` é um value object que nasce válido, lido com o System.Text.Json do .NET, sem pacote de
+  terceiro. A leitura própria aceita chaves repetidas e a varredura seguinte as recusa com `DuplicateKey`. Pela
+  API, quem recusa primeiro é o binding (`AllowDuplicateProperties = false`), com o 400 genérico `INVALID_BODY`
+  no campo; o `DuplicateKey` só aparece no uso direto do domínio e na reidratação do banco, como defesa em
+  profundidade.
 - `FlagSettings` troca `OnValue`/`OffValue` por um par fechado, `BooleanValues` ou `JsonValues`. O tipo
   deriva do par. Um `FlagChange` com valor de outro tipo é uma falha de domínio, não uma exceção.
-- `ProjectEnvironment` impõe os 128 KiB na criação e na edição, como já impõe as 200 flags. A concorrência
-  continua protegida pela revisão do rascunho.
-- **Banco:** `type text not null` com CHECK `in ('boolean', 'json')`, e `on_value`/`off_value` convertidas
-  para `json` com `USING to_json(...)`. Um CHECK garante que uma flag `boolean` só guarda `true`/`false`. A
-  conversão é feita de uma vez, sem expand/contract, porque ainda não há produção: o ToggleForge só implanta
-  no Marco 6.
+- `ProjectEnvironment` impõe os 128 KiB na criação e na edição, como já impõe as 200 flags. Quem impede dois
+  editores de passarem juntos do teto é a trava do ambiente na edição (`FOR NO KEY UPDATE`, em
+  `FindForUpdateAsync`), não a revisão do rascunho: a ETag é por flag, e duas edições em flags diferentes não
+  conflitam por ela.
+- **Banco:** `type text not null` com CHECK `in ('boolean', 'json')`, `on_value`/`off_value` do tipo `json` (com
+  `true`/`false` nas flags booleanas) e um CHECK de que uma flag `boolean` só guarda `true`/`false`. O Postgres não
+  converte `boolean` em `json` sem `USING`, e as migrations são geradas, nunca editadas à mão: por escolha do
+  usuário, a migration `Initial` do módulo Authoring foi **regenerada**, e todo banco de desenvolvimento existente
+  é recriado (`drop` e `--migrate`). Só é aceitável porque ainda não há produção; depois do Marco 6, mudanças de
+  esquema seguem expand/contract.
+- **Tipo travado por chave publicada:** uma vez publicada num ambiente com um tipo, a chave mantém esse tipo em
+  toda publicação seguinte do mesmo ambiente, e isso vale para o publish e para o rollback, porque os dois criam a
+  publicação que chega ao jogo. Apagar a flag do rascunho não libera o tipo: mudar de tipo exige uma chave nova.
+  Outros ambientes não se afetam.
+  - O invariante mora no banco, não num "checa e depois insere": a tabela `published_flag_types` tem uma linha por
+    (ambiente, chave) com o tipo, gravada na mesma transação da publicação, e cada linha de `publication_flags`
+    aponta para ela pela chave estrangeira (ambiente, chave, tipo). Uma publicação com o tipo trocado viola a FK, e
+    a linha travada não pode mudar de tipo enquanto houver publicação apontando para ela.
+  - O domínio (`PublishedFlagTypes`) recusa antes, com o 409 `flag-type-locked`, que diz a chave e o tipo já
+    publicado: no publish, no rollback e, mais cedo, na criação da flag no rascunho, para o console avisar antes da
+    publicação. O PATCH não troca o tipo, então não chega a essa recusa.
+  - Quem segura o invariante é a FK. O lock do ambiente (`FOR NO KEY UPDATE`), tomado antes de ler os tipos e
+    mantido até gravar a publicação, é o que faz a resposta ser 409, e não 500, quando dois editores disputam:
+    nenhuma outra publicação trava um tipo no meio. Se a recusa do domínio falhasse, a FK derrubaria a gravação com
+    500: um defeito, nunca um tipo trocado no jogo.
+  - Sem backfill: a migration `Initial` do Authoring foi regenerada de novo com a tabela, e os bancos de
+    desenvolvimento já precisam ser recriados nesta fatia. Depois da primeira produção, uma tabela assim nasce
+    preenchida a partir de `publication_flags` numa migration expand/contract.
+- **Tamanho no banco:** um CHECK `octet_length(... ::text) <= 4096` em `on_value` e `off_value`, nas duas tabelas,
+  repete o limite de `JsonFlagValue.MaxBytes`. Sem ele, um valor gravado por fora e maior que o limite faria toda
+  leitura do ambiente falhar, inclusive o snapshot. Pelo mesmo motivo, **apertar um limite do valor depois** (bytes,
+  níveis, regras de número) exige migrar os dados antes, em expand/contract: corrigir ou recusar os valores
+  gravados e só então apertar a regra no domínio e no CHECK. A mensagem de erro de um valor gravado inválido
+  nunca traz o valor, só o tipo e o tamanho, porque vai para o log.
 
 ### Contrato
 
@@ -131,7 +162,22 @@ O que já existe e pesa na escolha:
 - `Flag`, `SnapshotFlag` e `SimulationResult` ganham `type`, e os valores saem como JSON, não como string.
   No snapshot, `type` é opcional no schema (ausente quer dizer `boolean`), mas o servidor sempre o envia.
 - **Erros:** valor inválido ou fora dos limites → 400 no campo. Passar dos 128 KiB do ambiente → 409
-  `limit-reached`. Corpo acima de 32 KiB → 413.
+  `json-budget-reached`, um tipo próprio (mudança aditiva), para o console explicar o erro sem adivinhar; as 200
+  flags continuam `limit-reached`. Recriar ou republicar uma chave com o outro tipo → 409 `flag-type-locked`, outro
+  tipo próprio. Corpo acima de 32 KiB → 413 `payload-too-large`.
+  - Numa flag booleana com os dois valores errados, só `/onValue` é apontado: o domínio para na primeira falha, e
+    o `/offValue` aparece na tentativa seguinte.
+  - O limite de corpo é o nativo do servidor (`RequestSizeLimit` nas duas rotas), aplicado pelo Kestrel na leitura
+    do binding. O 413 chega vazio ao `UseStatusCodePages` e vira Problem Details lá. O TestServer não aplica o
+    limite, então os testes de 413 rodam num Kestrel.
+  - Com `Content-Length` a fronteira é exata; um corpo chunked pode levar 413 um pouco antes dos 32 KiB (o spike
+    da Tarefa 9 viu 413 com 32.767 bytes), então o cliente que chega perto do teto deve mandar `Content-Length`.
+  - `null` no PATCH é recusado no campo, porque no merge patch ele apagaria o valor; uma flag JSON só recebe o JSON
+    `null` na criação.
+  - Um corpo que o binding recusa aponta só o campo de topo (`/onValue`), na criação e no patch, sem as chaves
+    escolhidas pelo cliente dentro do valor.
+- **Saída:** o valor sai como o `JsonElement` do texto compacto. Acentos não são reescapados, então o download
+  fica no tamanho contado; o que a compactação escapa (fora do BMP, U+2028/U+2029) já pesa no limite.
 - O `openapi.yaml` muda na fatia da API, como primeiro commit dela e antes do código, porque os testes de
   integração conferem toda resposta contra ele.
 
@@ -176,6 +222,11 @@ O que já existe e pesa na escolha:
   publicação, rollback nem expiração até a próxima avaliação. Um sinal de mudança (evento ou a versão em uso) é
   candidato aditivo futuro, para quando um estúdio precisar reagir sem reavaliar.
 - Um tipo futuro (por exemplo, número) passa por builds antigos sem derrubá-los: eles só não o enxergam.
+- **O tipo de uma chave publicada é para sempre no ambiente.** Um build no ar lê a chave com a classe dele, e
+  nenhuma publicação pode entregar a ele a chave com outro tipo: recriar com o outro tipo, ou fazer rollback para uma
+  versão assim, recebe 409 `flag-type-locked`. O custo é o redesenho de uma configuração exigir uma chave nova (por
+  exemplo, `shop-config-v2`), e a tabela de tipos cresce com cada chave já publicada, sem nunca encolher. O
+  `TypeMismatch` do núcleo continua como defesa do jogo contra um snapshot de outra origem.
 
 ## Compliance
 
@@ -183,13 +234,15 @@ O que já existe e pesa na escolha:
   de uma flag JSON iguais aos dos vetores v1.
 - **`Domain.Tests`:** partições do `JsonFlagValue` (escalar, objeto, lista, sintaxe inválida, chave duplicada
   aninhada, profundidade 8 e 9, 4.096 e 4.097 bytes com caractere multibyte, número fora do `double`,
-  compactação com a ordem das chaves preservada), os 128 KiB nos dois lados da fronteira e a troca de tipo
-  recusada.
+  compactação com a ordem das chaves preservada), os 128 KiB nos dois lados da fronteira, a troca de tipo
+  recusada e a chave publicada com o outro tipo recusada na criação, no publish e no rollback.
 - **`Api.Tests`:**
   - criar, editar, publicar, snapshot, simulação e rollback de uma flag JSON;
-  - cada 400, o 409 do teto e o 413 do corpo;
-  - os CHECKs do banco;
-  - duas criações concorrentes que passariam do teto: só uma entra;
+  - cada 400, o 409 `json-budget-reached` do teto e o 413 do corpo (num Kestrel, com e sem `Content-Length`);
+  - os CHECKs do banco e a FK do tipo travado (`published_flag_types`);
+  - recriar uma chave publicada com o outro tipo → 409 `flag-type-locked` na criação e, com o rascunho gravado por
+    fora, na publicação; um editor publicando enquanto outro recria a chave com o outro tipo nunca publica os dois;
+  - duas criações ou duas edições concorrentes que passariam do teto: só uma entra;
   - todas as respostas conferidas contra o `openapi.yaml`.
 - **`Sdk.Tests`:** tipo ausente, flag JSON, tipo desconhecido ignorado sem recusar o snapshot, datas e inteiros
   preservados, fração pelo `double`, valor fora do padrão recusa o snapshot, parser que lança.

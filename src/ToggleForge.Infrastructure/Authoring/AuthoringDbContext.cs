@@ -15,6 +15,8 @@ internal sealed class AuthoringDbContext(DbContextOptions<AuthoringDbContext> op
 
     public DbSet<PublicationRow> Publications => Set<PublicationRow>();
 
+    public DbSet<PublishedFlagTypeRow> PublishedFlagTypes => Set<PublishedFlagTypeRow>();
+
     public DbSet<IdempotencyRecord> IdempotencyRecords => Set<IdempotencyRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -22,6 +24,7 @@ internal sealed class AuthoringDbContext(DbContextOptions<AuthoringDbContext> op
         modelBuilder.HasDefaultSchema(Schema);
         ConfigureProjects(modelBuilder);
         ConfigureEnvironments(modelBuilder);
+        ConfigurePublishedFlagTypes(modelBuilder);
         ConfigurePublications(modelBuilder);
         ConfigureIdempotency(modelBuilder);
     }
@@ -71,19 +74,39 @@ internal sealed class AuthoringDbContext(DbContextOptions<AuthoringDbContext> op
                 {
                     table.HasCheckConstraint("ck_draft_flags_key", SqlChecks.Key("key"));
                     table.HasCheckConstraint("ck_draft_flags_rollout", SqlChecks.BasisPoints("rollout"));
+                    table.HasCheckConstraint("ck_draft_flags_type", SqlChecks.FlagType("type"));
+                    table.HasCheckConstraint("ck_draft_flags_boolean_values", SqlChecks.BooleanValues("type", "on_value", "off_value"));
+                    table.HasCheckConstraint("ck_draft_flags_value_bytes", SqlChecks.JsonValueBytes("on_value", "off_value"));
                 });
                 flag.WithOwner().HasForeignKey("EnvironmentId");
                 flag.HasKey("EnvironmentId", nameof(DraftFlag.Key));
                 flag.Property(f => f.Key).HasConversion(ValueConverters.FlagKey);
                 flag.Property(f => f.IsEnabled);
-                flag.Property(f => f.OnValue);
-                flag.Property(f => f.OffValue);
+                flag.Property(f => f.Type).HasConversion(ValueConverters.FlagType);
+                flag.Property(f => f.OnValue).HasConversion(ValueConverters.JsonFlagValue).HasColumnType("json");
+                flag.Property(f => f.OffValue).HasConversion(ValueConverters.JsonFlagValue).HasColumnType("json");
                 flag.Property(f => f.Rollout).HasConversion(ValueConverters.RolloutPercentage);
                 flag.Property(f => f.Seed).HasConversion(ValueConverters.RolloutSeed);
                 flag.Property(f => f.ChangedAtRevision);
                 flag.Ignore(f => f.Settings);
             });
             environment.Navigation(e => e.Flags).HasField("_flags").UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+
+    private static void ConfigurePublishedFlagTypes(ModelBuilder modelBuilder) =>
+        modelBuilder.Entity<PublishedFlagTypeRow>(type =>
+        {
+            type.ToTable("published_flag_types", table =>
+            {
+                table.HasCheckConstraint("ck_published_flag_types_key", SqlChecks.Key("key"));
+                table.HasCheckConstraint("ck_published_flag_types_type", SqlChecks.FlagType("type"));
+            });
+            type.HasKey(t => new { t.EnvironmentId, t.Key });
+            type.Property(t => t.Type).HasConversion(ValueConverters.FlagType);
+
+            // Alvo da chave estrangeira de publication_flags: o tipo entra na chave para o banco comparar.
+            type.HasAlternateKey(t => new { t.EnvironmentId, t.Key, t.Type });
+            type.HasOne<ProjectEnvironment>().WithMany().HasForeignKey(t => t.EnvironmentId).OnDelete(DeleteBehavior.Restrict);
         });
 
     private static void ConfigurePublications(ModelBuilder modelBuilder) =>
@@ -105,9 +128,23 @@ internal sealed class AuthoringDbContext(DbContextOptions<AuthoringDbContext> op
                 {
                     table.HasCheckConstraint("ck_publication_flags_key", SqlChecks.Key("key"));
                     table.HasCheckConstraint("ck_publication_flags_rollout", SqlChecks.BasisPoints("rollout_basis_points"));
+                    table.HasCheckConstraint("ck_publication_flags_type", SqlChecks.FlagType("type"));
+                    table.HasCheckConstraint("ck_publication_flags_boolean_values", SqlChecks.BooleanValues("type", "on_value", "off_value"));
+                    table.HasCheckConstraint("ck_publication_flags_value_bytes", SqlChecks.JsonValueBytes("on_value", "off_value"));
                 });
                 flag.WithOwner().HasForeignKey("EnvironmentId", "Version");
                 flag.HasKey("EnvironmentId", "Version", nameof(PublicationFlagRow.Key));
+                flag.Property(f => f.Type).HasConversion(ValueConverters.FlagType);
+                flag.Property(f => f.OnValue).HasConversion(ValueConverters.JsonFlagValue).HasColumnType("json");
+                flag.Property(f => f.OffValue).HasConversion(ValueConverters.JsonFlagValue).HasColumnType("json");
+
+                // Uma chave publicada mantém o tipo no ambiente (ADR 0011): a linha precisa casar com o tipo travado.
+                flag.HasOne<PublishedFlagTypeRow>()
+                    .WithMany()
+                    .HasForeignKey("EnvironmentId", nameof(PublicationFlagRow.Key), nameof(PublicationFlagRow.Type))
+                    .HasPrincipalKey(t => new { t.EnvironmentId, t.Key, t.Type })
+                    .HasConstraintName("fk_publication_flags_published_flag_types")
+                    .OnDelete(DeleteBehavior.Restrict);
             });
         });
 

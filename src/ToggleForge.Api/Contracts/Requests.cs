@@ -1,3 +1,4 @@
+using System.Text.Json;
 using ToggleForge.Api.Http;
 
 namespace ToggleForge.Api.Contracts;
@@ -12,10 +13,15 @@ internal sealed record ProjectCreationRequest(string? Key, string? Name);
 
 internal sealed record EnvironmentCreationRequest(string? Key, string? Name);
 
-internal sealed record FlagCreationRequest(string? Key, bool? Enabled, bool? OnValue, bool? OffValue, int? RolloutBasisPoints);
+/// <summary>
+/// <see cref="JsonElement"/> não anulável distingue o campo ausente (<see cref="JsonValueKind.Undefined"/>) do
+/// <c>null</c>, que é um valor válido numa flag JSON e um tipo inválido.
+/// </summary>
+internal sealed record FlagCreationRequest(
+    string? Key, JsonElement Type, bool? Enabled, JsonElement OnValue, JsonElement OffValue, int? RolloutBasisPoints);
 
 internal sealed record FlagModificationRequest(
-    PatchField<bool> Enabled, PatchField<bool> OnValue, PatchField<bool> OffValue, PatchField<int> RolloutBasisPoints)
+    PatchField<bool> Enabled, PatchField<JsonElement> OnValue, PatchField<JsonElement> OffValue, PatchField<int> RolloutBasisPoints)
 {
     public bool IsEmpty => !(Enabled.IsPresent || OnValue.IsPresent || OffValue.IsPresent || RolloutBasisPoints.IsPresent);
 }

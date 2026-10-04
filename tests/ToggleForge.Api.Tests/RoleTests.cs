@@ -60,6 +60,38 @@ public sealed class RoleTests(ApiFactory api)
         Assert.Null(credential["revokedAt"]?.GetValue<DateTimeOffset>());
     }
 
+    /// <summary>O 400 de valor que não serve ao tipo só sai depois do papel conferido.</summary>
+    [Fact]
+    public async Task A_viewer_gets_403_for_a_json_value_that_does_not_fit_the_flag()
+    {
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        await owner.CreateProjectAsync("space-race");
+        var created = await owner.CreateFlagAsync("space-race", "new-shop");
+        using var viewer = await MemberWithRoleAsync(owner, "viewer");
+
+        var response = await viewer.UpdateFlagAsync("space-race", "new-shop", created.Header("ETag"), """{"onValue":{}}""", owner.OrganizationId);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.Status);
+        Assert.Equal("/problems/forbidden", response.ProblemType);
+        var flag = await owner.GetFlagAsync("space-race", "new-shop");
+        Assert.Equal(created.Header("ETag"), flag.Header("ETag"));
+        Assert.Equal(created.Body, flag.Body);
+    }
+
+    [Fact]
+    public async Task A_viewer_gets_403_creating_a_json_flag()
+    {
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        await owner.CreateProjectAsync("space-race");
+        using var viewer = await MemberWithRoleAsync(owner, "viewer");
+
+        var response = await viewer.CreateJsonFlagAsync("space-race", "shop-config", """{"discount":0.2}""", "null", organizationId: owner.OrganizationId);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.Status);
+        Assert.Equal("/problems/forbidden", response.ProblemType);
+        Assert.Empty((await owner.GetDraftAsync("space-race")).Json["flags"]!.AsArray());
+    }
+
     [Fact]
     public async Task An_editor_creates_changes_and_removes_flags_and_publishes()
     {
