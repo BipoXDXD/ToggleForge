@@ -53,6 +53,17 @@ public sealed class JsonTextTests
     public void An_escape_for_half_a_character_is_invalid_without_a_position() =>
         Assert.Null(Assert.IsType<JsonAnalysis.Invalid>(JsonText.Analyze("\"\\uD800\"")).Position);
 
+    // O código do caractere entra como número: o xUnit trocaria um surrogate solto no InlineData por U+FFFD.
+    [Theory]
+    [InlineData(0xD800)]
+    [InlineData(0xDC00)]
+    public void A_raw_half_character_cannot_be_encoded(int code) =>
+        Assert.IsType<JsonAnalysis.NotEncodable>(JsonText.Analyze($"\"a{(char)code}b\""));
+
+    [Fact]
+    public void A_whole_character_outside_the_bmp_is_valid() =>
+        Assert.IsType<JsonAnalysis.Valid>(JsonText.Analyze("\"\uD83D\uDE00\""));
+
     [Fact]
     public void Nesting_past_what_the_console_reads_is_too_deep()
     {

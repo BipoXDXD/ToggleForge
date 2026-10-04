@@ -5,7 +5,7 @@
 *@
 @{
     var analysis = JsonText.Analyze(Text);
-    var showsSyntax = analysis is JsonAnalysis.Invalid or JsonAnalysis.TooDeep;
+    var showsSyntax = analysis is JsonAnalysis.Invalid or JsonAnalysis.TooDeep or JsonAnalysis.NotEncodable;
     var error = showsSyntax ? null : Error;
     var invalid = showsSyntax || error is not null || analysis is JsonAnalysis.Valid { Level: MeterLevel.OverLimit };
 }
@@ -57,7 +57,10 @@
             break;
     }
 
-    @* Só o nível muda aqui, não a contagem: o leitor de tela fala na troca de estado, não a cada tecla. *@
+    @*
+        Só o nível do medidor, não a contagem nem a sintaxe: o leitor de tela fala na troca de estado, e a validação ao
+        digitar não interrompe (design spec, 3); o erro de sintaxe é lido pelo aria-describedby.
+    *@
     <p id="@($"{Id}-live")" aria-live="polite" class="sr-only">@LiveText(analysis)</p>
 
     @if (showsSyntax)
@@ -69,6 +72,9 @@
                     <p data-testid="syntax-summary"><strong class="font-semibold">Not valid JSON</strong> at line @position.Line, column @position.Column.</p>
                     <pre class="mt-1 overflow-x-auto font-mono text-xs leading-5 text-red-900"><span class="text-red-400">@Gutter(position.Line.ToString(System.Globalization.CultureInfo.InvariantCulture))</span>@position.LineText@("\n")<span class="text-red-400">@Gutter(string.Empty.PadLeft(position.Line.ToString(System.Globalization.CultureInfo.InvariantCulture).Length))</span>@position.Caret</pre>
                     <p class="mt-1 text-xs">Check for a missing comma or quote just before this point.</p>
+                    break;
+                case JsonAnalysis.NotEncodable:
+                    <p data-testid="syntax-summary"><strong class="font-semibold">Not valid JSON:</strong> a character in it cannot be encoded.</p>
                     break;
                 case JsonAnalysis.Invalid:
                     <p data-testid="syntax-summary"><strong class="font-semibold">Not valid JSON:</strong> a \u escape in it stands for half a character and needs its pair.</p>
@@ -144,7 +150,6 @@
     {
         JsonAnalysis.Valid { Level: MeterLevel.NearLimit } => FlagFields.NearLimit(Field),
         JsonAnalysis.Valid { Level: MeterLevel.OverLimit } => FlagFields.OverLimit(Field),
-        JsonAnalysis.Invalid or JsonAnalysis.TooDeep => FlagFields.NotJson(Field),
         _ => string.Empty,
     };
 

@@ -35,6 +35,8 @@
     public const string TooLargeToSend =
         "This change is too big to send (over 32 KiB), so nothing was saved. Each value can have at most 4 KiB once compacted.";
 
+    private const string CopiedOnce = "Value copied.";
+    private const string CopiedAgain = "Value copied.\u00A0";
     private const string IncludedExample = """{ "discount": 0.2 }""";
     private const string OthersExample = """{ "discount": 0 }""";
 
@@ -73,7 +75,8 @@
 
     private Task CopyOnValueAsync()
     {
-        _copyAnnouncement = "Value copied.";
+        // Um texto igual ao anterior não muda a região viva e não seria lido de novo; o espaço fino alterna e não aparece.
+        _copyAnnouncement = _copyAnnouncement == CopiedOnce ? CopiedAgain : CopiedOnce;
         return OffValueTextChanged.InvokeAsync(OnValueText);
     }
 }

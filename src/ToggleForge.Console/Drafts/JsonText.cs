@@ -32,7 +32,7 @@ public static class JsonText
             return new JsonAnalysis.Valid(value, Encoding.UTF8.GetByteCount(value.Text));
         }
 
-        return Locate(text);
+        return HasHalfCharacter(text) ? new JsonAnalysis.NotEncodable() : Locate(text);
     }
 
     public static MeterLevel LevelOf(int bytes) => bytes switch
@@ -65,6 +65,24 @@ public static class JsonText
 
         // O leitor aceitou o texto, mas o FlagValue não: um escape de meio caractere (\uD800) que não vira UTF-8.
         return new JsonAnalysis.Invalid(Position: null);
+    }
+
+    // Um surrogate sem o par não vira UTF-8; o leitor o trocaria por U+FFFD e acharia o texto válido.
+    private static bool HasHalfCharacter(string text)
+    {
+        for (var index = 0; index < text.Length; index++)
+        {
+            if (char.IsHighSurrogate(text[index]) && index + 1 < text.Length && char.IsLowSurrogate(text[index + 1]))
+            {
+                index++;
+            }
+            else if (char.IsSurrogate(text[index]))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // O leitor conta linha e coluna a partir de zero, e a coluna em bytes UTF-8; o membro lê caracteres, a partir de um.
@@ -110,6 +128,9 @@ public abstract record JsonAnalysis
 
     /// <param name="Position">Onde o texto deixou de ser JSON; nulo quando o problema não tem lugar (um escape partido).</param>
     public sealed record Invalid(SyntaxPosition? Position) : JsonAnalysis;
+
+    /// <summary>Um caractere partido (surrogate sem par) digitado ou colado: não há como mandá-lo em UTF-8.</summary>
+    public sealed record NotEncodable : JsonAnalysis;
 
     /// <summary>Mais níveis do que o console lê (<see cref="FlagValue.MaxReadingDepth"/>); a API aceita só 8.</summary>
     public sealed record TooDeep : JsonAnalysis;

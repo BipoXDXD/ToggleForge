@@ -26,6 +26,9 @@ public sealed class FieldErrors
     /// <remarks>Só a primeira mensagem de cada campo fica: uma de cada vez basta para corrigir.</remarks>
     internal void Add(string field, string message) => _byField.TryAdd(field, message);
 
+    /// <summary>O membro mexeu no campo: a mensagem antiga já não diz respeito ao que está escrito.</summary>
+    internal void Clear(string field) => _byField.Remove(field);
+
     /// <summary>
     /// Separa do problema da API os erros que apontam para um campo do formulário ou para dentro dele (como
     /// <c>/onValue/a</c>). O resto, como um erro em <c>/key</c>, continua no problema, para a mensagem geral.

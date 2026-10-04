@@ -81,7 +81,9 @@ else
         @if (_flag.Value.IsJson)
         {
             <div class="pt-4">
-            <JsonValuesInput @ref="_values" @bind-OnValueText="_edit.OnValueText" @bind-OffValueText="_edit.OffValueText"
+            <JsonValuesInput @ref="_values"
+                             @bind-OnValueText="_edit.OnValueText" @bind-OnValueText:after="() => _fieldErrors.Clear(FieldErrors.OnValue)"
+                             @bind-OffValueText="_edit.OffValueText" @bind-OffValueText:after="() => _fieldErrors.Clear(FieldErrors.OffValue)"
                              RolloutPercent="_edit.RolloutPercent" Enabled="_edit.Enabled" Errors="_fieldErrors" TooLarge="_valuesTooLarge" />
             </div>
         }

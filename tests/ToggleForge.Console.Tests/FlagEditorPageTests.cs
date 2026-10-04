@@ -429,7 +429,7 @@ public sealed class FlagEditorPageTests
     }
 
     [Fact]
-    public void The_level_of_the_meter_is_announced_politely_without_the_byte_count()
+    public void Only_the_level_of_the_meter_is_announced_politely_never_the_syntax()
     {
         var api = ShopConfigRead();
         ConsoleRendering.SignInAs(api, "editor");
@@ -439,8 +439,10 @@ public sealed class FlagEditorPageTests
         Assert.Equal(string.Empty, page.Find("#off-value-live[aria-live=polite]").TextContent);
         page.Find("#off-value").Input(StringOfBytes(3_500));
         Assert.Equal("The value for everyone else is near the limit.", page.Find("#off-value-live").TextContent);
+        page.Find("#off-value").Input(StringOfBytes(4_097));
+        Assert.Equal("The value for everyone else is over the limit.", page.Find("#off-value-live").TextContent);
         page.Find("#off-value").Input("{");
-        Assert.Equal("The value for everyone else is not valid JSON.", page.Find("#off-value-live").TextContent);
+        Assert.Equal(string.Empty, page.Find("#off-value-live").TextContent);
     }
 
     [Fact]
@@ -629,6 +631,120 @@ public sealed class FlagEditorPageTests
         page.FindAll("button").Single(button => button.TextContent.Trim() == "Copy from included").Click();
 
         Assert.Equal("Value copied.", page.Find("fieldset [role=status].sr-only").TextContent);
+    }
+
+    [Fact]
+    public void Copying_again_changes_the_status_so_it_is_announced_again()
+    {
+        var api = ShopConfigRead();
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+        var copy = () => page.FindAll("button").Single(button => button.TextContent.Trim() == "Copy from included").Click();
+
+        copy();
+        var first = page.Find("fieldset [role=status].sr-only").TextContent;
+        copy();
+        var second = page.Find("fieldset [role=status].sr-only").TextContent;
+
+        Assert.NotEqual(first, second);
+        Assert.Equal("Value copied.", second.Trim());
+    }
+
+    [Fact]
+    public void Editing_a_value_clears_the_error_the_api_gave_it()
+    {
+        var api = ShopConfigRead().Answer(HttpMethod.Patch, ShopConfig, HttpStatusCode.BadRequest, """
+            {"type":"/problems/invalid-input","title":"Invalid input","status":400,
+             "errors":[{"type":"INVALID_VALUE","detail":"The value nests deeper than 8 levels.","source":{"location":"body","pointer":"/onValue"}}]}
+            """, "application/problem+json");
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+        page.Find("#on-value").Input("[1]");
+        page.Find("form").Submit();
+        page.WaitForElement("#on-value-error");
+
+        page.Find("#on-value").Input("[2]");
+
+        Assert.Empty(page.FindAll("#on-value-error"));
+        Assert.Null(page.Find("#on-value").GetAttribute("aria-invalid"));
+    }
+
+    [Fact]
+    public void A_raw_half_character_gets_a_neutral_message()
+    {
+        var api = ShopConfigRead();
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+
+        page.Find("#on-value").Input("\"a\uD800b\"");
+
+        Assert.Equal("Not valid JSON: a character in it cannot be encoded.", page.Find("#on-value-syntax [data-testid=syntax-summary]").TextContent);
+    }
+
+    [Fact]
+    public void Switching_the_flag_off_alone_sends_only_enabled()
+    {
+        var api = ShopConfigRead().Answer(HttpMethod.Patch, ShopConfig, HttpStatusCode.OK, ShopConfigJson, eTag: "\"5\"");
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+
+        page.Find("input[type=checkbox]").Change(false);
+        page.Find("form").Submit();
+
+        page.WaitForAssertion(() => Assert.Single(api.RequestsTo(HttpMethod.Patch, ShopConfig)));
+        Assert.Equal("""{"enabled":false}""", api.BodyOf(api.RequestsTo(HttpMethod.Patch, ShopConfig).Single()));
+    }
+
+    [Fact]
+    public void Changing_both_values_sends_both_compacted()
+    {
+        var api = ShopConfigRead().Answer(HttpMethod.Patch, ShopConfig, HttpStatusCode.OK, ShopConfigJson, eTag: "\"5\"");
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+
+        page.Find("#on-value").Input("[ 1, 2 ]");
+        page.Find("#off-value").Input("{ \"gold\" : true }");
+        page.Find("form").Submit();
+
+        page.WaitForAssertion(() => Assert.Single(api.RequestsTo(HttpMethod.Patch, ShopConfig)));
+        Assert.Equal("""{"onValue":[1,2],"offValue":{"gold":true}}""", api.BodyOf(api.RequestsTo(HttpMethod.Patch, ShopConfig).Single()));
+    }
+
+    [Fact]
+    public void Formatting_the_value_read_leaves_nothing_to_save()
+    {
+        var api = ShopConfigRead();
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+
+        page.Find("#on-value").Input("""{"discount":0.2,"items":["sword"]}""");
+        page.Find("[data-testid=on-value-format]").Click();
+        page.Find("form").Submit();
+
+        Assert.Equal("Nothing to save: these are already the values in the draft.", page.Find("[role=alert]").TextContent.Trim());
+        Assert.Empty(api.RequestsTo(HttpMethod.Patch, ShopConfig));
+    }
+
+    [Fact]
+    public void A_formatted_change_is_sent_with_the_same_compact_text()
+    {
+        var api = ShopConfigRead().Answer(HttpMethod.Patch, ShopConfig, HttpStatusCode.OK, ShopConfigJson, eTag: "\"5\"");
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+
+        page.Find("#off-value").Input("""{"discount":0.1,"b":[1]}""");
+        page.Find("[data-testid=off-value-format]").Click();
+        page.Find("form").Submit();
+
+        page.WaitForAssertion(() => Assert.Single(api.RequestsTo(HttpMethod.Patch, ShopConfig)));
+        Assert.Equal("""{"offValue":{"discount":0.1,"b":[1]}}""", api.BodyOf(api.RequestsTo(HttpMethod.Patch, ShopConfig).Single()));
     }
 
     [Fact]

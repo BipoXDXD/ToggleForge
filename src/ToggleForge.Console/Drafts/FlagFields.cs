@@ -47,7 +47,7 @@ internal static class FlagFields
         return null;
     }
 
-    public static string NotJson(string field) => $"The value for {AudienceOf(field)} is not valid JSON.";
+    internal static string NotJson(string field) => $"The value for {AudienceOf(field)} is not valid JSON.";
 
     public static string NearLimit(string field) => $"The value for {AudienceOf(field)} is near the limit.";
 
