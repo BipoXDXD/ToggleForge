@@ -55,6 +55,9 @@ public sealed class FlagValueTests
     [InlineData("1 2")]
     [InlineData("{\"a\":1,}")]
     [InlineData("// note\n1")]
+    [InlineData("\"\\uD800\"")]
+    [InlineData("\"\\uDC00\"")]
+    [InlineData("{\"\\uD800\":1}")]
     public void Text_that_is_not_one_json_value_is_refused(string? text)
     {
         Assert.False(FlagValue.TryParse(text, out var value));

@@ -16,8 +16,8 @@ namespace ToggleForge.Console.Api;
 [JsonConverter(typeof(FlagValueConverter))]
 public sealed record FlagValue
 {
-    // A profundidade é regra da API (8 níveis, ADR 0011), que diz qual regra quebrou. Com o padrão de 64 do leitor,
-    // um valor fundo demais seria recusado aqui como se a sintaxe estivesse errada.
+    // A profundidade é regra da API (8 níveis, ADR 0011), e é ela que devolve o erro de profundidade. Com o padrão de
+    // 64 do leitor, o cliente recusaria esse valor por conta própria, como se fosse erro de sintaxe.
     private static readonly JsonDocumentOptions _reading = new() { MaxDepth = 512 };
 
     // Acentos e <, >, & ficam como foram escritos, como a API os guarda. A página nunca põe este texto em HTML sem
@@ -63,8 +63,7 @@ public sealed record FlagValue
         try
         {
             using var document = JsonDocument.Parse(text, _reading);
-            value = new FlagValue(Write(document.RootElement, _compact));
-            return true;
+            return TryCompact(document.RootElement, out value);
         }
         catch (JsonException)
         {
@@ -74,6 +73,21 @@ public sealed record FlagValue
         catch (ArgumentException)
         {
             // Um surrogate isolado não se converte para UTF-8, e o leitor avisa com esta exceção; também não é JSON.
+            return false;
+        }
+    }
+
+    private static bool TryCompact(JsonElement element, [NotNullWhen(true)] out FlagValue? value)
+    {
+        try
+        {
+            value = new FlagValue(Write(element, _compact));
+            return true;
+        }
+        catch (InvalidOperationException)
+        {
+            // Um escape \uD800 sem par passa pelo leitor, mas compactar exige desescapá-lo; não é texto que a API aceite.
+            value = null;
             return false;
         }
     }
