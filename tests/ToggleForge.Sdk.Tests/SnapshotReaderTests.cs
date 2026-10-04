@@ -188,4 +188,122 @@ public sealed class SnapshotReaderTests
 
         Assert.Null(SnapshotReader.Read(Snapshots.Json(flags: $"[{flag},{BooleanFlagJson}]")));
     }
+
+    [Fact]
+    public void A_json_flag_is_read_with_its_values_compact_and_its_keys_in_order()
+    {
+        var spaced = Snapshots.JsonFlag(onValue: "{ \"discount\" : 0.2 ,\n \"featuredItems\" : [ \"sword\", \"shield\" ] }");
+
+        var snapshot = SnapshotReader.Read(Snapshots.Json(flags: $"[{spaced}]"));
+
+        Assert.NotNull(snapshot);
+        Assert.True(snapshot.TryGetFlag(FlagKey.Parse("shop-config"), out var found));
+        var flag = Assert.IsType<JsonFlag>(found);
+        Assert.Equal(
+            (true, """{"discount":0.2,"featuredItems":["sword","shield"]}""", "null"),
+            (flag.IsEnabled, flag.OnValue, flag.OffValue));
+        var rollout = Assert.IsType<PercentageRollout>(flag.Targeting);
+        Assert.Equal((10_000, "s2"), (rollout.Percentage.BasisPoints, rollout.Seed.Value));
+    }
+
+    [Theory]
+    [InlineData("\"2026-10-04T12:00:00Z\"")]
+    [InlineData("\"2026-10-04T12:00:00+03:00\"")]
+    [InlineData("12345678901234567890")]
+    [InlineData("9007199254740993")]
+    [InlineData("-7")]
+    [InlineData("0.1")]
+    [InlineData("1.0")]
+    [InlineData("{\"b\":1,\"a\":[2,{}]}")]
+    [InlineData("\"<script>ação\"")]
+    [InlineData("true")]
+    [InlineData("null")]
+    [InlineData("[]")]
+    public void Dates_integers_and_text_in_a_json_value_reach_the_game_as_written(string value) =>
+        Assert.Equal(value, OnValueOf(Snapshots.JsonFlag(onValue: value)));
+
+    [Theory]
+    [InlineData("1.50", "1.5")]
+    [InlineData("1e308", "1E+308")]
+    [InlineData("1e-400", "0.0")]
+    public void A_fraction_keeps_its_double_value_but_may_change_its_spelling(string value, string expected) =>
+        Assert.Equal(expected, OnValueOf(Snapshots.JsonFlag(onValue: value)));
+
+    [Theory]
+    [InlineData("1e400")]
+    [InlineData("-1e400")]
+    [InlineData("[1,1e400]")]
+    [InlineData("NaN")]
+    [InlineData("{\"a\":{\"b\":Infinity}}")]
+    [InlineData("-Infinity")]
+    [InlineData("undefined")]
+    [InlineData("new Date(1)")]
+    public void A_json_value_a_standard_parser_would_not_read_refuses_the_snapshot(string value) =>
+        Assert.Null(SnapshotReader.Read(Snapshots.Json(flags: $"[{Snapshots.JsonFlag(onValue: value)}]")));
+
+    [Fact]
+    public void An_off_value_a_standard_parser_would_not_read_refuses_the_snapshot_too() =>
+        Assert.Null(SnapshotReader.Read(Snapshots.Json(flags: $"[{Snapshots.JsonFlag(offValue: "NaN")}]")));
+
+    [Fact]
+    public void A_key_repeated_inside_a_json_value_refuses_the_snapshot() =>
+        Assert.Null(SnapshotReader.Read(Snapshots.Json(flags: $"[{Snapshots.JsonFlag(onValue: "{\"a\":{\"b\":1,\"b\":2}}")}]")));
+
+    [Theory]
+    [InlineData("\"onValue\":{\"discount\":0.2,\"featuredItems\":[\"sword\"]},", "")]
+    [InlineData(",\"offValue\":null", "")]
+    [InlineData("\"enabled\":true", "\"enabled\":\"true\"")]
+    [InlineData("\"rolloutBasisPoints\":10000", "\"rolloutBasisPoints\":10001")]
+    [InlineData("\"seed\":\"s2\"", "\"seed\":\"  \"")]
+    public void One_wrong_field_of_a_json_flag_refuses_the_snapshot(string field, string replacement)
+    {
+        var flag = Snapshots.JsonFlag().Replace(field, replacement, StringComparison.Ordinal);
+
+        Assert.Null(SnapshotReader.Read(Snapshots.Json(flags: $"[{flag}]")));
+    }
+
+    // As 8 camadas e os 4 KiB por valor são regras da API, que podem crescer; um SDK publicado não se corrige.
+    [Fact]
+    public void A_json_value_deeper_than_the_api_allows_is_still_read()
+    {
+        const string nineLevels = "[[[[[[[[[1]]]]]]]]]";
+
+        Assert.Equal(nineLevels, OnValueOf(Snapshots.JsonFlag(onValue: nineLevels)));
+    }
+
+    [Fact]
+    public void A_json_value_larger_than_the_api_allows_is_still_read()
+    {
+        var fiveThousandBytes = "\"" + new string('x', 4_998) + "\"";
+
+        Assert.Equal(fiveThousandBytes, OnValueOf(Snapshots.JsonFlag(onValue: fiveThousandBytes)));
+    }
+
+    [Fact]
+    public void A_json_flag_and_a_boolean_flag_cannot_share_a_key()
+    {
+        var clash = Snapshots.JsonFlag().Replace("shop-config", "new-shop", StringComparison.Ordinal);
+
+        Assert.Null(SnapshotReader.Read(Snapshots.Json(flags: $"[{BooleanFlagJson},{clash}]")));
+    }
+
+    [Fact]
+    public void The_json_type_is_matched_exactly_too()
+    {
+        var shouting = Snapshots.JsonFlag().Replace("\"type\":\"json\"", "\"type\":\"Json\"", StringComparison.Ordinal);
+
+        var snapshot = SnapshotReader.Read(Snapshots.Json(flags: $"[{shouting},{BooleanFlagJson}]"));
+
+        Assert.NotNull(snapshot);
+        Assert.False(snapshot.TryGetFlag(FlagKey.Parse("shop-config"), out _));
+    }
+
+    private static string OnValueOf(string jsonFlag)
+    {
+        var snapshot = SnapshotReader.Read(Snapshots.Json(flags: $"[{jsonFlag}]"));
+
+        Assert.NotNull(snapshot);
+        Assert.True(snapshot.TryGetFlag(FlagKey.Parse("shop-config"), out var flag));
+        return Assert.IsType<JsonFlag>(flag).OnValue;
+    }
 }
