@@ -31,4 +31,7 @@ public sealed record ProjectCreation(string Key, string Name);
 
 public sealed record FlagCreation(string Key, bool Enabled, bool OnValue, bool OffValue, int RolloutBasisPoints);
 
+/// <summary>Um recurso com a ETag que a API devolveu junto; é o valor do If-Match ao alterá-lo.</summary>
+public sealed record Versioned<T>(T Value, string? ETag);
+
 internal sealed record AntiforgeryToken(string Token);
