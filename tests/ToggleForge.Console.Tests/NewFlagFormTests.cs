@@ -225,6 +225,29 @@ public sealed class NewFlagFormTests
     }
 
     [Fact]
+    public void The_whole_form_is_locked_while_the_flag_is_being_created()
+    {
+        var api = Editor(new StubApi()
+            .Answer(HttpMethod.Post, Flags, HttpStatusCode.Created, CreatedJson)
+            .Hold(HttpMethod.Post, Flags, out var release));
+        using var console = ConsoleRendering.Create(api);
+        var form = RenderForm(console);
+        form.Find("#flag-key").Change("shop-config");
+        form.Find("#flag-type-json").Change(true);
+        form.Find("#on-value").Input("1");
+        form.Find("#off-value").Input("0");
+
+        form.Find("form").Submit();
+
+        form.WaitForAssertion(() => Assert.Single(api.RequestsTo(HttpMethod.Post, Flags)));
+        Assert.All(
+            ["#flag-key", "#flag-type-boolean", "#flag-type-json", "#rollout", "#on-value", "#off-value"],
+            control => Assert.NotNull(form.Find(control).Closest("fieldset[disabled]")));
+        release();
+        form.WaitForAssertion(() => Assert.Empty(form.FindAll("fieldset[disabled]")));
+    }
+
+    [Fact]
     public void Nothing_is_marked_invalid_before_submitting()
     {
         using var console = ConsoleRendering.Create(Editor(new StubApi()));
@@ -439,6 +462,39 @@ public sealed class NewFlagFormTests
 
         form.WaitForElement("[role=alert]");
         Assert.Equal("A draft can have at most 200 flags.", form.Find("[role=alert]").TextContent.Trim());
+    }
+
+    [Fact]
+    public void A_key_already_in_the_draft_shows_the_api_detail()
+    {
+        var api = Editor(new StubApi().Answer(HttpMethod.Post, Flags, HttpStatusCode.Conflict,
+            """{"type":"/problems/key-taken","title":"Key taken","status":409,"detail":"The draft already has a flag with the key shop-config."}""",
+            "application/problem+json"));
+        using var console = ConsoleRendering.Create(api);
+        var form = RenderForm(console);
+
+        form.Find("#flag-key").Change("shop-config");
+        form.Find("form").Submit();
+
+        form.WaitForElement("[role=alert]");
+        Assert.Equal("The draft already has a flag with the key shop-config.", form.Find("[role=alert]").TextContent.Trim());
+        Assert.Equal("shop-config", form.Find("#flag-key").GetAttribute("value"));
+    }
+
+    [Fact]
+    public void A_boolean_body_too_large_shows_the_api_detail()
+    {
+        var api = Editor(new StubApi().Answer(HttpMethod.Post, Flags, HttpStatusCode.RequestEntityTooLarge,
+            """{"type":"/problems/payload-too-large","title":"Payload too large","status":413,"detail":"The body is over the limit of 32768 bytes."}""",
+            "application/problem+json"));
+        using var console = ConsoleRendering.Create(api);
+        var form = RenderForm(console);
+
+        form.Find("#flag-key").Change("new-shop");
+        form.Find("form").Submit();
+
+        form.WaitForElement("[role=alert]");
+        Assert.Equal("The body is over the limit of 32768 bytes.", form.Find("[role=alert]").TextContent.Trim());
     }
 
     [Fact]

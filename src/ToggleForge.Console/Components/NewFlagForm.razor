@@ -7,71 +7,77 @@
 
 <section class="mt-10" aria-labelledby="new-flag">
     <h2 id="new-flag" class="text-lg font-semibold">New flag</h2>
-    <form class="mt-4 space-y-4" @onsubmit="CreateFlagAsync" @onsubmit:preventDefault>
-        <div class="max-w-lg space-y-4">
-            <div>
-                <label for="flag-key" class="block text-sm font-medium text-slate-700">Key</label>
-                <input id="flag-key" @ref="_key" required maxlength="64" @bind="_newFlag.Key" @bind:after="() => ClearFieldError(FieldErrors.Key)"
-                       aria-invalid="@(KeyError is null ? null : "true")" aria-describedby="@(KeyError is null ? null : "flag-key-error")"
-                       class="tf-field w-full font-mono" />
-                <FieldError Id="flag-key-error" Message="@KeyError" />
-            </div>
-            <fieldset aria-describedby="type-hint">
-                <legend class="text-sm font-medium text-slate-700">Type</legend>
-                <p id="type-hint" class="text-xs text-slate-500">Chosen now and fixed for good: games read the flag with this type.</p>
-                <div class="mt-2 grid grid-cols-2 gap-3">
-                    <label class="@CardStyle(FlagTypes.Boolean) flex cursor-pointer gap-3 rounded-md border px-4 py-3 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-indigo-600">
-                        <input type="radio" name="flag-type" id="flag-type-boolean" value="@FlagTypes.Boolean"
-                               checked="@(!_newFlag.IsJson)" @onchange="() => ChooseType(FlagTypes.Boolean)"
-                               class="mt-1 h-4 w-4 focus-visible:outline-none" />
-                        <span>
-                            <span class="block text-sm font-medium text-slate-800">Boolean</span>
-                            <span class="block text-xs text-slate-500">On or off: <code>true</code> or <code>false</code>.</span>
-                        </span>
-                    </label>
-                    <label class="@CardStyle(FlagTypes.Json) flex cursor-pointer gap-3 rounded-md border px-4 py-3 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-indigo-600">
-                        <input type="radio" name="flag-type" id="flag-type-json" value="@FlagTypes.Json"
-                               checked="@_newFlag.IsJson" @onchange="() => ChooseType(FlagTypes.Json)"
-                               class="mt-1 h-4 w-4 focus-visible:outline-none" />
-                        <span>
-                            <span class="block text-sm font-medium text-slate-800">JSON</span>
-                            <span class="block text-xs text-slate-500">A number, text, list or object the game parses.</span>
-                        </span>
-                    </label>
+    <form class="mt-4" @onsubmit="CreateFlagAsync" @onsubmit:preventDefault>
+        @* Enquanto o pedido não volta, nada muda: o que se digitasse agora seria apagado no sucesso. *@
+        <fieldset disabled="@_submitting" class="min-w-0 space-y-4">
+            <div class="max-w-lg space-y-4">
+                <div>
+                    <label for="flag-key" class="block text-sm font-medium text-slate-700">Key</label>
+                    <input id="flag-key" @ref="_key" required maxlength="64" @bind="_newFlag.Key" @bind:after="() => ClearFieldError(FieldErrors.Key)"
+                           aria-invalid="@(KeyError is null ? null : "true")" aria-describedby="@(KeyError is null ? null : "flag-key-error")"
+                           class="tf-field w-full font-mono" />
+                    <FieldError Id="flag-key-error" Message="@KeyError" />
                 </div>
-            </fieldset>
-            <div>
-                <label for="rollout" class="block text-sm font-medium text-slate-700">Rollout (%)</label>
-                <input id="rollout" @ref="_rollout" type="number" required min="0" max="100" step="0.01" @bind="_newFlag.RolloutPercent"
-                       aria-invalid="@(RolloutError is null ? null : "true")" aria-describedby="@(RolloutError is null ? null : "rollout-error")"
-                       class="tf-field w-40" />
-                <FieldError Id="rollout-error" Message="@RolloutError" />
+                <fieldset aria-describedby="type-hint">
+                    <legend class="text-sm font-medium text-slate-700">Type</legend>
+                    <p id="type-hint" class="text-xs text-slate-500">Chosen now and fixed for good: games read the flag with this type.</p>
+                    <div class="mt-2 grid grid-cols-2 gap-3">
+                        <label class="@CardStyle(FlagTypes.Boolean) flex cursor-pointer gap-3 rounded-md border px-4 py-3 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-indigo-600">
+                            <input type="radio" name="flag-type" id="flag-type-boolean" value="@FlagTypes.Boolean"
+                                   checked="@(!_newFlag.IsJson)" @onchange="() => ChooseType(FlagTypes.Boolean)"
+                                   class="mt-1 h-4 w-4 focus-visible:outline-none" />
+                            <span>
+                                <span class="block text-sm font-medium text-slate-800">Boolean</span>
+                                <span class="block text-xs text-slate-500">On or off: <code>true</code> or <code>false</code>.</span>
+                            </span>
+                        </label>
+                        <label class="@CardStyle(FlagTypes.Json) flex cursor-pointer gap-3 rounded-md border px-4 py-3 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-indigo-600">
+                            <input type="radio" name="flag-type" id="flag-type-json" value="@FlagTypes.Json"
+                                   checked="@_newFlag.IsJson" @onchange="() => ChooseType(FlagTypes.Json)"
+                                   class="mt-1 h-4 w-4 focus-visible:outline-none" />
+                            <span>
+                                <span class="block text-sm font-medium text-slate-800">JSON</span>
+                                <span class="block text-xs text-slate-500">A number, text, list or object the game parses.</span>
+                            </span>
+                        </label>
+                    </div>
+                </fieldset>
+                <div>
+                    <label for="rollout" class="block text-sm font-medium text-slate-700">Rollout (%)</label>
+                    <input id="rollout" @ref="_rollout" type="number" required min="0" max="100" step="0.01" @bind="_newFlag.RolloutPercent"
+                           aria-invalid="@(RolloutError is null ? null : "true")" aria-describedby="@(RolloutError is null ? null : "rollout-error")"
+                           class="tf-field w-40" />
+                    <FieldError Id="rollout-error" Message="@RolloutError" />
+                </div>
+                <label class="flex items-center gap-2">
+                    <input type="checkbox" @bind="_newFlag.Enabled" class="h-4 w-4" />
+                    <span class="text-sm text-slate-700">Enabled</span>
+                </label>
             </div>
-            <label class="flex items-center gap-2">
-                <input type="checkbox" @bind="_newFlag.Enabled" class="h-4 w-4" />
-                <span class="text-sm text-slate-700">Enabled</span>
-            </label>
-        </div>
-        @if (_newFlag.IsJson)
-        {
-            <div class="max-w-4xl pt-4">
-                <JsonValuesInput @ref="_values"
-                                 @bind-OnValueText="_newFlag.OnValueText" @bind-OnValueText:after="() => ClearFieldError(FieldErrors.OnValue)"
-                                 @bind-OffValueText="_newFlag.OffValueText" @bind-OffValueText:after="() => ClearFieldError(FieldErrors.OffValue)"
-                                 RolloutPercent="_newFlag.RolloutPercent" Enabled="_newFlag.Enabled" Errors="_fieldErrors" TooLarge="_valuesTooLarge" />
+            @if (_newFlag.IsJson)
+            {
+                <div class="max-w-4xl pt-4">
+                    <JsonValuesInput @ref="_values"
+                                     @bind-OnValueText="_newFlag.OnValueText" @bind-OnValueText:after="() => ClearFieldError(FieldErrors.OnValue)"
+                                     @bind-OffValueText="_newFlag.OffValueText" @bind-OffValueText:after="() => ClearFieldError(FieldErrors.OffValue)"
+                                     RolloutPercent="_newFlag.RolloutPercent" Enabled="_newFlag.Enabled" Errors="_fieldErrors" TooLarge="_valuesTooLarge" />
+                </div>
+            }
+            <div class="max-w-lg">
+                <ProblemMessage Problem="_problem" Heading="@ProblemHeading" />
             </div>
-        }
-        <div class="max-w-lg">
-            <ProblemMessage Problem="_problem" Heading="@ProblemHeading" />
-        </div>
-        <button type="submit" disabled="@_submitting"
-                class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60">
-            Add to draft
-        </button>
+            <button type="submit" disabled="@_submitting"
+                    class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60">
+                Add to draft
+            </button>
+        </fieldset>
     </form>
 </section>
 
 @code {
+    // A ordem dos campos na página: o foco vai para o primeiro que tiver erro.
+    private static readonly string[] _pageOrder = [FieldErrors.Key, FieldErrors.Rollout, FieldErrors.OnValue, FieldErrors.OffValue];
+
     private NewFlag _newFlag = new();
     private Problem? _problem;
     private FieldErrors _fieldErrors = new();
@@ -80,6 +86,7 @@
     private ElementReference _key;
     private ElementReference _rollout;
     private JsonValuesInput? _values;
+    private string? _focusAfterRender;
 
     /// <summary>O ambiente cujo rascunho recebe a flag.</summary>
     [Parameter, EditorRequired]
@@ -100,7 +107,7 @@
         (_problem, _fieldErrors, _valuesTooLarge) = (null, new FieldErrors(), false);
         if (!_newFlag.TryGetCreation(out var creation, out var errors))
         {
-            await MarkFieldsAsync(errors);
+            MarkFields(errors);
             return;
         }
 
@@ -114,7 +121,25 @@
             return;
         }
 
-        await ExplainAsync(flag.Problem);
+        Explain(flag.Problem, FlagTypes.IsJson(creation.Type));
+    }
+
+    // Depois do envio, os campos ainda estão no fieldset desabilitado até o próximo render, e um campo desabilitado
+    // não recebe foco: o foco espera o render que os reabilita.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusAfterRender is not { } field)
+        {
+            return;
+        }
+
+        _focusAfterRender = null;
+        await (field switch
+        {
+            FieldErrors.Key => _key.FocusAsync(),
+            FieldErrors.Rollout => _rollout.FocusAsync(),
+            _ => _values?.FocusAsync(field) ?? ValueTask.CompletedTask,
+        });
     }
 
     /// <summary>
@@ -123,19 +148,20 @@
     /// console; o resto (chave já usada no rascunho, <c>key-taken</c>, e o teto de 200 flags) vai para a mensagem geral
     /// com o texto da API.
     /// </summary>
+    /// <param name="sentJson">Se o pedido recusado era de uma flag JSON: o 413 fala dos valores que foram enviados.</param>
     /// <remarks>O mesmo switch do <c>FlagEditor.ExplainAsync</c>, sem o 412 e o 404; fica repetido até uma terceira tela.</remarks>
-    private async Task ExplainAsync(Problem problem)
+    private void Explain(Problem problem, bool sentJson)
     {
         switch (problem.StatusCode)
         {
             case System.Net.HttpStatusCode.BadRequest:
                 var (fields, general) = FieldErrors.Split(problem);
-                await MarkFieldsAsync(fields, general);
+                MarkFields(fields, general);
                 break;
             case System.Net.HttpStatusCode.Conflict when problem.Type == FormProblems.JsonBudgetReachedType:
                 _problem = FormProblems.OutOfJsonRoom;
                 break;
-            case System.Net.HttpStatusCode.RequestEntityTooLarge when _newFlag.IsJson:
+            case System.Net.HttpStatusCode.RequestEntityTooLarge when sentJson:
                 _valuesTooLarge = true;
                 break;
             default:
@@ -146,22 +172,11 @@
 
     // Cada erro fica sob o seu campo, o resumo avisa o leitor de tela (role="alert"), e o foco vai para o primeiro
     // campo a corrigir, na ordem da página (design spec, 2.2 e 3).
-    private async Task MarkFieldsAsync(FieldErrors fields, Problem? general = null)
+    private void MarkFields(FieldErrors fields, Problem? general = null)
     {
         _fieldErrors = fields;
         _problem = general ?? (fields.IsEmpty ? null : FormProblems.FixMarkedFields);
-        if (fields.For(FieldErrors.Key) is not null)
-        {
-            await _key.FocusAsync();
-        }
-        else if (fields.For(FieldErrors.Rollout) is not null)
-        {
-            await _rollout.FocusAsync();
-        }
-        else if (_values is not null && (fields.For(FieldErrors.OnValue) ?? fields.For(FieldErrors.OffValue)) is not null)
-        {
-            await _values.FocusAsync(fields.For(FieldErrors.OnValue) is null ? FieldErrors.OffValue : FieldErrors.OnValue);
-        }
+        _focusAfterRender = _pageOrder.FirstOrDefault(field => fields.For(field) is not null);
     }
 
     // O resumo fala dos campos marcados; quando o último deixa de estar, ele já não diz respeito ao formulário.
