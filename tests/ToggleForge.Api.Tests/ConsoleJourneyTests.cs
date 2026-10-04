@@ -172,6 +172,68 @@ public sealed class ConsoleJourneyTests(ApiFactory api, Browser browser) : IClas
         Assert.True(browserErrors.Count == 0, string.Join(" | ", browserErrors));
     }
 
+    /// <summary>O stub não prova isto: o console reconhece o <c>type</c> exato do 409 que a API real devolve.</summary>
+    [Fact]
+    public async Task A_member_creating_a_json_flag_in_a_full_draft_is_told_the_draft_is_out_of_room()
+    {
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        Assert.Equal(HttpStatusCode.Created, (await owner.CreateProjectAsync("space-race")).Status);
+        await owner.FillJsonBudgetAsync("space-race", 131_071);
+        await using var context = await browser.NewContextAsync(Host.Address);
+        var page = await context.NewPageAsync();
+
+        await ConsolePages.OpenDraftAsync(page, owner);
+        await AddJsonFlagAsync(page, "shop-config", "1", "0");
+
+        await Expect(page.GetByRole(AriaRole.Alert)).ToContainTextAsync("This draft is out of room for JSON values.");
+        await Expect(page.Locator("#flag-key")).ToHaveValueAsync("shop-config");
+        var keys = (await owner.GetDraftAsync("space-race")).Json["flags"]!.AsArray().Select(flag => flag!["key"]!.GetValue<string>());
+        Assert.DoesNotContain("shop-config", keys);
+    }
+
+    /// <summary>O console aceita a sintaxe e deixa a API decidir a profundidade; o erro dela volta ao campo, com o foco.</summary>
+    [Fact]
+    public async Task A_json_value_nested_past_eight_levels_is_refused_under_its_field()
+    {
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        Assert.Equal(HttpStatusCode.Created, (await owner.CreateProjectAsync("space-race")).Status);
+        await using var context = await browser.NewContextAsync(Host.Address);
+        var page = await context.NewPageAsync();
+
+        await ConsolePages.OpenDraftAsync(page, owner);
+        await AddJsonFlagAsync(page, "shop-config", "1", "[[[[[[[[[1]]]]]]]]]");
+
+        await Expect(page.Locator("#off-value-error")).ToContainTextAsync("The value nests deeper than 8 levels.");
+        await Expect(page.Locator("#off-value")).ToBeFocusedAsync();
+        await Expect(page.Locator("#off-value")).ToHaveAttributeAsync("aria-invalid", "true");
+    }
+
+    /// <summary>
+    /// Uma chave publicada guarda o tipo no ambiente (ADR 0011): apagada do rascunho, ela não volta com o outro tipo,
+    /// e o console diz isso na chave, que é o que o membro tem de trocar.
+    /// </summary>
+    [Fact]
+    public async Task A_key_published_as_boolean_cannot_come_back_as_json()
+    {
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        await owner.PublishedProjectAsync("space-race");
+        var read = await owner.GetFlagAsync("space-race", "new-shop");
+        Assert.Equal(HttpStatusCode.NoContent, (await owner.DeleteFlagAsync("space-race", "new-shop", read.Header("ETag"))).Status);
+        await using var context = await browser.NewContextAsync(Host.Address);
+        var page = await context.NewPageAsync();
+        var browserErrors = ConsolePages.CollectErrors(page);
+
+        await ConsolePages.OpenDraftAsync(page, owner);
+        await AddJsonFlagAsync(page, "new-shop", "1", "0");
+
+        await Expect(page.Locator("#flag-key-error")).ToContainTextAsync(
+            "This key was published as a Boolean flag in this environment, and a published key keeps its type. Use a new key for a JSON flag.");
+        await Expect(page.Locator("#flag-key")).ToBeFocusedAsync();
+        await Expect(page.Locator("#flag-key")).ToHaveAttributeAsync("aria-invalid", "true");
+        Assert.Empty((await owner.GetDraftAsync("space-race")).Json["flags"]!.AsArray());
+        Assert.True(browserErrors.Count == 0, string.Join(" | ", browserErrors));
+    }
+
     [Fact]
     public async Task A_visitor_without_session_signs_in_and_returns_to_the_page_asked_for()
     {
@@ -382,6 +444,16 @@ public sealed class ConsoleJourneyTests(ApiFactory api, Browser browser) : IClas
         await page.GetByLabel("Summary (optional)").FillAsync(summary);
         await page.GetByLabel("Type dev to confirm").FillAsync("dev");
         await page.GetByRole(AriaRole.Button, new() { Name = "Publish 1 change to dev" }).ClickAsync();
+    }
+
+    /// <summary>Preenche o formulário "New flag" como JSON, com o rollout padrão, e envia.</summary>
+    private static async Task AddJsonFlagAsync(IPage page, string key, string onValue, string offValue)
+    {
+        await page.Locator("#flag-key").FillAsync(key);
+        await page.GetByRole(AriaRole.Radio, new() { Name = "JSON" }).CheckAsync();
+        await page.Locator("#on-value").FillAsync(onValue);
+        await page.Locator("#off-value").FillAsync(offValue);
+        await page.GetByRole(AriaRole.Button, new() { Name = "Add to draft" }).ClickAsync();
     }
 
     /// <summary>O valor JSON do simulador começa recolhido; aberto, mostra o texto indentado.</summary>
