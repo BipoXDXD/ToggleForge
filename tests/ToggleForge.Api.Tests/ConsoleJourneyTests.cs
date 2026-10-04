@@ -181,6 +181,7 @@ public sealed class ConsoleJourneyTests(ApiFactory api, Browser browser) : IClas
         await owner.FillJsonBudgetAsync("space-race", 131_071);
         await using var context = await browser.NewContextAsync(Host.Address);
         var page = await context.NewPageAsync();
+        var browserErrors = ConsolePages.CollectErrors(page);
 
         await ConsolePages.OpenDraftAsync(page, owner);
         await AddJsonFlagAsync(page, "shop-config", "1", "0");
@@ -189,6 +190,7 @@ public sealed class ConsoleJourneyTests(ApiFactory api, Browser browser) : IClas
         await Expect(page.Locator("#flag-key")).ToHaveValueAsync("shop-config");
         var keys = (await owner.GetDraftAsync("space-race")).Json["flags"]!.AsArray().Select(flag => flag!["key"]!.GetValue<string>());
         Assert.DoesNotContain("shop-config", keys);
+        Assert.True(browserErrors.Count == 0, string.Join(" | ", browserErrors));
     }
 
     /// <summary>O console aceita a sintaxe e deixa a API decidir a profundidade; o erro dela volta ao campo, com o foco.</summary>
@@ -199,6 +201,7 @@ public sealed class ConsoleJourneyTests(ApiFactory api, Browser browser) : IClas
         Assert.Equal(HttpStatusCode.Created, (await owner.CreateProjectAsync("space-race")).Status);
         await using var context = await browser.NewContextAsync(Host.Address);
         var page = await context.NewPageAsync();
+        var browserErrors = ConsolePages.CollectErrors(page);
 
         await ConsolePages.OpenDraftAsync(page, owner);
         await AddJsonFlagAsync(page, "shop-config", "1", "[[[[[[[[[1]]]]]]]]]");
@@ -206,6 +209,8 @@ public sealed class ConsoleJourneyTests(ApiFactory api, Browser browser) : IClas
         await Expect(page.Locator("#off-value-error")).ToContainTextAsync("The value nests deeper than 8 levels.");
         await Expect(page.Locator("#off-value")).ToBeFocusedAsync();
         await Expect(page.Locator("#off-value")).ToHaveAttributeAsync("aria-invalid", "true");
+        Assert.Empty((await owner.GetDraftAsync("space-race")).Json["flags"]!.AsArray());
+        Assert.True(browserErrors.Count == 0, string.Join(" | ", browserErrors));
     }
 
     /// <summary>
