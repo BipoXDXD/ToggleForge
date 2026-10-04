@@ -52,10 +52,11 @@ namespace ToggleForge.Evaluation
                 return new EvaluationResult<T>(defaultValue, choice.Reason, snapshotVersion, choice.Bucket);
             }
 
+            var json = choice.Pick(OnValue, OffValue);
             T value;
             try
             {
-                value = parse(choice.Pick(OnValue, OffValue));
+                value = parse(json);
             }
             catch (Exception)
             {
