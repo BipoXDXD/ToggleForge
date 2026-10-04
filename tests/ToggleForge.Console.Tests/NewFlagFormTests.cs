@@ -279,6 +279,26 @@ public sealed class NewFlagFormTests
     }
 
     [Fact]
+    public void Editing_the_key_clears_the_error_the_api_gave_it()
+    {
+        var api = Editor(new StubApi().Answer(HttpMethod.Post, Flags, HttpStatusCode.BadRequest, """
+            {"type":"/problems/invalid-input","title":"Invalid input","status":400,
+             "errors":[{"type":"INVALID_VALUE","detail":"Keys start with a letter or digit.","source":{"location":"body","pointer":"/key"}}]}
+            """, "application/problem+json"));
+        using var console = ConsoleRendering.Create(api);
+        var form = RenderForm(console);
+        form.Find("#flag-key").Change("-shop");
+        form.Find("form").Submit();
+        form.WaitForElement("#flag-key-error");
+
+        form.Find("#flag-key").Change("shop");
+
+        Assert.Empty(form.FindAll("#flag-key-error"));
+        Assert.Null(form.Find("#flag-key").GetAttribute("aria-invalid"));
+        Assert.Empty(form.FindAll("[role=alert]"));
+    }
+
+    [Fact]
     public void The_first_invalid_field_in_page_order_gets_the_focus()
     {
         var api = Editor(new StubApi());

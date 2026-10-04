@@ -11,7 +11,7 @@
         <div class="max-w-lg space-y-4">
             <div>
                 <label for="flag-key" class="block text-sm font-medium text-slate-700">Key</label>
-                <input id="flag-key" @ref="_key" required maxlength="64" @bind="_newFlag.Key"
+                <input id="flag-key" @ref="_key" required maxlength="64" @bind="_newFlag.Key" @bind:after="() => ClearFieldError(FieldErrors.Key)"
                        aria-invalid="@(KeyError is null ? null : "true")" aria-describedby="@(KeyError is null ? null : "flag-key-error")"
                        class="tf-field w-full font-mono" />
                 <FieldError Id="flag-key-error" Message="@KeyError" />
