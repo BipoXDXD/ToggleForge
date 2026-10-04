@@ -53,93 +53,81 @@ internal static class ScriptedTour
 
     private static async Task TellAsync(string cacheDirectory)
     {
-        var clock = new DemoClock();
-        var server = new SimulatedServer(Flag, Seed);
         var credential = SdkCredential.Parse("tfsdk_demo-scripted-tour-credential-not-a-secret1");
-        var store = new FileSnapshotStore(cacheDirectory, credential);
+        var tour = new Tour(new SimulatedServer(Flag, Seed), new FileSnapshotStore(cacheDirectory, credential), new DemoClock());
         Console.WriteLine("ToggleForge: demonstração do SDK (Marco 4)");
         Console.WriteLine(string.Create(_culture, $"Flag {Flag}, {PlayerCount:N0} jogadores, cache em disco com idade máxima de {_maxCacheAge.TotalDays} dias"));
 
-        var game = new ToggleForgeClient(server, store, timeProvider: clock);
         Step(1, "Primeira abertura, sem rede");
-        await game.StartAsync();
-        var first = game.EvaluateBoolean(Flag, _players[0], defaultValue: false);
+        await tour.Game.StartAsync();
+        var first = tour.Game.EvaluateBoolean(Flag, _players[0], defaultValue: false);
         Show(first);
         Expect(first.Source == SnapshotSource.None && first.Reason == EvaluationReason.SnapshotMissing, "sem rede e sem cache, o jogo usa os próprios valores padrão");
 
         Step(2, "A rede volta: o estúdio publica a v1 com 10%");
-        server.IsOnline = true;
-        server.Publish(rolloutBasisPoints: 1_000);
-        Expect(await SyncAsync(game, clock) == SyncOutcome.Updated && Version(game) == 1, "a v1 chega na sincronização seguinte");
-        var atTenPercent = Included(game);
-        Show(game, atTenPercent);
+        tour.Server.IsOnline = true;
+        tour.Server.Publish(rolloutBasisPoints: 1_000);
+        Expect(await tour.SyncAsync() == SyncOutcome.Updated && tour.Version == 1, "a v1 chega na sincronização seguinte");
+        var atTenPercent = Included(tour.Game);
+        Show(tour, atTenPercent);
         Expect(atTenPercent.Count == IncludedAtTenPercent, $"a v1 inclui {IncludedAtTenPercent} jogadores");
 
         Step(3, "O estúdio amplia para 25% (v2)");
-        server.Publish(rolloutBasisPoints: 2_500);
-        Expect(await SyncAsync(game, clock) == SyncOutcome.Updated && Version(game) == 2, "a v2 chega na sincronização seguinte");
-        var atQuarter = Included(game);
+        tour.Server.Publish(rolloutBasisPoints: 2_500);
+        Expect(await tour.SyncAsync() == SyncOutcome.Updated && tour.Version == 2, "a v2 chega na sincronização seguinte");
+        var atQuarter = Included(tour.Game);
         var lost = atTenPercent.Except(atQuarter).Count();
-        Show(game, atQuarter);
+        Show(tour, atQuarter);
         Console.WriteLine(string.Create(_culture, $"   perdidos desde a v1: {lost}"));
         Expect(atQuarter.Count == IncludedAtQuarter, $"a v2 inclui {IncludedAtQuarter} jogadores");
         Expect(lost == 0, "ampliar o rollout não tira ninguém que já estava incluído");
 
         Step(4, "Uma resposta atrasada com a v1 chega depois da v2");
-        server.DeliverLateOnce(version: 1);
-        var late = await SyncAsync(game, clock);
-        Console.WriteLine($"   {late}: o jogo continua na v{Version(game)}");
-        Expect(late == SyncOutcome.OutOfOrder && Version(game) == 2, "a ordem vem da versão da publicação, nunca da chegada");
+        tour.Server.DeliverLateOnce(version: 1);
+        var late = await tour.SyncAsync();
+        Console.WriteLine($"   {late}: o jogo continua na v{tour.Version}");
+        Expect(late == SyncOutcome.OutOfOrder && tour.Version == 2, "a ordem vem da versão da publicação, nunca da chegada");
 
         Step(5, "O jogador fecha o jogo e abre de novo, sem rede");
-        await game.DisposeAsync();
-        server.IsOnline = false;
-        game = new ToggleForgeClient(server, store, timeProvider: clock);
-        await game.StartAsync();
-        var restarted = game.EvaluateBoolean(Flag, _players[0], defaultValue: false);
+        tour.Server.IsOnline = false;
+        await tour.ReopenGameAsync();
+        var restarted = tour.Game.EvaluateBoolean(Flag, _players[0], defaultValue: false);
         Show(restarted);
         Expect(restarted.Value && restarted.Source == SnapshotSource.Cache && restarted.SnapshotVersion == 2, "o snapshot do disco vale enquanto a rede não volta");
 
         var offline = _maxCacheAge + TimeSpan.FromDays(1);
         Step(6, $"{offline.TotalDays} dias sem rede");
-        clock.Advance(offline);
-        var expired = game.EvaluateBoolean(Flag, _players[0], defaultValue: false);
+        tour.Clock.Advance(offline);
+        var expired = tour.Game.EvaluateBoolean(Flag, _players[0], defaultValue: false);
         Show(expired);
         Expect(expired.Reason == EvaluationReason.SnapshotExpired && expired.IsFallback, $"depois de {_maxCacheAge.TotalDays} dias sem confirmação, o jogo volta aos valores padrão");
 
         Step(7, "A rede volta: o servidor confirma a v2 com 304");
-        server.IsOnline = true;
-        var confirmed = await SyncAsync(game, clock);
-        var back = game.EvaluateBoolean(Flag, _players[0], defaultValue: false);
-        Console.WriteLine($"   {server.LastStatusCode} {confirmed}");
+        tour.Server.IsOnline = true;
+        var confirmed = await tour.SyncAsync();
+        var back = tour.Game.EvaluateBoolean(Flag, _players[0], defaultValue: false);
+        Console.WriteLine($"   {tour.Server.LastStatusCode} {confirmed}");
         Show(back);
         Expect(
-            server.LastStatusCode == 304 && confirmed == SyncOutcome.NotModified && back.Value && back.Source == SnapshotSource.Server && back.SnapshotVersion == 2,
+            tour.Server.LastStatusCode == 304 && confirmed == SyncOutcome.NotModified && back.Value && back.Source == SnapshotSource.Server && back.SnapshotVersion == 2,
             "a ETag guardada no disco rende um 304, que confirma o snapshot sem baixá-lo de novo");
 
         Step(8, $"O estúdio publica a configuração JSON {ShopConfigFlag} (v3)");
-        server.Publish(rolloutBasisPoints: 2_500, jsonFlag: (ShopConfigFlag, ShopConfigJson));
-        Expect(await SyncAsync(game, clock) == SyncOutcome.Updated && Version(game) == 3, "a v3 chega na sincronização seguinte");
-        var shop = game.EvaluateJson(ShopConfigFlag, _players[0], ShopConfig.Closed, LoggingFailures(ShopConfig.Parse));
+        tour.Server.Publish(rolloutBasisPoints: 2_500, jsonFlag: (ShopConfigFlag, ShopConfigJson));
+        Expect(await tour.SyncAsync() == SyncOutcome.Updated && tour.Version == 3, "a v3 chega na sincronização seguinte");
+        var shop = tour.Game.EvaluateJson(ShopConfigFlag, _players[0], ShopConfig.Closed, LoggingFailures(ShopConfig.Parse));
         Show(ShopConfigFlag, shop, shop.Value.ToString());
         Expect(
             shop.Reason == EvaluationReason.Included && shop.Source == SnapshotSource.Server && shop.SnapshotVersion == 3
                 && shop.Value.Discount == 0.2m && shop.Value.FeaturedItems.SequenceEqual(["sword", "shield"]),
             "o jogo lê a configuração com a própria classe, sem recompilar");
-        var refused = game.EvaluateJson(ShopConfigFlag, _players[0], defaultValue: -1, LoggingFailures(json => int.Parse(json, CultureInfo.InvariantCulture)));
+        var refused = tour.Game.EvaluateJson(ShopConfigFlag, _players[0], defaultValue: -1, LoggingFailures(json => int.Parse(json, CultureInfo.InvariantCulture)));
         Show(ShopConfigFlag, refused, refused.Value.ToString(CultureInfo.InvariantCulture));
         Expect(refused.Value == -1 && refused.Reason == EvaluationReason.InvalidValue, "um parser que recusa o valor não derruba o jogo: ele recebe o próprio valor padrão");
-        await game.DisposeAsync();
+        await tour.Game.DisposeAsync();
 
         Console.WriteLine();
         Console.WriteLine("Tudo conferido.");
-    }
-
-    /// <summary>Um minuto depois, como o laço faria; o SDK não deixa o jogo sincronizar mais rápido que 15 s.</summary>
-    private static async Task<SyncOutcome> SyncAsync(ToggleForgeClient game, DemoClock clock)
-    {
-        clock.Advance(TimeSpan.FromMinutes(1));
-        return await game.RefreshAsync();
     }
 
     private static HashSet<int> Included(ToggleForgeClient game) =>
@@ -162,8 +150,6 @@ internal static class ScriptedTour
         }
     };
 
-    private static long? Version(ToggleForgeClient game) => game.EvaluateBoolean(Flag, _players[0], defaultValue: false).SnapshotVersion;
-
     private static void Step(int number, string title)
     {
         Console.WriteLine();
@@ -175,8 +161,8 @@ internal static class ScriptedTour
     private static void Show<T>(string flagKey, FlagResult<T> result, string value) =>
         Console.WriteLine($"   {FlagResultText.Describe(flagKey, result, value)}");
 
-    private static void Show(ToggleForgeClient game, HashSet<int> included) =>
-        Console.WriteLine(string.Create(_culture, $"   v{Version(game)}: incluídos {included.Count:N0} de {PlayerCount:N0} ({(decimal)included.Count / PlayerCount:P1})"));
+    private static void Show(Tour tour, HashSet<int> included) =>
+        Console.WriteLine(string.Create(_culture, $"   v{tour.Version}: incluídos {included.Count:N0} de {PlayerCount:N0} ({(decimal)included.Count / PlayerCount:P1})"));
 
     private static void Expect(bool held, string promise)
     {
@@ -187,4 +173,44 @@ internal static class ScriptedTour
     }
 
     private sealed class BrokenPromiseException(string promise) : Exception(promise);
+
+    /// <summary>
+    /// O que os passos do roteiro compartilham: o servidor simulado, o relógio e o jogo, que o passo 5 fecha e abre
+    /// de novo sobre o mesmo cache em disco.
+    /// </summary>
+    private sealed class Tour
+    {
+        private readonly FileSnapshotStore _store;
+
+        public Tour(SimulatedServer server, FileSnapshotStore store, DemoClock clock)
+        {
+            _store = store;
+            Server = server;
+            Clock = clock;
+            Game = new ToggleForgeClient(server, store, timeProvider: clock);
+        }
+
+        public SimulatedServer Server { get; }
+
+        public DemoClock Clock { get; }
+
+        public ToggleForgeClient Game { get; private set; }
+
+        public long? Version => Game.EvaluateBoolean(Flag, _players[0], defaultValue: false).SnapshotVersion;
+
+        /// <summary>Um minuto depois, como o laço faria; o SDK não deixa o jogo sincronizar mais rápido que 15 s.</summary>
+        public async Task<SyncOutcome> SyncAsync()
+        {
+            Clock.Advance(TimeSpan.FromMinutes(1));
+            return await Game.RefreshAsync();
+        }
+
+        public async Task ReopenGameAsync()
+        {
+            await Game.DisposeAsync();
+            Game = new ToggleForgeClient(Server, _store, timeProvider: Clock);
+            await Game.StartAsync();
+        }
+    }
 }
+
