@@ -122,7 +122,8 @@ public sealed class ConsoleJourneyTests(ApiFactory api, Browser browser) : IClas
         await Expect(page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex("/sign-in\\?returnUrl="));
         await ConsolePages.SignInAsync(page, owner.Email, ConsoleClient.Password);
 
-        await Expect(page.GetByRole(AriaRole.Tab, new() { Name = "Production" })).ToHaveAttributeAsync("aria-selected", "true");
+        await Expect(page.GetByRole(AriaRole.Navigation, new() { Name = "Environments" }).GetByRole(AriaRole.Link, new() { Name = "Production" }))
+            .ToHaveAttributeAsync("aria-current", "page");
         Assert.EndsWith($"/organizations/{owner.OrganizationId}/projects/space-race/environments/prod", page.Url, StringComparison.Ordinal);
     }
 

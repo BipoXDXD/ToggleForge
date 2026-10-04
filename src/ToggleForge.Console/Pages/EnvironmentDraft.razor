@@ -24,16 +24,17 @@ else if (_project is null || _draft is null)
 }
 else
 {
-    <div class="mt-6 flex gap-2 border-b border-slate-200" role="tablist" aria-label="Environments">
+    @* Links entre páginas, não abas: Tab percorre, Enter troca de página, e o atual é a página corrente. *@
+    <nav class="mt-6 flex gap-2 border-b border-slate-200" aria-label="Environments">
         @foreach (var environment in _project.Environments)
         {
             var current = environment.Key == EnvironmentKey;
-            <a href="@EnvironmentPath(environment.Key)" role="tab" aria-selected="@(current ? "true" : "false")"
+            <a href="@EnvironmentPath(environment.Key)" aria-current="@(current ? "page" : null)"
                class="@(current ? "border-indigo-600 text-indigo-700" : "border-transparent text-slate-500 hover:text-slate-700") -mb-px border-b-2 px-3 py-2 text-sm font-medium">
                 @environment.Name
             </a>
         }
-    </div>
+    </nav>
 
     <div class="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm">
         <span class="text-slate-600" data-testid="draft-status">
