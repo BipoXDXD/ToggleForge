@@ -15,6 +15,8 @@ public sealed class SdkClientTests(ApiFactory api) : IDisposable
     // O relógio do SDK: avançar o piso entre sincronizações deixa o teste pedir uma atrás da outra.
     private readonly FakeTimeProvider _time = new();
 
+    private readonly string _cacheDirectory = Path.Combine(Path.GetTempPath(), "toggleforge-sdk-cache", Guid.NewGuid().ToString("N"));
+
     [Fact]
     public async Task The_sdk_evaluates_each_player_like_the_simulation_of_the_live_version()
     {
@@ -73,6 +75,36 @@ public sealed class SdkClientTests(ApiFactory api) : IDisposable
         Assert.Equal((SnapshotSource.Server, (long?)1), (result.Source, result.SnapshotVersion));
     }
 
+    /// <summary>A evidência do Marco 4: o jogo funciona com perda de rede, inclusive depois de reiniciar.</summary>
+    [Fact]
+    public async Task A_game_restarted_without_network_plays_on_the_stored_snapshot_until_the_server_confirms_it()
+    {
+        var player = EvaluationContext.ForPlayer(PlayerId.Parse("player-42"));
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        await owner.PublishedProjectAsync("space-race");
+        var credential = SdkCredential.Parse((await owner.CreateCredentialAsync("space-race")).Json["secret"]!.GetValue<string>());
+        var store = new FileSnapshotStore(_cacheDirectory, credential);
+        bool online;
+        await using (var firstRun = new ToggleForgeClient(Transport(credential), store, timeProvider: _time))
+        {
+            await firstRun.StartAsync(TestContext.Current.CancellationToken);
+            online = firstRun.EvaluateBoolean("new-shop", player, defaultValue: false).Value;
+        }
+
+        // Porta 9 (discard): a conexão é recusada na hora, como num aparelho sem rede.
+        using var noNetwork = new HttpClient { BaseAddress = new Uri("http://127.0.0.1:9/") };
+        await using (var offlineRun = new ToggleForgeClient(new HttpSnapshotTransport(noNetwork, credential), store, timeProvider: _time))
+        {
+            await offlineRun.StartAsync(TestContext.Current.CancellationToken);
+            var offline = offlineRun.EvaluateBoolean("new-shop", player, defaultValue: !online);
+            Assert.Equal((online, SnapshotSource.Cache, (long?)1), (offline.Value, offline.Source, offline.SnapshotVersion));
+        }
+
+        await using var backOnline = new ToggleForgeClient(Transport(credential), store, timeProvider: _time);
+        await backOnline.StartAsync(TestContext.Current.CancellationToken);
+        Assert.Equal((SnapshotSource.Server, (long?)1), Origin(backOnline.EvaluateBoolean("new-shop", player, defaultValue: false)));
+    }
+
     [Fact]
     public async Task Before_the_first_publication_the_game_stays_on_its_defaults()
     {
@@ -106,14 +138,22 @@ public sealed class SdkClientTests(ApiFactory api) : IDisposable
     public void Dispose()
     {
         _games.ForEach(game => game.Dispose());
+        if (Directory.Exists(_cacheDirectory))
+        {
+            Directory.Delete(_cacheDirectory, recursive: true);
+        }
     }
 
-    private ToggleForgeClient ClientWith(string secret)
+    private static (SnapshotSource Source, long? Version) Origin(FlagResult<bool> result) => (result.Source, result.SnapshotVersion);
+
+    private HttpSnapshotTransport Transport(SdkCredential credential)
     {
         var game = api.CreateDefaultClient(ApiFactory.BaseAddress, new SnapshotContractCheck());
         _games.Add(game);
-        return new ToggleForgeClient(new HttpSnapshotTransport(game, SdkCredential.Parse(secret)), options: null, _time);
+        return new HttpSnapshotTransport(game, credential);
     }
+
+    private ToggleForgeClient ClientWith(string secret) => new(Transport(SdkCredential.Parse(secret)), timeProvider: _time);
 
     /// <summary>Sincroniza depois do piso do intervalo, como o laço faria.</summary>
     private async Task<SyncOutcome> RefreshLaterAsync(ToggleForgeClient client)
