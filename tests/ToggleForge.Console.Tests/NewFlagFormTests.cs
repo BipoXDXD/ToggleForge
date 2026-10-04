@@ -279,6 +279,20 @@ public sealed class NewFlagFormTests
     }
 
     [Fact]
+    public void The_focus_moves_once_and_then_stays_where_the_member_types()
+    {
+        using var console = ConsoleRendering.Create(Editor(new StubApi()));
+        var form = RenderForm(console);
+        form.Find("#rollout").Change("12.345");
+        form.Find("form").Submit();
+
+        form.Find("#flag-key").Change("new-shop");
+        form.Find("#rollout").Change("12.5");
+
+        Assert.Single(console.JSInterop.Invocations, invocation => invocation.Identifier.EndsWith(".focus", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void A_key_the_api_refuses_is_marked_on_its_field_and_focused()
     {
         const string KeyRule = "Keys have 1 to 64 characters from [a-z0-9._-] and start with a letter or digit.";
