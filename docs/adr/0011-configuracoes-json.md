@@ -142,8 +142,10 @@ O que já existe e pesa na escolha:
   - **tipo desconhecido → a flag é ignorada**, e o resto do snapshot vale. Isso corrige o defeito latente e
     deixa um tipo futuro passar por builds antigos;
   - chave duplicada continua recusando o snapshot inteiro, mesmo entre tipos.
-- O valor JSON é regravado compacto, com `DateParseHandling.None` (já em uso), para datas e números passarem
-  sem conversão.
+- O valor JSON é regravado compacto. Com `DateParseHandling.None` (já em uso), datas e inteiros passam sem
+  conversão; uma fração passa pelo `double`, que mantém o valor e pode mudar a grafia (`1.50` vira `1.5`). Um valor
+  que só o Newtonsoft aceita (`NaN`, `1e400`) recusa o snapshot (ADR 0010).
+- A exceção do parser não chega ao SDK: para diagnosticá-la, o jogo a registra dentro do próprio parser.
 - `EvaluateJson<T>(chave, contexto, defaultValue, parse)` devolve `FlagResult<T>`. Cache do valor já lido
   fica para quando houver medição.
 

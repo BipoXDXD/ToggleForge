@@ -98,6 +98,12 @@ O que já existe e pesa na escolha:
   Nada de snapshot pela metade. Campo que o SDK não usa, como `publishedAt`, não é conferido.
   Uma flag de um tipo que este SDK não conhece não é inválida: ela é ignorada, e o resto do snapshot vale
   (ADR 0011).
+- **Flag JSON (ADR 0011):** os valores são relidos e regravados como JSON compacto, com as chaves na ordem
+  recebida. Datas e inteiros passam como vieram. Uma fração passa pelo `double`: o valor se mantém, mas a grafia
+  pode mudar (`1.50` vira `1.5`). O `decimal` guardaria a grafia, mas recusaria `1e308`, que a API aceita. Um valor
+  que um parser JSON comum não leria (número fora do `double`, `NaN`, `Infinity`, `undefined`, construtor) torna a
+  flag inválida e recusa o snapshot. Os limites da API para cada valor (4 KiB, 8 níveis) não são conferidos aqui,
+  porque podem crescer; vale só o teto de 64 níveis.
 - **Profundidade máxima de 64 níveis no JSON.** O snapshot de hoje tem três, mas as configurações JSON vão
   aninhar mais, e um SDK publicado num jogo não se corrige depois. A API deve impor às configurações um teto
   bem abaixo desse.
