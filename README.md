@@ -108,15 +108,21 @@ anterior à que está em uso é descartada, porque a ordem vem da versão da pub
 snapshot inválido ou de algoritmo desconhecido mantém o anterior. O SDK é netstandard2.1 com C# 9 e lê o JSON
 com Newtonsoft.Json mapeado à mão, sem reflection, para rodar no IL2CPP da Unity (ADR 0010).
 
+`StartAsync` faz a primeira sincronização e mantém as próximas em segundo plano: a cada 60 s com ±10% de
+variação (configurável de 15 s a 1 h), backoff dobrando a cada falha até 10 min e `Retry-After` respeitado até
+1 h. Um ambiente nunca publicado volta ao ritmo normal, e uma credencial recusada espera o teto. O jogo pode
+desistir de esperar a primeira sincronização sem pará-la. `RefreshAsync` sincroniza na hora, por exemplo quando
+o jogo volta do segundo plano, mas devolve `Skipped` sem chamar o servidor se vier antes de 15 s da última
+tentativa ou do prazo que o servidor pediu.
+
 ```csharp
 using var http = new HttpClient { BaseAddress = new Uri("https://api.toggleforge.example/") };
-var client = new ToggleForgeClient(new HttpSnapshotTransport(http, SdkCredential.Parse(credential)));
-await client.RefreshAsync();
+await using var client = new ToggleForgeClient(new HttpSnapshotTransport(http, SdkCredential.Parse(credential)));
+await client.StartAsync();
 var newShop = client.EvaluateBoolean("new-shop", EvaluationContext.ForPlayer(PlayerId.Parse(playerId)), defaultValue: false);
 ```
 
-A sincronização periódica com variação e backoff, o cache em disco com idade máxima de 7 dias e o app
-demonstrativo entram nas próximas fatias.
+O cache em disco com idade máxima de 7 dias e o app demonstrativo entram nas próximas fatias.
 
 ## Desenvolvimento
 
