@@ -40,6 +40,7 @@ else
             @(_draft.Changes.Count switch { 0 => "No unpublished changes.", 1 => "1 unpublished change.", var count => $"{count} unpublished changes." })
         </span>
         <span class="flex items-center gap-3">
+            <a href="@($"{EnvironmentPath(EnvironmentKey)}/simulator")" class="font-medium text-indigo-700 hover:underline">Simulate</a>
             @if (_draft.BasedOnVersion is not null)
             {
                 <a href="@($"{EnvironmentPath(EnvironmentKey)}/history")" class="font-medium text-indigo-700 hover:underline">History</a>

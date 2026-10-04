@@ -74,6 +74,22 @@ public sealed record PageMetadata(string? NextPageToken = null);
 /// <param name="DiscardDraftChanges">Sem isso, a API recusa reverter por cima de mudanças não publicadas.</param>
 public sealed record RollbackRequest(long TargetVersion, long ExpectedCurrentVersion, bool DiscardDraftChanges);
 
+/// <param name="Version">Só ao simular uma publicação: o rascunho não tem versão, e a API recusa o campo.</param>
+public sealed record SimulationRequest(string PlayerId, string Source, long? Version)
+{
+    public static SimulationRequest ForDraft(string playerId) => new(playerId, "draft", Version: null);
+
+    public static SimulationRequest ForPublication(string playerId, long version) => new(playerId, "publication", version);
+}
+
+/// <param name="Version">A versão simulada; nula quando foi o rascunho.</param>
+/// <param name="Results">Um por flag, em ordem de chave.</param>
+public sealed record Simulation(long? Version, IReadOnlyList<SimulationResult> Results);
+
+/// <param name="Reason"><c>disabled</c>, <c>included</c> ou <c>excluded</c>; a lista pode crescer.</param>
+/// <param name="Bucket">O bucket do jogador (0 a 9999); nulo quando o resultado não dependeu dele.</param>
+public sealed record SimulationResult(string FlagKey, bool Value, string Reason, int? Bucket);
+
 /// <summary>Merge patch: só os campos que mudaram vão para a API, e campo nulo nem é enviado.</summary>
 public sealed record FlagModification(bool? Enabled = null, bool? OnValue = null, bool? OffValue = null, int? RolloutBasisPoints = null)
 {

@@ -17,8 +17,8 @@ public sealed class ConsoleApi(HttpClient http, SessionState session)
 {
     private const string AntiforgeryHeader = "X-XSRF-TOKEN";
 
-    // A API recusa null num merge patch (nenhum campo da flag pode ser apagado) e resumo vazio na publicação:
-    // o que é nulo fica de fora do JSON.
+    // A API recusa null num merge patch (nenhum campo da flag pode ser apagado), resumo vazio na publicação e
+    // versão ao simular o rascunho: o que é nulo fica de fora do JSON.
     private static readonly JsonSerializerOptions _omitNulls = new(JsonSerializerDefaults.Web)
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
@@ -113,6 +113,13 @@ public sealed class ConsoleApi(HttpClient http, SessionState session)
         EnvironmentAddress environment, RollbackRequest request, string idempotencyKey, CancellationToken cancellationToken) =>
         SendAsync<Publication>(
             new Outgoing(HttpMethod.Post, $"{EnvironmentPath(environment)}/rollbacks", Json(request), IdempotencyKey: idempotencyKey),
+            cancellationToken);
+
+    /// <remarks>O ID do jogador pode ser dado pessoal do estúdio: vai só no corpo, nunca no endereço.</remarks>
+    public Task<ApiResult<Simulation>> SimulateAsync(
+        EnvironmentAddress environment, SimulationRequest request, CancellationToken cancellationToken) =>
+        SendAsync<Simulation>(
+            new Outgoing(HttpMethod.Post, $"{EnvironmentPath(environment)}/simulations", JsonContent.Create(request, options: _omitNulls)),
             cancellationToken);
 
     private static JsonContent Json(object body) => JsonContent.Create(body);
