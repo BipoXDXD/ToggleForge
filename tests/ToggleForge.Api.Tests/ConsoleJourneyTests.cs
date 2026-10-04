@@ -28,10 +28,10 @@ public sealed class ConsoleJourneyTests(ApiFactory api, Browser browser) : IClas
         using var owner = await ConsoleClient.SignUpAsync(api);
         await using var context = await browser.NewContextAsync(Host.Address);
         var page = await context.NewPageAsync();
-        var browserErrors = CollectErrors(page);
+        var browserErrors = ConsolePages.CollectErrors(page);
 
         await page.GotoAsync("/");
-        await SignInAsync(page, owner.Email, ConsoleClient.Password);
+        await ConsolePages.SignInAsync(page, owner.Email, ConsoleClient.Password);
         await Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Projects" })).ToBeVisibleAsync();
         await page.GetByLabel("Name").FillAsync("Space Race");
         await page.GetByLabel("Key").FillAsync("space-race");
@@ -62,10 +62,10 @@ public sealed class ConsoleJourneyTests(ApiFactory api, Browser browser) : IClas
         using var owner = await ConsoleClient.SignUpAsync(api);
         await using var context = await browser.NewContextAsync(Host.Address);
         var page = await context.NewPageAsync();
-        var browserErrors = CollectErrors(page);
+        var browserErrors = ConsolePages.CollectErrors(page);
 
         await page.GotoAsync("/");
-        await SignInAsync(page, owner.Email, ConsoleClient.Password);
+        await ConsolePages.SignInAsync(page, owner.Email, ConsoleClient.Password);
         await Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Projects" })).ToBeVisibleAsync();
         await page.GetByLabel("Name").FillAsync("Space Race");
         await page.GetByLabel("Key").FillAsync("space-race");
@@ -120,7 +120,7 @@ public sealed class ConsoleJourneyTests(ApiFactory api, Browser browser) : IClas
 
         await page.GotoAsync($"/organizations/{owner.OrganizationId}/projects/space-race/environments/prod");
         await Expect(page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex("/sign-in\\?returnUrl="));
-        await SignInAsync(page, owner.Email, ConsoleClient.Password);
+        await ConsolePages.SignInAsync(page, owner.Email, ConsoleClient.Password);
 
         await Expect(page.GetByRole(AriaRole.Tab, new() { Name = "Production" })).ToHaveAttributeAsync("aria-selected", "true");
         Assert.EndsWith($"/organizations/{owner.OrganizationId}/projects/space-race/environments/prod", page.Url, StringComparison.Ordinal);
@@ -134,7 +134,7 @@ public sealed class ConsoleJourneyTests(ApiFactory api, Browser browser) : IClas
         var page = await context.NewPageAsync();
 
         await page.GotoAsync("/sign-in");
-        await SignInAsync(page, owner.Email, "not the password");
+        await ConsolePages.SignInAsync(page, owner.Email, "not the password");
 
         await Expect(page.GetByRole(AriaRole.Alert)).ToHaveTextAsync("The email or the password is wrong.");
         Assert.EndsWith("/sign-in", page.Url, StringComparison.Ordinal);
@@ -147,9 +147,9 @@ public sealed class ConsoleJourneyTests(ApiFactory api, Browser browser) : IClas
         await owner.PublishedProjectAsync("space-race");
         await using var context = await browser.NewContextAsync(Host.Address);
         var page = await context.NewPageAsync();
-        var browserErrors = CollectErrors(page);
+        var browserErrors = ConsolePages.CollectErrors(page);
 
-        await OpenDraftAsync(page, owner);
+        await ConsolePages.OpenDraftAsync(page, owner);
         await page.GetByRole(AriaRole.Link, new() { Name = "new-shop" }).ClickAsync();
         await Expect(page.GetByLabel("Value for included players")).ToHaveValueAsync("true");
         await Expect(page.GetByLabel("Value for everyone else")).ToHaveValueAsync("false");
@@ -170,7 +170,7 @@ public sealed class ConsoleJourneyTests(ApiFactory api, Browser browser) : IClas
         await owner.PublishedProjectAsync("space-race");
         await using var context = await browser.NewContextAsync(Host.Address);
         var page = await context.NewPageAsync();
-        await OpenDraftAsync(page, owner);
+        await ConsolePages.OpenDraftAsync(page, owner);
         await page.GetByRole(AriaRole.Link, new() { Name = "new-shop" }).ClickAsync();
         await Expect(page.GetByLabel("Rollout (%)")).ToHaveValueAsync("10");
 
@@ -193,7 +193,7 @@ public sealed class ConsoleJourneyTests(ApiFactory api, Browser browser) : IClas
         await using var context = await browser.NewContextAsync(Host.Address);
         var page = await context.NewPageAsync();
 
-        await OpenDraftAsync(page, owner);
+        await ConsolePages.OpenDraftAsync(page, owner);
         await page.GetByRole(AriaRole.Link, new() { Name = "new-shop" }).ClickAsync();
         await page.GetByRole(AriaRole.Button, new() { Name = "Remove from draft" }).ClickAsync();
         await page.GetByRole(AriaRole.Button, new() { Name = "Remove", Exact = true }).ClickAsync();
@@ -210,9 +210,9 @@ public sealed class ConsoleJourneyTests(ApiFactory api, Browser browser) : IClas
         Assert.Equal(HttpStatusCode.Created, (await owner.CreateFlagAsync("space-race", "new-shop", rolloutBasisPoints: 2_500)).Status);
         await using var context = await browser.NewContextAsync(Host.Address);
         var page = await context.NewPageAsync();
-        var browserErrors = CollectErrors(page);
+        var browserErrors = ConsolePages.CollectErrors(page);
 
-        await OpenDraftAsync(page, owner);
+        await ConsolePages.OpenDraftAsync(page, owner);
         await page.GetByRole(AriaRole.Link, new() { Name = "Review and publish" }).ClickAsync();
         await Expect(page.GetByRole(AriaRole.List, new() { Name = "Changes" })).ToContainTextAsync("new-shop");
         var publish = page.GetByRole(AriaRole.Button, new() { Name = "Publish 1 change to dev" });
@@ -241,9 +241,9 @@ public sealed class ConsoleJourneyTests(ApiFactory api, Browser browser) : IClas
         Assert.Equal(HttpStatusCode.Created, (await owner.PublishAsync("space-race", ConsoleClient.Revision(widened), ConsoleClient.NewIdempotencyKey())).Status);
         await using var context = await browser.NewContextAsync(Host.Address);
         var page = await context.NewPageAsync();
-        var browserErrors = CollectErrors(page);
+        var browserErrors = ConsolePages.CollectErrors(page);
 
-        await OpenDraftAsync(page, owner);
+        await ConsolePages.OpenDraftAsync(page, owner);
         await page.GetByRole(AriaRole.Link, new() { Name = "History" }).ClickAsync();
         await Expect(page.GetByRole(AriaRole.List, new() { Name = "Publications" }).GetByRole(AriaRole.Listitem).First).ToContainTextAsync("Live");
         await page.GetByRole(AriaRole.Link, new() { Name = "Version 1" }).ClickAsync();
@@ -268,11 +268,11 @@ public sealed class ConsoleJourneyTests(ApiFactory api, Browser browser) : IClas
         var (bucket, included) = (live["bucket"]!.GetValue<int>(), live["value"]!.GetValue<bool>());
         await using var context = await browser.NewContextAsync(Host.Address);
         var page = await context.NewPageAsync();
-        var browserErrors = CollectErrors(page);
+        var browserErrors = ConsolePages.CollectErrors(page);
         var browserMessages = new List<string>();
         page.Console += (_, message) => browserMessages.Add(message.Text);
 
-        await OpenDraftAsync(page, owner);
+        await ConsolePages.OpenDraftAsync(page, owner);
         await page.GetByRole(AriaRole.Link, new() { Name = "Simulate" }).ClickAsync();
         await page.GetByLabel("Player ID").FillAsync(playerId);
         await page.GetByRole(AriaRole.Button, new() { Name = "Simulate" }).ClickAsync();
@@ -296,14 +296,6 @@ public sealed class ConsoleJourneyTests(ApiFactory api, Browser browser) : IClas
         {
             await _host.DisposeAsync();
         }
-    }
-
-    /// <summary>Abre o rascunho de <c>dev</c> pelo endereço: o console pede o login e volta para ele.</summary>
-    private static async Task OpenDraftAsync(IPage page, ConsoleClient member)
-    {
-        await page.GotoAsync($"/organizations/{member.OrganizationId}/projects/space-race/environments/dev");
-        await SignInAsync(page, member.Email, ConsoleClient.Password);
-        await Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Draft flags" })).ToBeVisibleAsync();
     }
 
     /// <summary>Do rascunho ao simulador; <paramref name="publishedVersion"/> simula a versão no ar, que vem preenchida.</summary>
@@ -337,32 +329,4 @@ public sealed class ConsoleJourneyTests(ApiFactory api, Browser browser) : IClas
 
     private static ILocator ResultCells(IPage page) =>
         page.GetByRole(AriaRole.Row).Filter(new() { HasText = "new-shop" }).GetByRole(AriaRole.Cell);
-
-    private static async Task SignInAsync(IPage page, string email, string password)
-    {
-        await page.GetByLabel("Email").FillAsync(email);
-        await page.GetByLabel("Password").FillAsync(password);
-        await page.GetByRole(AriaRole.Button, new() { Name = "Sign in" }).ClickAsync();
-    }
-
-    /// <summary>
-    /// Erros de script, violações da CSP e arquivos do console que não carregaram aparecem só no console do
-    /// navegador. O status das chamadas à API fica de fora: o 401 de quem ainda não entrou faz parte do fluxo, e
-    /// a interface é que mostra se a resposta foi tratada.
-    /// </summary>
-    private static List<string> CollectErrors(IPage page)
-    {
-        var errors = new List<string>();
-        page.Console += (_, message) =>
-        {
-            var apiCallStatus = message.Text.StartsWith("Failed to load resource", StringComparison.Ordinal)
-                && new Uri(message.Location).AbsolutePath.StartsWith("/api/", StringComparison.Ordinal);
-            if (message.Type == "error" && !apiCallStatus)
-            {
-                errors.Add($"{message.Text} at {message.Location}");
-            }
-        };
-        page.PageError += (_, error) => errors.Add(error);
-        return errors;
-    }
 }
