@@ -73,6 +73,7 @@ internal sealed class AuthoringDbContext(DbContextOptions<AuthoringDbContext> op
                     table.HasCheckConstraint("ck_draft_flags_rollout", SqlChecks.BasisPoints("rollout"));
                     table.HasCheckConstraint("ck_draft_flags_type", SqlChecks.FlagType("type"));
                     table.HasCheckConstraint("ck_draft_flags_boolean_values", SqlChecks.BooleanValues("type", "on_value", "off_value"));
+                    table.HasCheckConstraint("ck_draft_flags_value_bytes", SqlChecks.JsonValueBytes("on_value", "off_value"));
                 });
                 flag.WithOwner().HasForeignKey("EnvironmentId");
                 flag.HasKey("EnvironmentId", nameof(DraftFlag.Key));
@@ -110,6 +111,7 @@ internal sealed class AuthoringDbContext(DbContextOptions<AuthoringDbContext> op
                     table.HasCheckConstraint("ck_publication_flags_rollout", SqlChecks.BasisPoints("rollout_basis_points"));
                     table.HasCheckConstraint("ck_publication_flags_type", SqlChecks.FlagType("type"));
                     table.HasCheckConstraint("ck_publication_flags_boolean_values", SqlChecks.BooleanValues("type", "on_value", "off_value"));
+                    table.HasCheckConstraint("ck_publication_flags_value_bytes", SqlChecks.JsonValueBytes("on_value", "off_value"));
                 });
                 flag.WithOwner().HasForeignKey("EnvironmentId", "Version");
                 flag.HasKey("EnvironmentId", "Version", nameof(PublicationFlagRow.Key));

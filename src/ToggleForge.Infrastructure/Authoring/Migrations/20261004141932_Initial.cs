@@ -82,6 +82,7 @@ namespace ToggleForge.Infrastructure.Authoring.Migrations
                     table.CheckConstraint("ck_draft_flags_key", "key ~ '^[a-z0-9][a-z0-9._-]{0,63}$'");
                     table.CheckConstraint("ck_draft_flags_rollout", "rollout between 0 and 10000");
                     table.CheckConstraint("ck_draft_flags_type", "type in ('boolean', 'json')");
+                    table.CheckConstraint("ck_draft_flags_value_bytes", "octet_length(on_value::text) <= 4096 and octet_length(off_value::text) <= 4096");
                     table.ForeignKey(
                         name: "fk_draft_flags_environments_environment_id",
                         column: x => x.environment_id,
@@ -167,6 +168,7 @@ namespace ToggleForge.Infrastructure.Authoring.Migrations
                     table.CheckConstraint("ck_publication_flags_key", "key ~ '^[a-z0-9][a-z0-9._-]{0,63}$'");
                     table.CheckConstraint("ck_publication_flags_rollout", "rollout_basis_points between 0 and 10000");
                     table.CheckConstraint("ck_publication_flags_type", "type in ('boolean', 'json')");
+                    table.CheckConstraint("ck_publication_flags_value_bytes", "octet_length(on_value::text) <= 4096 and octet_length(off_value::text) <= 4096");
                     table.ForeignKey(
                         name: "fk_publication_flags_publications_environment_id_version",
                         columns: x => new { x.environment_id, x.version },

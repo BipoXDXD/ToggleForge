@@ -1,3 +1,5 @@
+using ToggleForge.Domain.Authoring;
+
 namespace ToggleForge.Infrastructure.Persistence;
 
 /// <summary>As mesmas regras dos value objects, repetidas no schema para dado gravado por fora da aplicação.</summary>
@@ -14,4 +16,11 @@ internal static class SqlChecks
     /// <summary>Uma flag booleana só guarda os literais true e false (ADR 0011).</summary>
     public static string BooleanValues(string type, string onValue, string offValue) =>
         $"{type} <> 'boolean' or (json_typeof({onValue}) = 'boolean' and json_typeof({offValue}) = 'boolean')";
+
+    /// <summary>
+    /// O teto de bytes de <see cref="JsonFlagValue"/>, para um valor gravado por fora não derrubar a leitura do
+    /// ambiente inteiro. Conta o texto guardado, que a aplicação grava compacto.
+    /// </summary>
+    public static string JsonValueBytes(string onValue, string offValue) =>
+        $"octet_length({onValue}::text) <= {JsonFlagValue.MaxBytes} and octet_length({offValue}::text) <= {JsonFlagValue.MaxBytes}";
 }

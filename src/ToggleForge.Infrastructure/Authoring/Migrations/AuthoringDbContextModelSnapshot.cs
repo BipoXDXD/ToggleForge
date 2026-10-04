@@ -269,6 +269,8 @@ namespace ToggleForge.Infrastructure.Authoring.Migrations
                                     t.HasCheckConstraint("ck_draft_flags_rollout", "rollout between 0 and 10000");
 
                                     t.HasCheckConstraint("ck_draft_flags_type", "type in ('boolean', 'json')");
+
+                                    t.HasCheckConstraint("ck_draft_flags_value_bytes", "octet_length(on_value::text) <= 4096 and octet_length(off_value::text) <= 4096");
                                 });
 
                             b1.WithOwner()
@@ -342,6 +344,8 @@ namespace ToggleForge.Infrastructure.Authoring.Migrations
                                     t.HasCheckConstraint("ck_publication_flags_rollout", "rollout_basis_points between 0 and 10000");
 
                                     t.HasCheckConstraint("ck_publication_flags_type", "type in ('boolean', 'json')");
+
+                                    t.HasCheckConstraint("ck_publication_flags_value_bytes", "octet_length(on_value::text) <= 4096 and octet_length(off_value::text) <= 4096");
                                 });
 
                             b1.WithOwner()

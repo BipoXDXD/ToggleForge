@@ -29,6 +29,28 @@ public sealed class FlagStorageTests(ApiFactory api)
         Assert.Equal("ck_draft_flags_type", error.ConstraintName);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task The_database_refuses_a_json_value_over_4_KiB(bool onValueIsLarge)
+    {
+        using var owner = await OwnerWithProjectAsync();
+        var large = JsonTextOf(bytes: 4_097);
+
+        var error = await Assert.ThrowsAnyAsync<PostgresException>(() => api.ExecuteSqlAsync(
+            InsertDraftFlag(owner, "config", "json", onValueIsLarge ? large : "null", onValueIsLarge ? "null" : large)));
+
+        Assert.Equal("ck_draft_flags_value_bytes", error.ConstraintName);
+    }
+
+    [Fact]
+    public async Task The_database_takes_a_json_value_of_exactly_4_KiB()
+    {
+        using var owner = await OwnerWithProjectAsync();
+
+        await api.ExecuteSqlAsync(InsertDraftFlag(owner, "config", "json", "null", JsonTextOf(bytes: 4_096)));
+    }
+
     [Fact]
     public async Task A_corrupted_json_value_never_reaches_the_logs_or_the_response()
     {
@@ -78,6 +100,9 @@ public sealed class FlagStorageTests(ApiFactory api)
         from authoring.environments environment join authoring.projects project on project.id = environment.project_id
         where flag.environment_id = environment.id and project.organization_id = '{owner.OrganizationId}' and flag.key = 'new-shop'
         """;
+
+    /// <summary>Uma string JSON com exatamente <paramref name="bytes"/> bytes, contando as aspas.</summary>
+    private static string JsonTextOf(int bytes) => "\"" + new string('x', bytes - 2) + "\"";
 
     private static string Literal(string text) => $"'{text.Replace("'", "''", StringComparison.Ordinal)}'";
 }
