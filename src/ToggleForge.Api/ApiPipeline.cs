@@ -39,6 +39,8 @@ internal static class ApiPipeline
 
         var sdk = app.MapGroup("/sdk/v1").RequireAuthorization(ApiServices.SdkPolicy);
         sdk.MapSnapshotEndpoints();
+
+        app.MapToggleForgeConsole();
         return app;
     }
 

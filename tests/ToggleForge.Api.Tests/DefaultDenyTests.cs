@@ -11,8 +11,9 @@ namespace ToggleForge.Api.Tests;
 
 /// <summary>
 /// Varreduras sobre todas as rotas registradas, para uma rota nova não escapar das regras gerais. STRIDE E3:
-/// toda rota exige autenticação, exceto uma allowlist explícita. STRIDE S2: toda mutação exige o token
-/// antiforgery.
+/// toda rota da API exige autenticação, exceto uma allowlist explícita. STRIDE S2: toda mutação exige o token
+/// antiforgery. Fora de <c>/api</c> e <c>/sdk</c> só existem os arquivos do console, só de leitura (ADR 0009);
+/// que eles são públicos, <see cref="ConsoleHostingTests"/> prova.
 /// </summary>
 public sealed partial class DefaultDenyTests(ApiFactory api)
 {
@@ -66,6 +67,20 @@ public sealed partial class DefaultDenyTests(ApiFactory api)
     }
 
     [Fact]
+    public void Outside_the_api_every_route_only_reads()
+    {
+        var consoleRoutes = AllEndpoints().Where(endpoint => !IsApiRoute(endpoint)).ToList();
+
+        Assert.NotEmpty(consoleRoutes);
+        // Sem metadado de método, o endpoint aceita qualquer método: a lista vazia também é falha.
+        Assert.All(consoleRoutes, endpoint =>
+        {
+            Assert.NotEmpty(Methods(endpoint));
+            Assert.Subset(new HashSet<string>(["GET", "HEAD"]), Methods(endpoint).ToHashSet());
+        });
+    }
+
+    [Fact]
     public void Every_route_is_an_operation_of_the_contract()
     {
         var contract = ApiContract.Operations();
@@ -78,8 +93,14 @@ public sealed partial class DefaultDenyTests(ApiFactory api)
         }
     }
 
-    private List<RouteEndpoint> Endpoints() =>
+    private List<RouteEndpoint> Endpoints() => AllEndpoints().Where(IsApiRoute).ToList();
+
+    private List<RouteEndpoint> AllEndpoints() =>
         api.Services.GetRequiredService<EndpointDataSource>().Endpoints.OfType<RouteEndpoint>().ToList();
+
+    private static bool IsApiRoute(RouteEndpoint endpoint) =>
+        endpoint.RoutePattern.RawText is { } route
+        && (route.StartsWith("/api/", StringComparison.Ordinal) || route.StartsWith("/sdk/", StringComparison.Ordinal));
 
     private static string OperationId(RouteEndpoint endpoint) =>
         endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName

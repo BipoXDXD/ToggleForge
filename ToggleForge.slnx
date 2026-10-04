@@ -5,6 +5,7 @@
   <Folder Name="/src/">
     <Project Path="src/ToggleForge.Api/ToggleForge.Api.csproj" />
     <Project Path="src/ToggleForge.Application/ToggleForge.Application.csproj" />
+    <Project Path="src/ToggleForge.Console/ToggleForge.Console.csproj" />
     <Project Path="src/ToggleForge.Domain/ToggleForge.Domain.csproj" />
     <Project Path="src/ToggleForge.Evaluation/ToggleForge.Evaluation.csproj" />
     <Project Path="src/ToggleForge.Infrastructure/ToggleForge.Infrastructure.csproj" />

@@ -37,6 +37,7 @@ internal static class ApiServices
         services.AddSingleton<SignInTiming>();
         services.AddToggleForgeRateLimiting();
         services.AddToggleForgeForwardedHeaders();
+        services.AddToggleForgeConsole();
 
         services.ConfigureHttpJsonOptions(options =>
         {

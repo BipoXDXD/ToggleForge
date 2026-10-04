@@ -12,6 +12,8 @@
   <ItemGroup>
     <ProjectReference Include="..\ToggleForge.Application\ToggleForge.Application.csproj" />
     <ProjectReference Include="..\ToggleForge.Infrastructure\ToggleForge.Infrastructure.csproj" />
+    <!-- Só para servir os arquivos do console na mesma origem (ADR 0009); a API não usa os tipos dele. -->
+    <ProjectReference Include="..\ToggleForge.Console\ToggleForge.Console.csproj" />
   </ItemGroup>
 
   <ItemGroup>

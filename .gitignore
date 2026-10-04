@@ -11,3 +11,6 @@ riderModule.iml
 
 # Node (tools/api-lint)
 node_modules/
+
+# Gerado pelo Tailwind no build (ADR 0003)
+src/ToggleForge.Console/wwwroot/css/

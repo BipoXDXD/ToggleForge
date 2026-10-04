@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <!--
+      Sem placeholders no index.html: eles geram um import map inline, que a CSP do console teria de liberar
+      por hash a cada build (ADR 0009). O blazor.webassembly.js sai sem fingerprint e é revalidado por ETag.
+    -->
+    <OverrideHtmlAssetPlaceholders>false</OverrideHtmlAssetPlaceholders>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ToggleForge.Console.Tests" />
+  </ItemGroup>
+
+  <!-- Tailwind pelo npm, no build (ADR 0003). O CSS gerado nunca vai para o repositório. -->
+  <PropertyGroup>
+    <ConsoleStylesheet>wwwroot/css/app.css</ConsoleStylesheet>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ConsoleStyleSource Include="Styles/**/*.css;**/*.razor;wwwroot/index.html;package-lock.json" Exclude="bin/**;obj/**;node_modules/**" />
+  </ItemGroup>
+
+  <Target Name="RestoreConsoleNpmPackages" Condition="'$(DesignTimeBuild)' != 'true' And !Exists('node_modules/.package-lock.json')">
+    <Exec Command="npm ci --no-audit --no-fund" WorkingDirectory="$(MSBuildProjectDirectory)" />
+  </Target>
+
+  <Target Name="BuildConsoleStylesheet"
+          BeforeTargets="BeforeBuild"
+          DependsOnTargets="RestoreConsoleNpmPackages"
+          Condition="'$(DesignTimeBuild)' != 'true'"
+          Inputs="@(ConsoleStyleSource)"
+          Outputs="$(ConsoleStylesheet)">
+    <Exec Command="npm run build:css --silent" WorkingDirectory="$(MSBuildProjectDirectory)" />
+    <!-- No primeiro build o arquivo não existia quando o glob do wwwroot foi avaliado. -->
+    <ItemGroup>
+      <Content Include="$(ConsoleStylesheet)" Exclude="@(Content)" />
+    </ItemGroup>
+  </Target>
+
+</Project>
