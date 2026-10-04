@@ -150,6 +150,29 @@ public sealed class HistoryPagesTests
         Assert.Empty(page.FindAll("form"));
     }
 
+    [Fact]
+    public void The_breadcrumb_ends_at_the_history()
+    {
+        var api = LiveAtVersion(3, pendingChanges: false).Answer(HttpMethod.Get, Publications, HttpStatusCode.OK, """{"data":[],"metadata":{}}""");
+        using var console = ConsoleRendering.Create(api);
+
+        var page = RenderHistory(console);
+
+        Assert.Equal("History", AccessibleNames.CurrentBreadcrumb(page));
+    }
+
+    [Fact]
+    public void The_version_table_is_named_and_the_breadcrumb_ends_at_the_version()
+    {
+        using var console = ConsoleRendering.Create(VersionOneWhileThreeIsLive(pendingChanges: false));
+
+        var page = RenderVersionOne(console);
+
+        page.WaitForElement("table");
+        Assert.Equal("Flags in version 1", AccessibleNames.TableName(page));
+        Assert.Equal("Version 1", AccessibleNames.CurrentBreadcrumb(page));
+    }
+
     private static StubApi LiveAtVersion(long version, bool pendingChanges)
     {
         var api = new StubApi().Answer(HttpMethod.Get, Environment, HttpStatusCode.OK, EnvironmentJson(version, pendingChanges));

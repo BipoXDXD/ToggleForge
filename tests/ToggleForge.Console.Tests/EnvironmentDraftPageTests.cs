@@ -93,6 +93,40 @@ public sealed class EnvironmentDraftPageTests
         Assert.Equal(links, page.FindAll("a").Count(link => link.TextContent == "Review and publish"));
     }
 
+    [Fact]
+    public void The_current_environment_is_marked_as_the_current_page()
+    {
+        var api = DraftWithOneFlag().Answer(HttpMethod.Get, Project, HttpStatusCode.OK, """
+            {"key":"space-race","name":"Space Race","environments":[
+              {"key":"dev","name":"Development","currentVersion":null,"draftRevision":2,"hasUnpublishedChanges":true},
+              {"key":"prod","name":"Production","currentVersion":null,"draftRevision":1,"hasUnpublishedChanges":false}]}
+            """);
+        ConsoleRendering.SignInAs(api, "viewer");
+        using var console = ConsoleRendering.Create(api);
+
+        var page = RenderDraft(console);
+
+        page.WaitForElement("nav[aria-label=Environments]");
+        var links = page.FindAll("nav[aria-label=Environments] a");
+        Assert.Equal(["Development", "Production"], links.Select(link => link.TextContent.Trim()));
+        Assert.Equal(["page", null], links.Select(link => link.GetAttribute("aria-current")));
+        Assert.Empty(page.FindAll("[role=tab], [role=tablist], [aria-selected]"));
+    }
+
+    [Fact]
+    public void The_flags_table_is_named_and_the_breadcrumb_ends_at_the_project()
+    {
+        var api = DraftWithOneFlag();
+        ConsoleRendering.SignInAs(api, "viewer");
+        using var console = ConsoleRendering.Create(api);
+
+        var page = RenderDraft(console);
+
+        page.WaitForElement("table");
+        Assert.Equal("Draft flags", AccessibleNames.TableName(page));
+        Assert.Equal("Space Race", AccessibleNames.CurrentBreadcrumb(page));
+    }
+
     private static string DraftStatus(IRenderedComponent<EnvironmentDraft> page) =>
         System.Text.RegularExpressions.Regex.Replace(page.Find("[data-testid=draft-status]").TextContent, @"\s+", " ").Trim();
 

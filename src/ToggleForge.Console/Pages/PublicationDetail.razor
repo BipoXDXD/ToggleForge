@@ -11,7 +11,12 @@
     <a href="@DraftPath" class="hover:text-slate-700 hover:underline">@ProjectKey · @EnvironmentKey</a>
     <span aria-hidden="true"> / </span>
     <a href="@HistoryPath" class="hover:text-slate-700 hover:underline">History</a>
+    <span aria-hidden="true"> / </span>
+    <span aria-current="page" class="text-slate-700">Version @Version</span>
 </nav>
+
+@* Fora do carregamento: o FocusOnNavigate só acha o h1 que existe no primeiro render. *@
+<h1 class="mt-2 text-2xl font-semibold tracking-tight">Version @Version</h1>
 
 @if (_loadProblem is not null)
 {
@@ -23,8 +28,7 @@ else if (_environment is null || _publication is null)
 }
 else
 {
-    <h1 class="mt-2 text-2xl font-semibold tracking-tight">Version @_publication.Version</h1>
-    <p class="mt-1 text-sm text-slate-600">
+    <p class="mt-1 text-sm text-slate-600 wrap-anywhere">
         @PublicationText.Origin(_publication.Origin, _publication.RestoredVersion) by @_publication.PublishedBy.Email,
         @PublicationText.When(_publication.PublishedAt)
     </p>
@@ -34,7 +38,7 @@ else
     }
 
     <div class="mt-6 overflow-hidden rounded-lg border border-slate-200 bg-white">
-        <table class="w-full text-left text-sm">
+        <table aria-label="Flags in version @Version" class="w-full text-left text-sm">
             <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <tr>
                     <th scope="col" class="px-4 py-2">Flag</th>

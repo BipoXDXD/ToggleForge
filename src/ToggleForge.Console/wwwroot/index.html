@@ -11,10 +11,13 @@
 
 <body>
     <div id="app">
-        <div class="boot-screen">Loading ToggleForge…</div>
+        <main class="boot-screen">
+            <h1 class="sr-only">ToggleForge</h1>
+            <p role="status">Loading ToggleForge…</p>
+        </main>
     </div>
 
-    <div id="blazor-error-ui">
+    <div id="blazor-error-ui" role="alert">
         Something went wrong. <a href="" class="underline">Reload</a>
     </div>
     <script src="_framework/blazor.webassembly.js"></script>

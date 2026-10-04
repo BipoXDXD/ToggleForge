@@ -110,6 +110,16 @@ public sealed class PublishDraftPageTests
         Assert.Empty(page.FindAll("form"));
     }
 
+    [Fact]
+    public void The_breadcrumb_ends_at_the_publish_page()
+    {
+        using var console = ConsoleRendering.Create(TwoChangesSinceVersionThree());
+
+        var page = RenderPublish(console);
+
+        Assert.Equal("Publish", AccessibleNames.CurrentBreadcrumb(page));
+    }
+
     private static StubApi TwoChangesSinceVersionThree()
     {
         var api = new StubApi()

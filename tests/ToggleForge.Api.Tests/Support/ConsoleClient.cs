@@ -40,16 +40,20 @@ public sealed class ConsoleClient : IDisposable
 
     public static ConsoleClient Anonymous(WebApplicationFactory<Program> api) => new(api);
 
-    /// <summary>Cria a conta com uma organização própria, da qual o membro é owner, e já entra.</summary>
-    public static async Task<ConsoleClient> SignUpAsync(WebApplicationFactory<Program> api)
+    /// <summary>
+    /// Cria a conta com uma organização própria, da qual o membro é owner, e já entra. O e-mail é
+    /// <c>{emailPrefix}-{guid}@toggleforge.test</c>: um prefixo maior dá o e-mail longo dos testes de layout.
+    /// </summary>
+    public static async Task<ConsoleClient> SignUpAsync(WebApplicationFactory<Program> api, string emailPrefix = "member")
     {
         var client = new ConsoleClient(api);
-        var email = $"member-{Guid.NewGuid():N}@toggleforge.test";
+        var id = Guid.NewGuid().ToString("N");
+        var email = $"{emailPrefix}-{id}@toggleforge.test";
         var created = await client.SendAsync("createAccount", HttpMethod.Post, Paths.Accounts, new
         {
             email,
             password = Password,
-            organizationName = "Studio " + email[7..15],
+            organizationName = "Studio " + id[..8],
         });
         Assert.Equal(HttpStatusCode.Created, created.Status);
         client.Email = email;

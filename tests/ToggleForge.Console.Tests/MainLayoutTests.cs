@@ -34,4 +34,18 @@ public sealed class MainLayoutTests
         layout.WaitForAssertion(() => Assert.Equal("Check your connection and try again.", layout.Find("[role=alert]").TextContent.Trim()));
         Assert.DoesNotContain("page", layout.Markup, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void While_the_session_loads_the_screen_is_a_status_inside_the_main_landmark()
+    {
+        var api = new StubApi().Hold(HttpMethod.Get, "/api/v1/session", out var release);
+        using var console = ConsoleRendering.Create(api);
+
+        var layout = console.Render<MainLayout>(parameters => parameters.Add(main => main.Body, "page"));
+
+        Assert.Equal("Loading ToggleForge…", layout.Find("main [role=status]").TextContent.Trim());
+        // Sem h1: o FocusOnNavigate focaria um título que some quando a página chega, e o Tab recomeçaria no meio dela.
+        Assert.Empty(layout.FindAll("main h1"));
+        release();
+    }
 }

@@ -9,7 +9,11 @@
     <a href="organizations/@OrganizationId/projects" class="hover:text-slate-700 hover:underline">Projects</a>
     <span aria-hidden="true"> / </span>
     <a href="@DraftPath" class="hover:text-slate-700 hover:underline">@ProjectKey · @EnvironmentKey</a>
+    <span aria-hidden="true"> / </span>
+    <span aria-current="page" class="text-slate-700">Publish</span>
 </nav>
+
+<h1 class="mt-2 text-2xl font-semibold tracking-tight">Publish to @EnvironmentText.Title(_environment, EnvironmentKey)</h1>
 
 @if (_loadProblem is not null)
 {
@@ -21,8 +25,6 @@ else if (_environment is null || _draft is null)
 }
 else
 {
-    <h1 class="mt-2 text-2xl font-semibold tracking-tight">Publish to @_environment.Name (@EnvironmentKey)</h1>
-
     @if (_published is not null)
     {
         <div role="status" class="mt-6 max-w-lg rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">

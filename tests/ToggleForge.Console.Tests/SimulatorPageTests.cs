@@ -287,6 +287,35 @@ public sealed class SimulatorPageTests
         Assert.DoesNotContain("CANARY", console.Services.GetRequiredService<NavigationManager>().Uri, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void The_results_table_is_named_by_its_heading_and_the_breadcrumb_ends_at_the_simulator()
+    {
+        var api = LiveAtVersion(3).Answer(HttpMethod.Post, Simulations, HttpStatusCode.OK,
+            """{"source":"draft","version":null,"results":[{"flagKey":"new-shop","value":true,"reason":"included","bucket":412}]}""");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderSimulator(console);
+
+        page.Find("input[autocomplete=off]").Change(PlayerId);
+        page.Find("form").Submit();
+
+        page.WaitForElement("table");
+        Assert.Equal("Draft", AccessibleNames.TableName(page));
+        Assert.Equal("Simulator", AccessibleNames.CurrentBreadcrumb(page));
+    }
+
+    [Fact]
+    public void The_heading_is_there_while_the_environment_loads()
+    {
+        var api = LiveAtVersion(3).Hold(HttpMethod.Get, Environment, out var release);
+        using var console = ConsoleRendering.Create(api);
+
+        var page = RenderSimulator(console);
+
+        Assert.Equal("Simulate a player in prod", page.Find("h1").TextContent);
+        release();
+        page.WaitForAssertion(() => Assert.Equal("Simulate a player in Production (prod)", page.Find("h1").TextContent));
+    }
+
     private static StubApi LiveAtVersion(long version)
     {
         var api = new StubApi().Answer(HttpMethod.Get, Environment, HttpStatusCode.OK, EnvironmentJson(version.ToString(System.Globalization.CultureInfo.InvariantCulture)));

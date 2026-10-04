@@ -8,7 +8,11 @@
     <a href="organizations/@OrganizationId/projects" class="hover:text-slate-700 hover:underline">Projects</a>
     <span aria-hidden="true"> / </span>
     <a href="@DraftPath" class="hover:text-slate-700 hover:underline">@ProjectKey · @EnvironmentKey</a>
+    <span aria-hidden="true"> / </span>
+    <span aria-current="page" class="text-slate-700">History</span>
 </nav>
+
+<h1 class="mt-2 text-2xl font-semibold tracking-tight">History of @EnvironmentText.Title(_environment, EnvironmentKey)</h1>
 
 @if (_loadProblem is not null)
 {
@@ -20,8 +24,6 @@ else if (_environment is null)
 }
 else
 {
-    <h1 class="mt-2 text-2xl font-semibold tracking-tight">History of @_environment.Name (@EnvironmentKey)</h1>
-
     @if (_publications.Count == 0)
     {
         <p class="mt-6 text-sm text-slate-600">Nothing published yet.</p>
@@ -42,7 +44,7 @@ else
                             <span class="rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-medium text-emerald-800">Live</span>
                         }
                         <span>@PublicationText.Origin(publication.Origin, publication.RestoredVersion)</span>
-                        <span>by @publication.PublishedBy.Email</span>
+                        <span class="min-w-0 wrap-anywhere">by @publication.PublishedBy.Email</span>
                     </div>
                     @if (publication.Summary is { } summary)
                     {
