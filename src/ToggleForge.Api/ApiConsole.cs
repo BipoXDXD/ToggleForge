@@ -18,6 +18,9 @@ internal static class ApiConsole
         "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data:; " +
         "connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
 
+    /// <summary>Uma janela aberta por outro site não ganha referência ao console (window.opener), e vice-versa.</summary>
+    private const string CrossOriginOpenerPolicy = "same-origin";
+
     private const string ConsoleRoute = "consoleroute";
 
     public static IServiceCollection AddToggleForgeConsole(this IServiceCollection services) =>
@@ -25,22 +28,23 @@ internal static class ApiConsole
 
     public static WebApplication MapToggleForgeConsole(this WebApplication app)
     {
-        // A página também é um arquivo estático (/index.html): a CSP vai em toda resposta do console, não só no fallback.
-        app.MapStaticAssets().AllowAnonymous().DisableRateLimiting().Add(WithContentSecurityPolicy);
+        // A página também é um arquivo estático (/index.html): os headers vão em toda resposta do console, não só no fallback.
+        app.MapStaticAssets().AllowAnonymous().DisableRateLimiting().Add(WithDocumentPolicies);
         app.MapFallbackToFile($"{{*path:nonfile:{ConsoleRoute}}}", "index.html")
             .AllowAnonymous()
             .DisableRateLimiting()
-            .Add(WithContentSecurityPolicy);
+            .Add(WithDocumentPolicies);
         return app;
     }
 
-    private static void WithContentSecurityPolicy(EndpointBuilder endpoint)
+    private static void WithDocumentPolicies(EndpointBuilder endpoint)
     {
         var serve = endpoint.RequestDelegate
             ?? throw new InvalidOperationException($"The console endpoint {endpoint.DisplayName} has no request delegate yet.");
         endpoint.RequestDelegate = context =>
         {
             context.Response.Headers.ContentSecurityPolicy = ContentSecurityPolicy;
+            context.Response.Headers["Cross-Origin-Opener-Policy"] = CrossOriginOpenerPolicy;
             return serve(context);
         };
     }

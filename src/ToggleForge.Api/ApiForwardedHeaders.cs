@@ -13,6 +13,9 @@ internal static class ApiForwardedHeaders
 {
     public const string Section = "ForwardedHeaders";
 
+    /// <summary>A chave que ASPNETCORE_FORWARDEDHEADERS_ENABLED (ou DOTNET_FORWARDEDHEADERS_ENABLED) vira na configuração.</summary>
+    private const string HostForwardedHeadersSwitch = "ForwardedHeaders_Enabled";
+
     public static IServiceCollection AddToggleForgeForwardedHeaders(this IServiceCollection services)
     {
         services.AddOptions<TrustedProxies>()
@@ -20,6 +23,17 @@ internal static class ApiForwardedHeaders
             .Validate(
                 proxies => proxies.KnownNetworks.All(network => IPNetwork.TryParse(network, out _)),
                 $"{Section}:KnownNetworks must list networks in CIDR notation, such as 10.0.0.0/8.")
+            // Fora do desenvolvimento a API sempre está atrás do ingress: sem a rede dele, o rate limit juntaria
+            // todos os clientes no IP do proxy e o HSTS nunca sairia, porque o esquema repassado seria ignorado.
+            .Validate<IHostEnvironment>(
+                (proxies, environment) => environment.IsDevelopment() || proxies.KnownNetworks.Count > 0,
+                $"Set {Section}:KnownNetworks to the network of the ingress, such as 10.0.0.0/8.")
+            // A variável faz o host ligar o próprio middleware de forwarded headers e limpar as redes conhecidas
+            // (Learn, "Kestrel security considerations"): todo remetente passaria a escolher o próprio IP e esquema.
+            // O host só reconhece o literal "true", sem diferenciar maiúsculas; "1" ou "yes" ele ignora, e aqui também.
+            .Validate<IHostEnvironment, IConfiguration>(
+                (_, environment, configuration) => environment.IsDevelopment() || !HostOpensForwardedHeaders(configuration),
+                $"Unset ASPNETCORE_FORWARDEDHEADERS_ENABLED ({HostForwardedHeadersSwitch}): it trusts forwarded headers from any sender.")
             .ValidateOnStart();
         services.AddOptions<ForwardedHeadersOptions>().Configure<IOptions<TrustedProxies>>((options, proxies) =>
         {
@@ -32,6 +46,9 @@ internal static class ApiForwardedHeaders
         });
         return services;
     }
+
+    private static bool HostOpensForwardedHeaders(IConfiguration configuration) =>
+        string.Equals(configuration[HostForwardedHeadersSwitch], "true", StringComparison.OrdinalIgnoreCase);
 
     private sealed class TrustedProxies
     {

@@ -39,6 +39,13 @@ public static class ApiContract
                 .Select(method => (Id: method.Value.GetProperty("operationId").GetString()!, Method: method.Name.ToUpperInvariant(), Path: path.Name)))
             .ToDictionary(operation => operation.Id, operation => (operation.Method, operation.Path));
 
+    /// <summary>operationId de cada operação que declara corpo de requisição.</summary>
+    public static IReadOnlyList<string> OperationsTakingABody() =>
+        Operations().Keys.Where(operationId => Resolve(FindOperation(operationId).Combine("requestBody")) is not null).Order(StringComparer.Ordinal).ToList();
+
+    public static bool Declares(string operationId, int status) =>
+        Resolve(FindOperation(operationId).Combine("responses", status.ToString(CultureInfo.InvariantCulture))) is not null;
+
     private static void VerifyHeaders(string operationId, JsonPointer responsePointer, HttpResponseMessage response)
     {
         if (!Node(responsePointer).TryGetProperty("headers", out var headers))

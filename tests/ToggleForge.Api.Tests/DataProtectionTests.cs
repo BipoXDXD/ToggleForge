@@ -55,6 +55,8 @@ public sealed class DataProtectionTests(ApiFactory api)
     {
         using var owner = await ConsoleClient.SignUpAsync(api);
         var elsewhere = Directory.CreateTempSubdirectory("toggleforge-content-root-").FullName;
+        // Uma instância instalada leva o próprio appsettings.json, onde está a configuração obrigatória (HSTS).
+        File.Copy(Path.Combine(AppContext.BaseDirectory, "appsettings.json"), Path.Combine(elsewhere, "appsettings.json"));
         await using var moved = api.WithWebHostBuilder(builder => builder.UseContentRoot(elsewhere));
 
         var session = await SessionOnAsync(moved, owner);

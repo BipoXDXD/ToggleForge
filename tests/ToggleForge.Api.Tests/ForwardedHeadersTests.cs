@@ -76,6 +76,74 @@ public sealed class ForwardedHeadersTests(ApiFactory api)
         Assert.Contains("ForwardedHeaders:KnownNetworks", error.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Fora do desenvolvimento a API sempre roda atrás do ingress. Sem a rede dele declarada, todo cliente cairia na
+    /// partição do proxy no rate limit, e o HSTS nunca sairia, porque o esquema repassado seria ignorado.
+    /// </summary>
+    [Fact]
+    public async Task Outside_development_the_api_does_not_start_without_the_ingress_network()
+    {
+        await using var production = api.WithWebHostBuilder(builder => builder.UseEnvironment("Production"));
+
+        var error = Assert.Throws<OptionsValidationException>(() => production.CreateClient());
+
+        Assert.Contains("ForwardedHeaders:KnownNetworks", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// ASPNETCORE_FORWARDEDHEADERS_ENABLED (chave ForwardedHeaders_Enabled) faz o host ligar o próprio middleware
+    /// de forwarded headers e limpar as redes conhecidas: qualquer remetente escolheria o próprio IP e esquema.
+    /// </summary>
+    [Theory]
+    [InlineData("true")]
+    [InlineData("True")]
+    public async Task Outside_development_the_api_does_not_start_with_forwarded_headers_opened_by_the_host(string enabled)
+    {
+        await using var production = api.WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Production");
+            builder.UseSetting("ForwardedHeaders:KnownNetworks:0", TrustedNetwork);
+            builder.UseSetting("ForwardedHeaders_Enabled", enabled);
+        });
+
+        var error = Assert.Throws<OptionsValidationException>(() => production.CreateClient());
+
+        Assert.Contains("ASPNETCORE_FORWARDEDHEADERS_ENABLED", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>O framework só liga o próprio middleware com o literal "true"; qualquer outro valor é ignorado.</summary>
+    [Theory]
+    [InlineData("1")]
+    [InlineData("yes")]
+    [InlineData("false")]
+    public async Task Outside_development_a_value_the_host_ignores_does_not_block_startup(string value)
+    {
+        await using var production = api.WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Production");
+            builder.UseSetting("ForwardedHeaders:KnownNetworks:0", TrustedNetwork);
+            builder.UseSetting("ForwardedHeaders_Enabled", value);
+        });
+
+        using var client = production.CreateClient();
+
+        Assert.NotNull(client);
+    }
+
+    [Fact]
+    public async Task In_development_forwarded_headers_opened_by_the_host_do_not_block_startup()
+    {
+        await using var development = api.WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Development");
+            builder.UseSetting("ForwardedHeaders_Enabled", "true");
+        });
+
+        using var client = development.CreateClient();
+
+        Assert.NotNull(client);
+    }
+
     private WebApplicationFactory<Program> Host(string? knownNetwork, int anonymousPerMinute = 1) =>
         api.WithWebHostBuilder(builder =>
         {
