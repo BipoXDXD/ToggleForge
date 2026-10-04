@@ -149,23 +149,12 @@ else
 }
 
 @code {
-    private const string JsonBudgetReached = "/problems/json-budget-reached";
-
     private static readonly Problem _nothingToSave = new(
         "/problems/nothing-to-save", "Nothing to save", 400, "Nothing to save: these are already the values in the draft.");
-
-    private static readonly Problem _fixMarkedFields = new(
-        "/problems/invalid-fields", "Invalid fields", 400, "Nothing was saved: fix the fields marked below.");
 
     private static readonly Problem _changedMeanwhile = new(
         "/problems/flag-changed", "The flag changed", 412,
         "Someone changed this flag after you opened it. These are its current values; make your change again.");
-
-    // O texto da API diz os números; o console explica o porquê e o que fazer (design spec, 6).
-    private static readonly Problem _outOfJsonRoom = new(
-        JsonBudgetReached, "This draft is out of room for JSON values.", 409,
-        "All JSON values of an environment add up to at most 128 KiB, because every player downloads all of them. " +
-        "Make a value smaller or remove a JSON flag you no longer use, then save again. Nothing was saved.");
 
     private Versioned<Flag>? _flag;
     private FlagEdit? _edit;
@@ -199,7 +188,7 @@ else
 
     private string? RolloutError => _fieldErrors.For(FieldErrors.Rollout);
 
-    private string? ProblemHeading => _problem == _outOfJsonRoom ? _outOfJsonRoom.Title : null;
+    private string? ProblemHeading => _problem == FormProblems.OutOfJsonRoom ? FormProblems.OutOfJsonRoom.Title : null;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -303,8 +292,8 @@ else
                 var (fields, general) = FieldErrors.Split(problem);
                 await MarkFieldsAsync(fields, general);
                 break;
-            case System.Net.HttpStatusCode.Conflict when problem.Type == JsonBudgetReached:
-                _problem = _outOfJsonRoom;
+            case System.Net.HttpStatusCode.Conflict when problem.Type == FormProblems.JsonBudgetReachedType:
+                _problem = FormProblems.OutOfJsonRoom;
                 break;
             case System.Net.HttpStatusCode.RequestEntityTooLarge when _flag?.Value.IsJson == true:
                 _valuesTooLarge = true;
@@ -320,7 +309,7 @@ else
     private async Task MarkFieldsAsync(FieldErrors fields, Problem? general = null)
     {
         _fieldErrors = fields;
-        _problem = general ?? (fields.IsEmpty ? null : _fixMarkedFields);
+        _problem = general ?? (fields.IsEmpty ? null : FormProblems.FixMarkedFields);
         if (fields.For(FieldErrors.Rollout) is not null)
         {
             await _rollout.FocusAsync();
@@ -335,7 +324,7 @@ else
     private void ClearFieldError(string field)
     {
         _fieldErrors.Clear(field);
-        if (_fieldErrors.IsEmpty && _problem == _fixMarkedFields)
+        if (_fieldErrors.IsEmpty && _problem == FormProblems.FixMarkedFields)
         {
             _problem = null;
         }
