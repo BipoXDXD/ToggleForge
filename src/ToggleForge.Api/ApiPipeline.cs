@@ -21,8 +21,9 @@ internal static class ApiPipeline
             SuppressDiagnosticsCallback = _ => true,
         });
         app.UseStatusCodePages(context => EmptyErrorAsProblem(context.HttpContext));
-        // Explícito para os arquivos do console, que saem em curto-circuito aqui (ApiConsole), passarem antes
-        // pelos cabeçalhos encaminhados e pelo tratamento de erro, mas não pela autenticação.
+        // Explícito porque os arquivos do console saem em curto-circuito aqui (ApiConsole): pulam tudo o que vem
+        // abaixo, inclusive a autenticação. O que também precisa valer para eles fica acima desta linha: hoje os
+        // cabeçalhos encaminhados e o tratamento de erro; os cabeçalhos de segurança, quando chegarem.
         app.UseRouting();
         app.UseAuthentication();
         app.UseAuthorization();
