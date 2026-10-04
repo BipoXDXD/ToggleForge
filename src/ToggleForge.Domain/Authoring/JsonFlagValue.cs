@@ -21,7 +21,8 @@ public sealed record JsonFlagValue
     private static readonly JsonDocumentOptions _reading = new() { AllowDuplicateProperties = true };
 
     // O texto vai para o snapshot e para o console como JSON, nunca embutido em HTML sem codificação; escapar
-    // acentos só aumentaria os bytes que contam para o limite.
+    // acentos só aumentaria os bytes que contam para o limite. Mesmo relaxado, o encoder ainda escapa o que fica
+    // fora do BMP (um emoji vira \uXXXX\uXXXX) e U+2028/U+2029, então esses caracteres pesam mais no limite.
     private static readonly JsonWriterOptions _compact = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     private JsonFlagValue(string text) => Text = text;
@@ -31,7 +32,7 @@ public sealed record JsonFlagValue
 
     public static JsonFlagValue False { get; } = new("false");
 
-    /// <summary>O JSON compacto.</summary>
+    /// <summary>O JSON compactado, com as chaves na ordem em que vieram.</summary>
     public string Text { get; }
 
     /// <summary>O tamanho de <see cref="Text"/> em UTF-8, que é o que os limites contam.</summary>
@@ -93,6 +94,13 @@ public sealed record JsonFlagValue
             document = null;
             return false;
         }
+        catch (ArgumentException)
+        {
+            // Um surrogate isolado no próprio texto não se converte para UTF-8, e o parser avisa com esta exceção
+            // em vez de JsonException; também não é JSON.
+            document = null;
+            return false;
+        }
     }
 
     /// <param name="depth">Quantos objetos e listas envolvem <paramref name="element"/>.</param>
@@ -100,6 +108,7 @@ public sealed record JsonFlagValue
     {
         JsonValueKind.Object => ProblemInObject(element, depth + 1),
         JsonValueKind.Array => ProblemInArray(element, depth + 1),
+        JsonValueKind.String when !IsReadableText(element) => JsonValueProblem.NotJson,
         JsonValueKind.Number when !(element.TryGetDouble(out var number) && double.IsFinite(number)) => JsonValueProblem.NumberOutOfRange,
         _ => null,
     };
@@ -114,7 +123,12 @@ public sealed record JsonFlagValue
         var keys = new HashSet<string>(StringComparer.Ordinal);
         foreach (var property in element.EnumerateObject())
         {
-            if (!keys.Add(property.Name))
+            if (!TryReadName(property, out var name))
+            {
+                return JsonValueProblem.NotJson;
+            }
+
+            if (!keys.Add(name))
             {
                 return JsonValueProblem.DuplicateKey;
             }
@@ -144,6 +158,36 @@ public sealed record JsonFlagValue
         }
 
         return null;
+    }
+
+    // O leitor aceita um escape \uD800 sem par, mas a string não existe em UTF-16 válido e lê-la lança; o mesmo
+    // valeria para o jogo, então é texto que não é JSON.
+    private static bool IsReadableText(JsonElement element)
+    {
+        try
+        {
+            _ = element.GetString();
+            return true;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
+    // Mesma razão de IsReadableText, para o nome de uma propriedade.
+    private static bool TryReadName(JsonProperty property, [NotNullWhen(true)] out string? name)
+    {
+        try
+        {
+            name = property.Name;
+            return true;
+        }
+        catch (InvalidOperationException)
+        {
+            name = null;
+            return false;
+        }
     }
 
     private static string Compact(JsonElement element)

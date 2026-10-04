@@ -28,12 +28,36 @@ public sealed class JsonFlagValueTests
     [InlineData("{'a':1}")]
     [InlineData("1 2")]
     [InlineData("{\"a\":1,}")]
+    [InlineData("\"\\uD800\"")]
+    [InlineData("{\"\\uDC00\":1}")]
+    [InlineData("[\"\\uD83D\"]")]
     public void Text_that_is_not_one_json_value_is_refused(string? json)
     {
         Assert.False(JsonFlagValue.TryParse(json, out var value, out var problem));
         Assert.Null(value);
         Assert.Equal(JsonValueProblem.NotJson, problem);
     }
+
+    [Fact]
+    public void Text_with_a_lone_surrogate_is_refused()
+    {
+        var json = "\"" + '\uD800' + "\"";
+
+        Assert.False(JsonFlagValue.TryParse(json, out var value, out var problem));
+        Assert.Null(value);
+        Assert.Equal(JsonValueProblem.NotJson, problem);
+    }
+
+    [Fact]
+    public void Parse_rejects_a_lone_surrogate() =>
+        Assert.Throws<ArgumentException>(() => JsonFlagValue.Parse("\"\\uD800\""));
+
+    [Theory]
+    [InlineData("\"\\u00e7\"", "\"ç\"")]
+    [InlineData("\"ç\"", "\"ç\"")]
+    [InlineData("\"a\\/b\"", "\"a/b\"")]
+    public void Escapes_are_written_in_one_canonical_form(string json, string expected) =>
+        Assert.Equal(expected, JsonFlagValue.Parse(json).Text);
 
     [Theory]
     [InlineData("{\"a\":1,\"a\":2}")]
