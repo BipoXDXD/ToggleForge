@@ -50,6 +50,12 @@ public sealed class FileSnapshotStoreTests : IDisposable
     [InlineData("")]
     [InlineData("not json")]
     [InlineData("[]")]
+    [InlineData("null")]
+    [InlineData("""{"format":1,"eTag":null,"confirmedAt":"2026""")]
+    [InlineData("""{"eTag":null,"confirmedAt":"2026-10-04T12:00:00.0000000+00:00","snapshot":"{}"}""")]
+    [InlineData("""{"format":"1","eTag":null,"confirmedAt":"2026-10-04T12:00:00.0000000+00:00","snapshot":"{}"}""")]
+    [InlineData("""{"format":1,"eTag":null,"confirmedAt":"2026-10-04T12:00:00.0000000+00:00","snapshot":{}}""")]
+    [InlineData("""{"format":1,"eTag":null,"confirmedAt":1791117600,"snapshot":"{}"}""")]
     [InlineData("""{"format":2,"eTag":null,"confirmedAt":"2026-10-04T12:00:00.0000000+00:00","snapshot":"{}"}""")]
     [InlineData("""{"format":1,"eTag":null,"confirmedAt":"yesterday","snapshot":"{}"}""")]
     [InlineData("""{"format":1,"eTag":null,"confirmedAt":"2026-10-04T12:00:00.0000000+00:00"}""")]
@@ -64,6 +70,20 @@ public sealed class FileSnapshotStoreTests : IDisposable
         await File.WriteAllTextAsync(Assert.Single(Directory.GetFiles(_directory)), content, TestContext.Current.CancellationToken);
 
         Assert.Null(await store.LoadAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task An_etag_that_is_not_text_is_dropped_and_the_snapshot_still_loads()
+    {
+        var store = Store(Snapshots.Credential);
+        await store.SaveAsync(new StoredSnapshot(Snapshots.Json(), "\"v1\"", _confirmedAt), TestContext.Current.CancellationToken);
+        var content = """{"format":1,"eTag":7,"confirmedAt":"2026-10-04T12:30:15.1230000+00:00","snapshot":"{}"}""";
+
+        await File.WriteAllTextAsync(Assert.Single(Directory.GetFiles(_directory)), content, TestContext.Current.CancellationToken);
+        var loaded = await store.LoadAsync(TestContext.Current.CancellationToken);
+
+        Assert.NotNull(loaded);
+        Assert.Equal(("{}", (string?)null, _confirmedAt), (loaded.Body, loaded.ETag, loaded.ConfirmedAt));
     }
 
     [Fact]
