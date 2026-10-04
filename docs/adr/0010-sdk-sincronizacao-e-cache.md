@@ -103,7 +103,7 @@ O que já existe e pesa na escolha:
   mantém é o `double` mais próximo, e a grafia pode mudar (`1.50` vira `1.5`, `1e2` vira `100.0`, mais de 17
   dígitos significativos arredondam, e o underflow `1e-400` vira `0.0` sem recusar o snapshot). O `decimal`
   guardaria a grafia, mas recusaria `1e308`, que a API aceita. Um valor que, regravado, o parser do jogo leria de
-  outro jeito ou nem leria (número acima do `double`, `NaN`, `Infinity`, `undefined`, construtor) torna a flag
+  outro jeito ou nem leria (número fora do `double`, `NaN`, `Infinity`, `undefined`, construtor) torna a flag
   inválida e recusa o snapshot. Já aspas simples, nome de campo sem aspas, comentário e vírgula sobrando são
   aceitos pelo Newtonsoft e saem normalizados em JSON padrão; a API nunca os manda. Ponto a conferir no build
   Unity: o Newtonsoft grava o `double` com o formato `"R"`, e no Mono essa grafia pode não ser a mais curta.
