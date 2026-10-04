@@ -134,7 +134,7 @@ public sealed class FlagEvaluatorTests
             offValue: false,
             new PercentageRollout(percentage, NewShopFlag.Seed));
 
-    private static ConfigurationSnapshot SnapshotWith(params BooleanFlag[] flags) =>
+    private static ConfigurationSnapshot SnapshotWith(params Flag[] flags) =>
         new(NewShopFlag.Project, NewShopFlag.Environment, SnapshotVersion, flags);
 
     private static EvaluationContext ReferencePlayer() =>

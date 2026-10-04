@@ -69,6 +69,6 @@ public sealed class ConfigurationSnapshotTests
             offValue: false,
             new PercentageRollout(RolloutPercentage.All, NewShopFlag.Seed));
 
-    private static ConfigurationSnapshot SnapshotWith(params BooleanFlag[] flags) =>
+    private static ConfigurationSnapshot SnapshotWith(params Flag[] flags) =>
         new(NewShopFlag.Project, NewShopFlag.Environment, 1, flags);
 }
