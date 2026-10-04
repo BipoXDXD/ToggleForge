@@ -7,6 +7,8 @@ namespace ToggleForge.Api.Tests;
 /// <summary>As constraints do tipo e dos valores de uma flag (ADR 0011), contra dado gravado por fora da aplicação.</summary>
 public sealed class FlagStorageTests(ApiFactory api)
 {
+    private const string PublishedTypeForeignKey = "fk_publication_flags_published_flag_types";
+
     [Theory]
     [InlineData("on_value")]
     [InlineData("off_value")]
@@ -62,6 +64,48 @@ public sealed class FlagStorageTests(ApiFactory api)
             api.ExecuteSqlAsync(UpdatePublishedNewShop(owner, "type = 'color'")));
 
         Assert.Equal("ck_publication_flags_type", error.ConstraintName);
+    }
+
+    /// <summary>ADR 0011: a chave publicada mantém o tipo, mesmo para quem grava sem passar pela aplicação.</summary>
+    [Fact]
+    public async Task The_database_refuses_a_published_flag_with_another_type_than_its_key_was_published_with()
+    {
+        using var owner = await OwnerWithPublishedNewShopAsync();
+
+        var error = await Assert.ThrowsAnyAsync<PostgresException>(() =>
+            api.ExecuteSqlAsync(UpdatePublishedNewShop(owner, "type = 'json'")));
+
+        Assert.Equal(PublishedTypeForeignKey, error.ConstraintName);
+    }
+
+    [Fact]
+    public async Task The_database_refuses_changing_the_type_a_key_was_published_with()
+    {
+        using var owner = await OwnerWithPublishedNewShopAsync();
+
+        var error = await Assert.ThrowsAnyAsync<PostgresException>(() => api.ExecuteSqlAsync(
+            $"""
+            update authoring.published_flag_types published set type = 'json'
+            from authoring.environments environment join authoring.projects project on project.id = environment.project_id
+            where published.environment_id = environment.id and project.organization_id = '{owner.OrganizationId}' and published.key = 'new-shop'
+            """));
+
+        Assert.Equal(PublishedTypeForeignKey, error.ConstraintName);
+    }
+
+    [Fact]
+    public async Task The_database_keeps_one_published_type_per_key_and_environment()
+    {
+        using var owner = await OwnerWithPublishedNewShopAsync();
+
+        var error = await Assert.ThrowsAnyAsync<PostgresException>(() => api.ExecuteSqlAsync(
+            $"""
+            insert into authoring.published_flag_types (environment_id, key, type)
+            select environment.id, 'new-shop', 'json'
+            {DevEnvironmentOf(owner)}
+            """));
+
+        Assert.Equal("pk_published_flag_types", error.ConstraintName);
     }
 
     [Theory]

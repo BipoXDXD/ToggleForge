@@ -46,6 +46,25 @@ public sealed class IsolationTests(ApiFactory api)
         Assert.Equal(before, await StateAsync(owner));
     }
 
+    /// <summary>O 409 da trava de tipo revelaria que a chave já foi publicada, e com qual tipo.</summary>
+    [Fact]
+    public async Task A_member_of_another_organization_gets_404_not_the_type_a_key_was_published_with()
+    {
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        using var intruder = await ConsoleClient.SignUpAsync(api);
+        var revision = await owner.PublishedProjectAsync("space-race");
+        Assert.Equal(HttpStatusCode.NoContent, (await owner.DeleteFlagAsync("space-race", "new-shop", $"\"{revision}\"")).Status);
+        var before = await StateAsync(owner);
+
+        var response = await intruder.CreateJsonFlagAsync("space-race", "new-shop", """{"a":1}""", "null", organizationId: owner.OrganizationId);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.Status);
+        Assert.Equal("/problems/not-found", response.ProblemType);
+        Assert.DoesNotContain("new-shop", response.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("boolean", response.Body, StringComparison.Ordinal);
+        Assert.Equal(before, await StateAsync(owner));
+    }
+
     /// <summary>O 409 do teto revelaria quanto o rascunho de outra organização ocupa.</summary>
     [Fact]
     public async Task A_member_of_another_organization_gets_404_even_when_the_owner_draft_is_full()

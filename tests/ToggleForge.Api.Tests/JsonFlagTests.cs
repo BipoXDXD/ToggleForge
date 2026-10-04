@@ -535,15 +535,21 @@ public sealed class JsonFlagTests(ApiFactory api)
     /// STRIDE I1: a <c>JsonException</c> da chave repetida cita a chave. O System.Text.Json corta o nome em 15
     /// caracteres na mensagem, então o canário cabe nesse corte para que um log da exceção o mostre.
     /// </summary>
-    [Fact]
-    public async Task A_canary_in_a_repeated_key_never_reaches_the_logs_or_the_response()
+    [Theory]
+    [InlineData("createFlag")]
+    [InlineData("updateFlag")]
+    public async Task A_canary_in_a_repeated_key_never_reaches_the_logs_or_the_response(string operation)
     {
         using var owner = await OwnerWithProjectAsync();
         var canary = $"CANARY{Guid.NewGuid():N}"[..14];
+        var repeated = $$"""{"{{canary}}":1,"{{canary}}":2}""";
 
-        var response = await owner.CreateJsonFlagAsync(Project, "shop-config", $$"""{"{{canary}}":1,"{{canary}}":2}""", "null");
+        var response = operation == "createFlag"
+            ? await owner.CreateJsonFlagAsync(Project, "shop-config", repeated, "null")
+            : await PatchOnValueAsync(owner, repeated);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.Status);
+        Assert.Equal(["/onValue"], response.ErrorSources());
         Assert.DoesNotContain(canary, response.Body, StringComparison.Ordinal);
         Assert.DoesNotContain(api.Logs.Entries, entry => entry.Contains(canary, StringComparison.Ordinal));
     }
@@ -553,6 +559,13 @@ public sealed class JsonFlagTests(ApiFactory api)
         var owner = await ConsoleClient.SignUpAsync(api);
         Assert.Equal(HttpStatusCode.Created, (await owner.CreateProjectAsync(Project)).Status);
         return owner;
+    }
+
+    private static async Task<ApiResponse> PatchOnValueAsync(ConsoleClient owner, string onValue)
+    {
+        var created = await owner.CreateJsonFlagAsync(Project, "shop-config", """{"a":1}""", "null");
+        Assert.Equal(HttpStatusCode.Created, created.Status);
+        return await owner.UpdateFlagAsync(Project, "shop-config", created.Header("ETag"), $$"""{"onValue":{{onValue}}}""");
     }
 
     private static Task<ApiResponse> CreateRawAsync(ConsoleClient owner, string json) =>
