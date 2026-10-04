@@ -15,7 +15,7 @@ O plano de produto está em [`ToggleForge.md`](ToggleForge.md), e as decisões d
 |---|---|---|
 | 1 — Núcleo | Avaliação booleana, contexto, rollout percentual e fallback | ✅ Concluído |
 | 2 — API persistente | Rascunho, publicação, rollback, autenticação e isolamento | ✅ Concluído |
-| 3 — Console | Editor, simulador, publicação e histórico (Blazor + Tailwind) | Em andamento |
+| 3 — Console | Editor, simulador, publicação e histórico (Blazor + Tailwind) | ✅ Concluído |
 | 4 — SDK e configurações | Sincronização, cache, JSON e app demonstrativo | Planejado |
 | 5 — Unity e segmentação | Adaptador, jogo simples e regras por atributos | Planejado |
 
@@ -83,15 +83,21 @@ dotnet run --project src/ToggleForge.Api
 
 Blazor WebAssembly com Tailwind, servido pela própria API na mesma origem (ADR 0009): o console é só mais
 um cliente de `/api/v1`, com o cookie de sessão e o token antiforgery. Com a API rodando, ele abre na raiz
-(`https://localhost:<porta>/`). Já dá para entrar, listar e criar projetos, adicionar flags ao rascunho de um
-ambiente, editá-las ou removê-las, simular um jogador, publicar o rascunho, navegar pelo histórico e reverter para uma versão anterior. A edição vai com `If-Match`: se outra pessoa mudou a
-flag enquanto ela estava aberta, nada é gravado e o console mostra os valores atuais para a mudança ser refeita.
-A publicação mostra as mudanças desde a versão no ar e só libera o botão com a chave do ambiente digitada. Se
-a resposta não chega, o console só oferece conferir o resultado, reenviando o mesmo pedido com o mesmo
-`Idempotency-Key`, o que nunca publica duas vezes. O rollback segue as mesmas regras e ainda pede o descarte explícito
-das mudanças não publicadas do rascunho, que ele substitui.
-O simulador avalia o rascunho ou uma versão publicada para um ID de jogador e explica cada flag: o valor e o
-bucket que o decidiu. O ID vai só no corpo do pedido, nunca no endereço.
+(`https://localhost:<porta>/`). A experiência central inteira passa por ele: criar o projeto e a flag,
+simular jogadores, publicar para 10%, ampliar a distribuição e reverter. Uma jornada no Chromium
+(`A_member_creates_simulates_publishes_widens_and_rolls_back_a_flag_from_the_console`) percorre esse caminho
+só pela interface e confere que, depois do rollback, o mesmo jogador volta ao mesmo bucket.
+
+- **Rascunho e flags:** listar e criar projetos, adicionar flags ao rascunho de um ambiente, editá-las ou
+  removê-las. A edição vai com `If-Match`: se outra pessoa mudou a flag enquanto ela estava aberta, nada é
+  gravado e o console mostra os valores atuais para a mudança ser refeita.
+- **Simulador:** avalia o rascunho ou uma versão publicada para um ID de jogador e explica cada flag, com o
+  valor e o bucket que o decidiu. O ID vai só no corpo do pedido, nunca no endereço.
+- **Publicação:** mostra as mudanças desde a versão no ar e só libera o botão com a chave do ambiente
+  digitada. Se a resposta não chega, o console só oferece conferir o resultado, reenviando o mesmo pedido com
+  o mesmo `Idempotency-Key`, o que nunca publica duas vezes.
+- **Histórico e rollback:** o histórico é paginado e marca a versão no ar. O rollback segue as regras da
+  publicação e ainda pede o descarte explícito das mudanças não publicadas do rascunho, que ele substitui.
 
 ## Desenvolvimento
 
