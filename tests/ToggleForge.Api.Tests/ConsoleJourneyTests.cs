@@ -142,6 +142,35 @@ public sealed class ConsoleJourneyTests(ApiFactory api, Browser browser) : IClas
         Assert.Empty((await owner.GetDraftAsync("space-race")).Json["flags"]!.AsArray());
     }
 
+    [Fact]
+    public async Task A_member_reviews_the_changes_and_publishes_after_typing_the_environment_key()
+    {
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        Assert.Equal(HttpStatusCode.Created, (await owner.CreateProjectAsync("space-race")).Status);
+        Assert.Equal(HttpStatusCode.Created, (await owner.CreateFlagAsync("space-race", "new-shop", rolloutBasisPoints: 2_500)).Status);
+        await using var context = await browser.NewContextAsync(Host.Address);
+        var page = await context.NewPageAsync();
+        var browserErrors = CollectErrors(page);
+
+        await OpenDraftAsync(page, owner);
+        await page.GetByRole(AriaRole.Link, new() { Name = "Review and publish" }).ClickAsync();
+        await Expect(page.GetByRole(AriaRole.List, new() { Name = "Changes" })).ToContainTextAsync("new-shop");
+        var publish = page.GetByRole(AriaRole.Button, new() { Name = "Publish 1 change to dev" });
+        await Expect(publish).ToBeDisabledAsync();
+        await page.GetByLabel("Summary (optional)").FillAsync("Open the new shop to 25%");
+        await page.GetByLabel("Type dev to confirm").FillAsync("dev");
+        await publish.ClickAsync();
+
+        await Expect(page.GetByRole(AriaRole.Status)).ToContainTextAsync("Version 1 is live in Development.");
+        await page.GetByRole(AriaRole.Link, new() { Name = "Back to the draft" }).ClickAsync();
+        await Expect(page.GetByTestId("draft-status")).ToContainTextAsync("Version 1 is live. No unpublished changes.");
+        var publication = (await owner.ListPublicationsAsync("space-race")).Json["data"]!.AsArray().Single()!;
+        Assert.Equal(1, publication["version"]!.GetValue<long>());
+        Assert.Equal("Open the new shop to 25%", publication["summary"]!.GetValue<string>());
+        Assert.Equal(owner.Email, publication["publishedBy"]!["email"]!.GetValue<string>());
+        Assert.True(browserErrors.Count == 0, string.Join(" | ", browserErrors));
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (_host is not null)

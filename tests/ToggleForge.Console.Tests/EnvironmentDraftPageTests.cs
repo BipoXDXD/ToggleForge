@@ -27,9 +27,14 @@ public sealed class EnvironmentDraftPageTests
     }
 
     [Fact]
-    public void A_created_flag_joins_the_draft_table_with_its_rollout()
+    public void A_created_flag_joins_the_draft_as_an_unpublished_change()
     {
         var api = DraftWithOneFlag()
+            .ThenAnswer(HttpMethod.Get, Draft, HttpStatusCode.OK, """
+                {"revision":3,"basedOnVersion":null,"changes":[{"flagKey":"dark-mode","change":"added"},{"flagKey":"new-shop","change":"added"}],
+                 "flags":[{"key":"dark-mode","enabled":false,"onValue":true,"offValue":false,"rolloutBasisPoints":0},
+                          {"key":"new-shop","enabled":true,"onValue":true,"offValue":false,"rolloutBasisPoints":1250}]}
+                """)
             .Answer(HttpMethod.Post, Draft + "/flags", HttpStatusCode.Created,
                 """{"key":"new-shop","enabled":true,"onValue":true,"offValue":false,"rolloutBasisPoints":1250}""");
         ConsoleRendering.SignInAs(api, "owner");
@@ -43,6 +48,7 @@ public sealed class EnvironmentDraftPageTests
 
         page.WaitForAssertion(() => Assert.Equal(2, page.FindAll("tbody tr").Count));
         Assert.Equal(["new-shop", "Enabled", "12.5%"], page.FindAll("tbody tr")[1].QuerySelectorAll("td").Select(cell => cell.TextContent));
+        Assert.Equal("Never published. 2 unpublished changes.", DraftStatus(page));
     }
 
     [Fact]
@@ -58,13 +64,31 @@ public sealed class EnvironmentDraftPageTests
         Assert.Empty(page.FindAll("form"));
     }
 
+    [Theory]
+    [InlineData("editor", 1)]
+    [InlineData("viewer", 0)]
+    public void Editors_with_unpublished_changes_get_the_way_to_publish(string role, int links)
+    {
+        var api = DraftWithOneFlag();
+        ConsoleRendering.SignInAs(api, role);
+        using var console = ConsoleRendering.Create(api);
+
+        var page = RenderDraft(console);
+
+        page.WaitForAssertion(() => Assert.Equal("Never published. 1 unpublished change.", DraftStatus(page)));
+        Assert.Equal(links, page.FindAll("a").Count(link => link.TextContent == "Review and publish"));
+    }
+
+    private static string DraftStatus(IRenderedComponent<EnvironmentDraft> page) =>
+        System.Text.RegularExpressions.Regex.Replace(page.Find("[data-testid=draft-status]").TextContent, @"\s+", " ").Trim();
+
     private static StubApi DraftWithOneFlag() => new StubApi()
         .Answer(HttpMethod.Get, Project, HttpStatusCode.OK, """
             {"key":"space-race","name":"Space Race","environments":[
               {"key":"dev","name":"Development","currentVersion":null,"draftRevision":2,"hasUnpublishedChanges":true}]}
             """)
         .Answer(HttpMethod.Get, Draft, HttpStatusCode.OK, """
-            {"revision":2,"basedOnVersion":null,"changes":[],
+            {"revision":2,"basedOnVersion":null,"changes":[{"flagKey":"dark-mode","change":"added"}],
              "flags":[{"key":"dark-mode","enabled":false,"onValue":true,"offValue":false,"rolloutBasisPoints":0}]}
             """);
 

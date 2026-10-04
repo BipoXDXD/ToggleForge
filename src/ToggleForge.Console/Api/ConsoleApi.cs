@@ -16,7 +16,8 @@ public sealed class ConsoleApi(HttpClient http, SessionState session)
 {
     private const string AntiforgeryHeader = "X-XSRF-TOKEN";
 
-    // A API recusa null num merge patch (nenhum campo da flag pode ser apagado): campo sem mudança fica de fora.
+    // A API recusa null num merge patch (nenhum campo da flag pode ser apagado) e resumo vazio na publicação:
+    // o que é nulo fica de fora do JSON.
     private static readonly JsonSerializerOptions _omitNulls = new(JsonSerializerDefaults.Web)
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
@@ -74,6 +75,19 @@ public sealed class ConsoleApi(HttpClient http, SessionState session)
         return result.Problem;
     }
 
+    /// <param name="idempotencyKey">
+    /// A mesma chave em todo reenvio do mesmo pedido: a API devolve a resposta original em vez de publicar de novo.
+    /// </param>
+    public Task<ApiResult<Publication>> PublishAsync(
+        EnvironmentAddress environment, PublicationRequest request, string idempotencyKey, CancellationToken cancellationToken) =>
+        SendAsync<Publication>(
+            new Outgoing(
+                HttpMethod.Post,
+                $"{EnvironmentPath(environment)}/publications",
+                JsonContent.Create(request, options: _omitNulls),
+                IdempotencyKey: idempotencyKey),
+            cancellationToken);
+
     private static JsonContent Json(object body) => JsonContent.Create(body);
 
     private static JsonContent MergePatch(FlagModification changes) =>
@@ -87,6 +101,9 @@ public sealed class ConsoleApi(HttpClient http, SessionState session)
 
     private static string DraftPath(Guid organizationId, string projectKey, string environmentKey) =>
         $"{ProjectPath(organizationId, projectKey)}/environments/{Uri.EscapeDataString(environmentKey)}/draft";
+
+    private static string EnvironmentPath(EnvironmentAddress environment) =>
+        $"{ProjectPath(environment.OrganizationId, environment.ProjectKey)}/environments/{Uri.EscapeDataString(environment.EnvironmentKey)}";
 
     private static string FlagPath(FlagAddress flag) =>
         $"{DraftPath(flag.OrganizationId, flag.ProjectKey, flag.EnvironmentKey)}/flags/{Uri.EscapeDataString(flag.FlagKey)}";
@@ -133,6 +150,11 @@ public sealed class ConsoleApi(HttpClient http, SessionState session)
             if (outgoing.IfMatch is not null)
             {
                 request.Headers.TryAddWithoutValidation("If-Match", outgoing.IfMatch);
+            }
+
+            if (outgoing.IdempotencyKey is not null)
+            {
+                request.Headers.Add("Idempotency-Key", outgoing.IdempotencyKey);
             }
 
             using var response = await http.SendAsync(request, cancellationToken);
@@ -198,8 +220,12 @@ public sealed class ConsoleApi(HttpClient http, SessionState session)
         }
     }
 
-    /// <summary>Um pedido à API; <paramref name="IfMatch"/> é a ETag lida antes de alterar o recurso.</summary>
-    private sealed record Outgoing(HttpMethod Method, string Path, HttpContent? Content = null, string? IfMatch = null);
+    /// <summary>
+    /// Um pedido à API. <paramref name="IfMatch"/> é a ETag lida antes de alterar o recurso;
+    /// <paramref name="IdempotencyKey"/>, a chave das operações que a API deduplica.
+    /// </summary>
+    private sealed record Outgoing(
+        HttpMethod Method, string Path, HttpContent? Content = null, string? IfMatch = null, string? IdempotencyKey = null);
 
     /// <summary>A resposta como chegou; a ETag só existe nos recursos que se alteram com If-Match.</summary>
     private sealed record Received<T>(T Value, string? ETag);

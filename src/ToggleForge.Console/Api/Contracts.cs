@@ -23,11 +23,18 @@ public sealed record Project(string Key, string Name, IReadOnlyList<ProjectEnvir
 
 public sealed record ProjectEnvironment(string Key, string Name, long? CurrentVersion, bool HasUnpublishedChanges);
 
-public sealed record Draft(long Revision, IReadOnlyList<Flag> Flags);
+/// <param name="BasedOnVersion">A publicação atual, com que as mudanças são comparadas; nula antes da primeira.</param>
+public sealed record Draft(long Revision, long? BasedOnVersion, IReadOnlyList<Flag> Flags, IReadOnlyList<DraftChange> Changes);
+
+/// <param name="Change"><c>added</c>, <c>modified</c> ou <c>removed</c>.</param>
+public sealed record DraftChange(string FlagKey, string Change);
 
 /// <param name="OnValue">O valor de quem cai no rollout.</param>
 /// <param name="OffValue">O valor de quem fica fora e de todos quando a flag está desligada.</param>
 public sealed record Flag(string Key, bool Enabled, bool OnValue, bool OffValue, int RolloutBasisPoints);
+
+/// <summary>Um ambiente de um projeto da organização.</summary>
+public sealed record EnvironmentAddress(Guid OrganizationId, string ProjectKey, string EnvironmentKey);
 
 /// <summary>Onde uma flag mora: organização, projeto, ambiente e a chave dela no rascunho.</summary>
 public sealed record FlagAddress(Guid OrganizationId, string ProjectKey, string EnvironmentKey, string FlagKey);
@@ -37,6 +44,12 @@ public sealed record Credentials(string Email, string Password);
 public sealed record ProjectCreation(string Key, string Name);
 
 public sealed record FlagCreation(string Key, bool Enabled, bool OnValue, bool OffValue, int RolloutBasisPoints);
+
+/// <param name="DraftRevision">A revisão que o membro revisou; se o rascunho mudou depois, a API recusa.</param>
+/// <param name="Summary">Opcional; a API recusa texto vazio, então ausente vai como nulo e fica fora do JSON.</param>
+public sealed record PublicationRequest(long DraftRevision, string? Summary);
+
+public sealed record Publication(long Version);
 
 /// <summary>Merge patch: só os campos que mudaram vão para a API, e campo nulo nem é enviado.</summary>
 public sealed record FlagModification(bool? Enabled = null, bool? OnValue = null, bool? OffValue = null, int? RolloutBasisPoints = null)
