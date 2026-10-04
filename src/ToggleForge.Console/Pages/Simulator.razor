@@ -1,0 +1,192 @@
+@page "/organizations/{OrganizationId:guid}/projects/{ProjectKey}/environments/{EnvironmentKey}/simulator"
+@inherits ConsolePage
+@inject ConsoleApi Api
+
+<PageTitle>Simulator · @ProjectKey · @EnvironmentKey · ToggleForge</PageTitle>
+
+<nav class="text-sm text-slate-500" aria-label="Breadcrumb">
+    <a href="organizations/@OrganizationId/projects" class="hover:text-slate-700 hover:underline">Projects</a>
+    <span aria-hidden="true"> / </span>
+    <a href="@DraftPath" class="hover:text-slate-700 hover:underline">@ProjectKey · @EnvironmentKey</a>
+</nav>
+
+@if (_loadProblem is not null)
+{
+    <div class="mt-6"><ProblemMessage Problem="_loadProblem" /></div>
+}
+else if (_environment is null)
+{
+    <p class="mt-6 text-sm text-slate-500">Loading the environment…</p>
+}
+else
+{
+    <h1 class="mt-2 text-2xl font-semibold tracking-tight">Simulate a player in @_environment.Name (@EnvironmentKey)</h1>
+    <p class="mt-1 text-sm text-slate-600">
+        Evaluates every flag for one player with the same code the SDK runs. Nothing is saved.
+    </p>
+
+    <form class="mt-6 max-w-lg space-y-4" @onsubmit="SimulateAsync" @onsubmit:preventDefault>
+        <label class="block">
+            <span class="text-sm font-medium text-slate-700">Player ID</span>
+            <input required maxlength="256" autocomplete="off" spellcheck="false" @bind="_playerId"
+                   class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm focus:border-indigo-500 focus:outline-none" />
+        </label>
+        <fieldset>
+            <legend class="text-sm font-medium text-slate-700">Source</legend>
+            <div class="mt-2 space-y-2 text-sm text-slate-700">
+                <label class="flex items-center gap-2">
+                    <input type="radio" name="source" checked="@(!_publicationChosen)" @onchange="() => _publicationChosen = false"
+                           class="h-4 w-4 border-slate-300" />
+                    <span>Draft</span>
+                </label>
+                @if (_environment.CurrentVersion is null)
+                {
+                    <p class="text-slate-500">Nothing published yet, so only the draft can be simulated.</p>
+                }
+                else
+                {
+                    <div class="flex items-center gap-2">
+                        <label class="flex items-center gap-2">
+                            <input type="radio" name="source" checked="@_publicationChosen" @onchange="() => _publicationChosen = true"
+                                   class="h-4 w-4 border-slate-300" />
+                            <span>Published version</span>
+                        </label>
+                        <input type="number" min="1" step="1" aria-label="Version number" disabled="@(!_publicationChosen)" @bind="_version"
+                               class="block w-24 rounded-md border border-slate-300 px-2 py-1 text-sm focus:border-indigo-500 focus:outline-none disabled:bg-slate-100" />
+                    </div>
+                }
+            </div>
+        </fieldset>
+
+        <ProblemMessage Problem="_problem" />
+
+        <button type="submit" disabled="@_busy"
+                class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60">
+            Simulate
+        </button>
+    </form>
+
+    @* Sempre no DOM: o leitor de tela anuncia o resultado quando ele chega. *@
+    <div aria-live="polite">
+    @if (_simulation is not null)
+    {
+        <section class="mt-10" aria-labelledby="simulation-results">
+            <h2 id="simulation-results" class="text-lg font-semibold">@SimulationText.Source(_simulation)</h2>
+            <p class="mt-1 text-sm text-slate-600">For player <span class="font-mono text-slate-800">@_simulatedPlayer</span></p>
+            @if (_simulation.Results.Count == 0)
+            {
+                <p class="mt-3 text-sm text-slate-600">No flags to evaluate.</p>
+            }
+            else
+            {
+                <div class="mt-3 overflow-hidden rounded-lg border border-slate-200 bg-white">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                            <tr>
+                                <th scope="col" class="px-4 py-2">Flag</th>
+                                <th scope="col" class="px-4 py-2">Value</th>
+                                <th scope="col" class="px-4 py-2">Why</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-200">
+                            @foreach (var result in _simulation.Results)
+                            {
+                                <tr>
+                                    <td class="px-4 py-2 font-mono">@result.FlagKey</td>
+                                    <td class="px-4 py-2 font-mono">@(result.Value ? "true" : "false")</td>
+                                    <td class="px-4 py-2 text-slate-600">@SimulationText.Why(result)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+    }
+    </div>
+}
+
+@code {
+    private static readonly Problem _missingVersion = new(
+        "/problems/missing-version", "Missing version", 400, "Enter the version to simulate.");
+
+    private ProjectEnvironment? _environment;
+    private Problem? _loadProblem;
+    private Problem? _problem;
+    private string _playerId = string.Empty;
+    private bool _publicationChosen;
+    private long? _version;
+    private bool _busy;
+
+    // O resultado mostrado e o jogador a que ele se refere: o campo pode mudar depois da simulação.
+    private Simulation? _simulation;
+    private string? _simulatedPlayer;
+
+    [Parameter]
+    public Guid OrganizationId { get; set; }
+
+    [Parameter]
+    public string ProjectKey { get; set; } = string.Empty;
+
+    [Parameter]
+    public string EnvironmentKey { get; set; } = string.Empty;
+
+    private EnvironmentAddress Address => new(OrganizationId, ProjectKey, EnvironmentKey);
+
+    private string DraftPath =>
+        $"organizations/{OrganizationId}/projects/{Uri.EscapeDataString(ProjectKey)}/environments/{Uri.EscapeDataString(EnvironmentKey)}";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        (_environment, _loadProblem, _simulation, _simulatedPlayer, _problem, _publicationChosen, _busy) = (null, null, null, null, null, false, false);
+        var environment = await Api.GetEnvironmentAsync(Address, Leaving);
+        if (environment.Succeeded)
+        {
+            _environment = environment.Value;
+            _version = _environment.CurrentVersion;
+        }
+        else
+        {
+            _loadProblem = environment.Problem;
+        }
+    }
+
+    private async Task SimulateAsync()
+    {
+        // A regra do ID do jogador é da API (a mesma do SDK); o console só repassa o que o membro digitou.
+        var request = (_publicationChosen, _version) switch
+        {
+            (false, _) => SimulationRequest.ForDraft(_playerId),
+            (true, { } version) => SimulationRequest.ForPublication(_playerId, version),
+            (true, null) => null,
+        };
+        if (request is null)
+        {
+            Show(_missingVersion);
+            return;
+        }
+
+        // Voltar ou avançar entre ambientes reaproveita a página: resposta de outro ambiente é descartada.
+        var address = Address;
+        _problem = null;
+        _busy = true;
+        var simulation = await Api.SimulateAsync(address, request, Leaving);
+        if (address != Address)
+        {
+            return;
+        }
+
+        _busy = false;
+        if (simulation.Succeeded)
+        {
+            (_simulation, _simulatedPlayer) = (simulation.Value, request.PlayerId);
+        }
+        else
+        {
+            Show(simulation.Problem);
+        }
+    }
+
+    /// <summary>O resultado anterior sai junto: ele não responde mais ao que está no formulário.</summary>
+    private void Show(Problem problem) => (_simulation, _simulatedPlayer, _problem) = (null, null, problem);
+}

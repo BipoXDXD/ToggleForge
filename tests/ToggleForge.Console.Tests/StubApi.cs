@@ -15,6 +15,7 @@ internal sealed class StubApi : HttpMessageHandler
 
     private readonly Dictionary<string, List<Func<HttpResponseMessage>>> _responses = new(StringComparer.Ordinal);
     private readonly Dictionary<HttpRequestMessage, string> _bodies = [];
+    private readonly Dictionary<string, TaskCompletionSource> _held = new(StringComparer.Ordinal);
 
     public StubApi() => Answer(HttpMethod.Get, "/api/v1/antiforgery-token", HttpStatusCode.OK, $$"""{"token":"{{AntiforgeryToken}}"}""");
 
@@ -44,6 +45,15 @@ internal sealed class StubApi : HttpMessageHandler
         return this;
     }
 
+    /// <summary>Segura as respostas da rota até <paramref name="release"/> ser chamado: a resposta chega atrasada.</summary>
+    public StubApi Hold(HttpMethod method, string path, out Action release)
+    {
+        var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _held[Key(method, path)] = held;
+        release = held.SetResult;
+        return this;
+    }
+
     public string BodyOf(HttpRequestMessage request) => _bodies.GetValueOrDefault(request, string.Empty);
 
     public ConsoleApi CreateClient() => new(new HttpClient(this) { BaseAddress = new Uri("https://console.toggleforge.test/") }, Session);
@@ -60,6 +70,11 @@ internal sealed class StubApi : HttpMessageHandler
         }
 
         var key = Key(request.Method, request.RequestUri?.AbsolutePath ?? string.Empty);
+        if (_held.TryGetValue(key, out var held))
+        {
+            await held.Task;
+        }
+
         if (!_responses.TryGetValue(key, out var answers))
         {
             return Respond(HttpStatusCode.NotFound, """{"type":"about:blank","title":"Not Found","status":404}""", "application/problem+json", eTag: null)();

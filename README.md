@@ -84,12 +84,14 @@ dotnet run --project src/ToggleForge.Api
 Blazor WebAssembly com Tailwind, servido pela própria API na mesma origem (ADR 0009): o console é só mais
 um cliente de `/api/v1`, com o cookie de sessão e o token antiforgery. Com a API rodando, ele abre na raiz
 (`https://localhost:<porta>/`). Já dá para entrar, listar e criar projetos, adicionar flags ao rascunho de um
-ambiente, editá-las ou removê-las, publicar o rascunho, navegar pelo histórico e reverter para uma versão anterior. A edição vai com `If-Match`: se outra pessoa mudou a
+ambiente, editá-las ou removê-las, simular um jogador, publicar o rascunho, navegar pelo histórico e reverter para uma versão anterior. A edição vai com `If-Match`: se outra pessoa mudou a
 flag enquanto ela estava aberta, nada é gravado e o console mostra os valores atuais para a mudança ser refeita.
 A publicação mostra as mudanças desde a versão no ar e só libera o botão com a chave do ambiente digitada. Se
 a resposta não chega, o console só oferece conferir o resultado, reenviando o mesmo pedido com o mesmo
 `Idempotency-Key`, o que nunca publica duas vezes. O rollback segue as mesmas regras e ainda pede o descarte explícito
 das mudanças não publicadas do rascunho, que ele substitui.
+O simulador avalia o rascunho ou uma versão publicada para um ID de jogador e explica cada flag: o valor e o
+bucket que o decidiu. O ID vai só no corpo do pedido, nunca no endereço.
 
 ## Desenvolvimento
 

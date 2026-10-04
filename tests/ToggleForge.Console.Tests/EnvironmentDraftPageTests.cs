@@ -64,6 +64,20 @@ public sealed class EnvironmentDraftPageTests
         Assert.Empty(page.FindAll("form"));
     }
 
+    [Fact]
+    public void A_viewer_gets_the_way_to_simulate_players()
+    {
+        var api = DraftWithOneFlag();
+        ConsoleRendering.SignInAs(api, "viewer");
+        using var console = ConsoleRendering.Create(api);
+
+        var page = RenderDraft(console);
+
+        page.WaitForAssertion(() => Assert.Equal(
+            "organizations/3f1c7d8e-2b4a-4c6d-9e8f-0a1b2c3d4e5f/projects/space-race/environments/dev/simulator",
+            page.FindAll("a").Single(link => link.TextContent == "Simulate").GetAttribute("href")));
+    }
+
     [Theory]
     [InlineData("editor", 1)]
     [InlineData("viewer", 0)]
