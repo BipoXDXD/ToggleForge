@@ -18,11 +18,20 @@ public sealed class FieldErrorsTests
     [Fact]
     public void An_error_on_another_field_stays_in_the_general_message()
     {
-        var (fields, rest) = FieldErrors.Split(Invalid(("/key", "Use lowercase letters."), ("/rolloutBasisPoints", "Use 0 to 10000.")));
+        var (fields, rest) = FieldErrors.Split(Invalid(("/type", "Use boolean or json."), ("/rolloutBasisPoints", "Use 0 to 10000.")));
 
         Assert.Equal("Use 0 to 10000.", fields.For(FieldErrors.Rollout));
         Assert.NotNull(rest);
-        Assert.Equal(["Use lowercase letters."], rest.Messages);
+        Assert.Equal(["Use boolean or json."], rest.Messages);
+    }
+
+    [Fact]
+    public void An_error_on_the_key_goes_to_the_key_field()
+    {
+        var (fields, rest) = FieldErrors.Split(Invalid(("/key", "Use lowercase letters.")));
+
+        Assert.Equal("Use lowercase letters.", fields.For(FieldErrors.Key));
+        Assert.Null(rest);
     }
 
     [Fact]

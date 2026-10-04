@@ -8,13 +8,16 @@ namespace ToggleForge.Console.Drafts;
 /// </summary>
 public sealed class FieldErrors
 {
+    /// <summary>Só a criação manda a chave; a edição nunca recebe erro nela.</summary>
+    public const string Key = "/key";
+
     public const string OnValue = "/onValue";
 
     public const string OffValue = "/offValue";
 
     public const string Rollout = "/rolloutBasisPoints";
 
-    private static readonly string[] _fields = [OnValue, OffValue, Rollout];
+    private static readonly string[] _fields = [Key, OnValue, OffValue, Rollout];
 
     private readonly Dictionary<string, string> _byField = new(StringComparer.Ordinal);
 
@@ -31,7 +34,7 @@ public sealed class FieldErrors
 
     /// <summary>
     /// Separa do problema da API os erros que apontam para um campo do formulário ou para dentro dele (como
-    /// <c>/onValue/a</c>). O resto, como um erro em <c>/key</c>, continua no problema, para a mensagem geral.
+    /// <c>/onValue/a</c>). O resto, como um erro em <c>/type</c>, continua no problema, para a mensagem geral.
     /// </summary>
     /// <returns>Os erros por campo e o problema sem eles; nulo quando não sobrou nada para a mensagem geral.</returns>
     public static (FieldErrors Fields, Problem? General) Split(Problem problem)
