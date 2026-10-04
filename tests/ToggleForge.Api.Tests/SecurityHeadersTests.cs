@@ -67,16 +67,4 @@ public sealed class SecurityHeadersTests(ApiFactory api)
         Assert.Equal("DENY", Assert.Single(response.Headers.GetValues("X-Frame-Options")));
         Assert.Equal("no-referrer", Assert.Single(response.Headers.GetValues("Referrer-Policy")));
     }
-
-    private sealed class BrokenMembershipDirectory : IMembershipDirectory
-    {
-        public Task<Domain.Access.Role?> FindRoleAsync(Guid memberId, Guid organizationId, CancellationToken cancellationToken) =>
-            throw new InvalidOperationException("Broken on purpose.");
-
-        public Task<IReadOnlyList<MembershipView>> ListAsync(Guid memberId, CancellationToken cancellationToken) =>
-            throw new InvalidOperationException("Broken on purpose.");
-
-        public Task<IReadOnlyDictionary<Guid, string>> FindEmailsAsync(IReadOnlyCollection<Guid> memberIds, CancellationToken cancellationToken) =>
-            throw new InvalidOperationException("Broken on purpose.");
-    }
 }

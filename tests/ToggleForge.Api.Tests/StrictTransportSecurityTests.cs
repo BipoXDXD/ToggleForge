@@ -95,16 +95,4 @@ public sealed class StrictTransportSecurityTests(ApiFactory api)
             builder.UseSetting("ForwardedHeaders:KnownNetworks:0", IngressNetwork);
             configure?.Invoke(builder);
         });
-
-    private sealed class BrokenMembershipDirectory : IMembershipDirectory
-    {
-        public Task<Domain.Access.Role?> FindRoleAsync(Guid memberId, Guid organizationId, CancellationToken cancellationToken) =>
-            throw new InvalidOperationException("Broken on purpose.");
-
-        public Task<IReadOnlyList<MembershipView>> ListAsync(Guid memberId, CancellationToken cancellationToken) =>
-            throw new InvalidOperationException("Broken on purpose.");
-
-        public Task<IReadOnlyDictionary<Guid, string>> FindEmailsAsync(IReadOnlyCollection<Guid> memberIds, CancellationToken cancellationToken) =>
-            throw new InvalidOperationException("Broken on purpose.");
-    }
 }
