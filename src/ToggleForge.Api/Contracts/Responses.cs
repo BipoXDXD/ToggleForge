@@ -42,8 +42,11 @@ internal static class FlagValueJson
     public static JsonElement Of(JsonFlagValue value)
     {
         ArgumentNullException.ThrowIfNull(value);
-        return JsonElement.Parse(value.Text);
+        return Of(value.Text);
     }
+
+    /// <summary><paramref name="text"/> é o texto JSON de um valor de flag que o domínio já validou.</summary>
+    public static JsonElement Of(string text) => JsonElement.Parse(text);
 }
 
 internal sealed record FlagResponse(string Key, string Type, bool Enabled, JsonElement OnValue, JsonElement OffValue, int RolloutBasisPoints)
@@ -169,9 +172,8 @@ internal static class SimulationSources
 
 internal sealed record SimulationResultResponse(string FlagKey, string Type, JsonElement Value, string Reason, int? Bucket)
 {
-    /// <summary><see cref="SimulationResultView.Value"/> é o texto JSON de um valor da flag, já validado.</summary>
     public static SimulationResultResponse Of(SimulationResultView view) =>
-        new(view.FlagKey.Value, FlagTypes.Name(view.Type), JsonElement.Parse(view.Value), ReasonOf(view.Reason), view.Bucket);
+        new(view.FlagKey.Value, FlagTypes.Name(view.Type), FlagValueJson.Of(view.Value), ReasonOf(view.Reason), view.Bucket);
 
     /// <summary>A simulação sempre tem jogador e só avalia flags que existem: os outros motivos não ocorrem.</summary>
     private static string ReasonOf(EvaluationReason reason) =>
