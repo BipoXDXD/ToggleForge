@@ -19,7 +19,7 @@ public sealed class AccessibilityTests(ApiFactory api, Browser browser) : IClass
     /// com a fatia de configurações JSON do console e com um PR de acessibilidade seguinte, e só então as tags
     /// <c>wcag2a</c>/<c>wcag2aa</c>/<c>wcag21aa</c> entram aqui no lugar da lista.
     /// </summary>
-    private static readonly List<string> _pinnedRules =
+    private static readonly IReadOnlyList<string> _pinnedRules =
     [
         "region",
         "landmark-one-main",
@@ -56,6 +56,7 @@ public sealed class AccessibilityTests(ApiFactory api, Browser browser) : IClass
         await using var context = await browser.NewContextAsync(Host.Address);
         var page = await context.NewPageAsync();
 
+        await PrepareJourneyDataAsync(owner);
         await OpenAsync(page, owner, journeyPage);
         var result = await page.RunAxe(PinnedRules());
 
@@ -79,7 +80,7 @@ public sealed class AccessibilityTests(ApiFactory api, Browser browser) : IClass
 
     [Theory]
     [MemberData(nameof(PagesReachedByClicking))]
-    public async Task Navigating_to_a_page_moves_focus_to_its_heading(string journeyPage)
+    public async Task Navigating_from_the_projects_moves_focus_to_the_page_heading(string journeyPage)
     {
         using var owner = await ConsoleClient.SignUpAsync(api);
         await PrepareJourneyDataAsync(owner);
@@ -93,7 +94,7 @@ public sealed class AccessibilityTests(ApiFactory api, Browser browser) : IClass
 
     [Theory]
     [MemberData(nameof(JourneyPages))]
-    public async Task No_journey_page_scrolls_sideways_on_a_phone(string journeyPage)
+    public async Task No_page_scrolls_sideways_on_a_phone(string journeyPage)
     {
         using var owner = await ConsoleClient.SignUpAsync(api, emailPrefix: "studio-owner-with-a-long-address");
         Assert.True(owner.Email.Length > 60, owner.Email);
@@ -101,6 +102,7 @@ public sealed class AccessibilityTests(ApiFactory api, Browser browser) : IClass
         var page = await context.NewPageAsync();
         await page.SetViewportSizeAsync(PhoneWidth, PhoneHeight);
 
+        await PrepareJourneyDataAsync(owner);
         await OpenAsync(page, owner, journeyPage);
         var widths = await page.EvaluateAsync<int[]>("() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]");
         var (scrollWidth, clientWidth) = (widths[0], widths[1]);
@@ -140,7 +142,7 @@ public sealed class AccessibilityTests(ApiFactory api, Browser browser) : IClass
         }
     }
 
-    private static AxeRunOptions PinnedRules() => new() { RunOnly = new RunOnlyOptions { Type = "rule", Values = _pinnedRules } };
+    private static AxeRunOptions PinnedRules() => new() { RunOnly = new RunOnlyOptions { Type = "rule", Values = _pinnedRules.ToList() } };
 
     private static string Describe(IEnumerable<AxeResultItem> violations) =>
         string.Join(
@@ -170,7 +172,6 @@ public sealed class AccessibilityTests(ApiFactory api, Browser browser) : IClass
             return;
         }
 
-        await PrepareJourneyDataAsync(owner);
         var draft = $"/organizations/{owner.OrganizationId}/projects/space-race/environments/dev";
         var (path, heading) = journeyPage switch
         {
