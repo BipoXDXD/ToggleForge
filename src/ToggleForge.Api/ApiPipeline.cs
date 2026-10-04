@@ -11,6 +11,8 @@ internal static class ApiPipeline
 {
     public static WebApplication UseToggleForgeApi(this WebApplication app)
     {
+        // Antes de tudo: o rate limit, os cookies e os logs precisam do IP e do esquema do cliente, não do proxy.
+        app.UseForwardedHeaders();
         app.UseExceptionHandler(new ExceptionHandlerOptions
         {
             ExceptionHandler = UnexpectedErrors.HandleAsync,

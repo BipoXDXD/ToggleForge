@@ -14,7 +14,7 @@ O plano de produto está em [`ToggleForge.md`](ToggleForge.md), e as decisões d
 | Marco | Entrega | Situação |
 |---|---|---|
 | 1 — Núcleo | Avaliação booleana, contexto, rollout percentual e fallback | ✅ Concluído |
-| 2 — API persistente | Rascunho, publicação, rollback, autenticação e isolamento | 🚧 Operações do contrato, rate limit, limpeza da idempotência e checagem de senha vazada prontos; falta o `ForwardedHeaders` para o deploy |
+| 2 — API persistente | Rascunho, publicação, rollback, autenticação e isolamento | ✅ Concluído |
 | 3 — Console | Editor, simulador, publicação e histórico (Blazor + Tailwind) | Planejado |
 | 4 — SDK e configurações | Sincronização, cache, JSON e app demonstrativo | Planejado |
 | 5 — Unity e segmentação | Adaptador, jogo simples e regras por atributos | Planejado |
@@ -68,7 +68,8 @@ usa cookie de sessão com token antiforgery; o jogo, `Authorization: Bearer tfsd
 por minuto (membro pela conta, jogo pela credencial e IP, o resto pelo IP) responde 429 com
 `Retry-After`; os tetos ficam em `RateLimits:*` (ADR 0006). As chaves que protegem a sessão ficam no
 Postgres, cifradas pelo certificado PEM de `DataProtection:CertificatePath` e `DataProtection:KeyPath`;
-fora do Development, a API não sobe sem ele (ADR 0008).
+fora do Development, a API não sobe sem ele (ADR 0008). Atrás de um proxy, declare a rede dele em
+`ForwardedHeaders:KnownNetworks` (CIDR) para a API enxergar o IP e o HTTPS do cliente.
 
 ```bash
 dotnet user-secrets set ConnectionStrings:ToggleForge "Host=localhost;Database=toggleforge;Username=..." \
