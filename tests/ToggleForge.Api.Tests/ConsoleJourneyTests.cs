@@ -94,7 +94,7 @@ public sealed class ConsoleJourneyTests(ApiFactory api, Browser browser) : IClas
         await page.GetByRole(AriaRole.Link, new() { Name = "Back to the draft" }).ClickAsync();
         await SimulateAsync(page, playerId, publishedVersion: true);
         await Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Version 2", Exact = true })).ToBeVisibleAsync();
-        await Expect(ResultCells(page)).ToHaveTextAsync(["new-shop", "true", "The rollout includes everyone."]);
+        await Expect(ResultCells(page)).ToHaveTextAsync(["new-shop boolean", "true", "The rollout includes everyone."]);
 
         await ReturnToDraftAsync(page);
         await page.GetByRole(AriaRole.Link, new() { Name = "History" }).ClickAsync();
@@ -278,13 +278,13 @@ public sealed class ConsoleJourneyTests(ApiFactory api, Browser browser) : IClas
         await page.GetByLabel("Player ID").FillAsync(playerId);
         await page.GetByRole(AriaRole.Button, new() { Name = "Simulate" }).ClickAsync();
         await Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Draft", Exact = true })).ToBeVisibleAsync();
-        await Expect(ResultCells(page)).ToHaveTextAsync(["new-shop", "true", "The rollout includes everyone."]);
+        await Expect(ResultCells(page)).ToHaveTextAsync(["new-shop boolean", "true", "The rollout includes everyone."]);
         await page.GetByLabel("Published version").CheckAsync();
         await page.GetByRole(AriaRole.Button, new() { Name = "Simulate" }).ClickAsync();
 
         await Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Version 1", Exact = true })).ToBeVisibleAsync();
         await Expect(ResultCells(page)).ToHaveTextAsync(
-            included ? ["new-shop", "true", $"Bucket {bucket} is inside the rollout."] : ["new-shop", "false", $"Bucket {bucket} is outside the rollout."]);
+            included ? ["new-shop boolean", "true", $"Bucket {bucket} is inside the rollout."] : ["new-shop boolean", "false", $"Bucket {bucket} is outside the rollout."]);
         Assert.DoesNotContain("CANARY", page.Url, StringComparison.Ordinal);
         Assert.DoesNotContain(browserMessages, message => message.Contains("CANARY", StringComparison.Ordinal));
         Assert.DoesNotContain("CANARY", await page.EvaluateAsync<string>("JSON.stringify({ ...localStorage, ...sessionStorage })"), StringComparison.Ordinal);

@@ -1,0 +1,15 @@
+@* A coluna "Values" das tabelas de flags: o que recebe quem cai no rollout e o que recebem os outros. *@
+<dl class="grid grid-cols-[auto_1fr] gap-x-2">
+    <dt class="text-xs leading-5 text-slate-500">Included</dt>
+    <dd class="min-w-0"><ValuePreview Value="OnValue" /></dd>
+    <dt class="text-xs leading-5 text-slate-500">Others</dt>
+    <dd class="min-w-0"><ValuePreview Value="OffValue" /></dd>
+</dl>
+
+@code {
+    [Parameter, EditorRequired]
+    public FlagValue OnValue { get; set; } = FlagValue.Null;
+
+    [Parameter, EditorRequired]
+    public FlagValue OffValue { get; set; } = FlagValue.Null;
+}

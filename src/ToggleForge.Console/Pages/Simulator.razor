@@ -94,9 +94,23 @@ else
                         <tbody class="divide-y divide-slate-200">
                             @foreach (var result in _simulation.Results)
                             {
-                                <tr>
-                                    <td class="px-4 py-2 font-mono">@result.FlagKey</td>
-                                    <td class="px-4 py-2 font-mono">@result.Value.Text</td>
+                                <tr class="align-top">
+                                    <td class="px-4 py-2">
+                                        <span class="flex flex-wrap items-center gap-2">
+                                            <span data-testid="flag-key" class="font-mono">@result.FlagKey</span>
+                                            <FlagTypeBadge Type="@result.Type" />
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-2 font-mono">
+                                        @if (ShowsWhole(result))
+                                        {
+                                            @result.Value.Text
+                                        }
+                                        else
+                                        {
+                                            <JsonValueBlock Value="result.Value" />
+                                        }
+                                    </td>
                                     <td class="px-4 py-2 text-slate-600">@SimulationText.Why(result)</td>
                                 </tr>
                             }
@@ -188,6 +202,17 @@ else
         {
             Show(simulation.Problem);
         }
+    }
+
+    /// <summary>
+    /// Valor escalar que cabe na prévia (toda booleana, e números ou textos curtos) aparece inteiro na célula; objeto,
+    /// lista e texto longo vão para o bloco recolhível (design spec, 2.5).
+    /// </summary>
+    private static bool ShowsWhole(SimulationResult result)
+    {
+        var text = result.Value.Text;
+        var isScalar = text[0] is not ('{' or '[');
+        return isScalar && text.Length <= ValuePreview.MaxLength;
     }
 
     /// <summary>O resultado anterior sai junto: ele não responde mais ao que está no formulário.</summary>

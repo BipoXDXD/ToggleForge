@@ -44,15 +44,22 @@ else
                     <th scope="col" class="px-4 py-2">Flag</th>
                     <th scope="col" class="px-4 py-2">State</th>
                     <th scope="col" class="px-4 py-2">Rollout</th>
+                    <th scope="col" class="px-4 py-2">Values</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-slate-200">
                 @foreach (var flag in _publication.Flags)
                 {
-                    <tr>
-                        <td class="px-4 py-2 font-mono">@flag.Key</td>
+                    <tr class="align-top">
+                        <td class="px-4 py-2">
+                            <span class="flex flex-wrap items-center gap-2">
+                                <span data-testid="flag-key" class="font-mono">@flag.Key</span>
+                                <FlagTypeBadge Type="@flag.Type" />
+                            </span>
+                        </td>
                         <td class="px-4 py-2">@(flag.Enabled ? "Enabled" : "Disabled")</td>
                         <td class="px-4 py-2">@RolloutShare.Format(flag.RolloutBasisPoints)</td>
+                        <td class="px-4 py-2"><ValuePair OnValue="flag.OnValue" OffValue="flag.OffValue" /></td>
                     </tr>
                 }
             </tbody>

@@ -6,7 +6,7 @@
 
 @code {
     // Cabe ao lado das outras colunas da tabela sem quebrar a linha numa tela de notebook (design spec, 2.3).
-    private const int MaxLength = 40;
+    public const int MaxLength = 40;
 
     [Parameter, EditorRequired]
     public FlagValue Value { get; set; } = FlagValue.Null;
