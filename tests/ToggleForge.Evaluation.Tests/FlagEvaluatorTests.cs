@@ -143,6 +143,21 @@ public sealed class FlagEvaluatorTests
     }
 
     [Fact]
+    public void EvaluateJson_in_a_partial_rollout_carries_the_player_bucket_and_is_not_a_fallback()
+    {
+        // A chave new-shop é a dos vetores de rollout: o bucket do jogador de referência nela é conhecido.
+        var config = new JsonFlag(
+            NewShopFlag.Key, isEnabled: true, ShopConfigJson, offValue: "{}",
+            new PercentageRollout(RolloutPercentage.FromBasisPoints(NewShopFlag.ReferencePlayerBucket + 1), NewShopFlag.Seed));
+
+        var result = _evaluator.EvaluateJson(SnapshotWith(config), "new-shop", ReferencePlayer(), "game-default", json => json);
+
+        Assert.Equal((ShopConfigJson, EvaluationReason.Included), (result.Value, result.Reason));
+        Assert.Equal(NewShopFlag.ReferencePlayerBucket, result.Bucket);
+        Assert.False(result.IsFallback);
+    }
+
+    [Fact]
     public void EvaluateJson_returns_what_the_parser_returns_not_the_raw_json()
     {
         var result = _evaluator.EvaluateJson(SnapshotWith(ShopConfig()), "shop-config", ReferencePlayer(), defaultValue: -1, json => json.Length);
