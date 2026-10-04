@@ -56,7 +56,7 @@
         }
 
         Session.Start(session.Value);
-        Navigation.NavigateTo(SignInRedirect.SafeReturnPath(ReturnUrl));
+        Navigation.NavigateTo(SignInRedirect.SafeReturnUri(ReturnUrl, new Uri(Navigation.BaseUri)).AbsoluteUri);
     }
 
     // A API responde igual para e-mail inexistente e senha errada (ADR 0004); a mensagem também não distingue.
