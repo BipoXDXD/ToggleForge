@@ -5,6 +5,8 @@ namespace ToggleForge.Api.Tests;
 
 public sealed class PublishingTests(ApiFactory api)
 {
+    private const int Racers = 4;
+
     [Fact]
     public async Task Repeating_a_publication_with_the_same_key_and_body_returns_the_original()
     {
@@ -71,6 +73,64 @@ public sealed class PublishingTests(ApiFactory api)
     }
 
     [Fact]
+    public async Task The_same_key_in_another_environment_conflicts()
+    {
+        using var editor = await ConsoleClient.SignUpAsync(api);
+        await editor.CreateProjectAsync("space-race");
+        var devRevision = ConsoleClient.Revision(await editor.CreateFlagAsync("space-race", "new-shop", environmentKey: "dev"));
+        var prodRevision = ConsoleClient.Revision(await editor.CreateFlagAsync("space-race", "new-shop", environmentKey: "prod"));
+        var key = ConsoleClient.NewIdempotencyKey();
+        await editor.PublishAsync("space-race", devRevision, key, environmentKey: "dev");
+
+        var reused = await editor.PublishAsync("space-race", prodRevision, key, environmentKey: "prod");
+
+        Assert.Equal(HttpStatusCode.Conflict, reused.Status);
+        Assert.Equal("/problems/idempotency-key-reused", reused.ProblemType);
+        Assert.Null(await CurrentVersionAsync(editor, "prod"));
+    }
+
+    /// <summary>
+    /// O lock é por ambiente, então as requisições não se esperam: todas passam pelo replay sem achar a chave e
+    /// disputam a primary key do registro de idempotência. As perdedoras abortam e respondem pelo registro da
+    /// vencedora, que tem outro ambiente no fingerprint.
+    /// </summary>
+    [Fact]
+    public async Task The_same_key_racing_in_several_environments_publishes_once_and_conflicts_for_the_rest()
+    {
+        using var editor = await ConsoleClient.SignUpAsync(api);
+        await editor.CreateProjectAsync("space-race");
+        string[] created = [.. Enumerable.Range(1, Racers - 2).Select(racer => $"racer-{racer}")];
+        foreach (var environment in created)
+        {
+            await editor.CreateEnvironmentAsync("space-race", environment);
+        }
+
+        string[] environments = ["dev", "prod", .. created];
+        var revisions = new Dictionary<string, long>();
+        foreach (var environment in environments)
+        {
+            revisions[environment] = ConsoleClient.Revision(
+                await editor.CreateFlagAsync("space-race", "new-shop", environmentKey: environment));
+        }
+
+        var key = ConsoleClient.NewIdempotencyKey();
+
+        var responses = await Task.WhenAll(environments.Select(environment =>
+            editor.PublishAsync("space-race", revisions[environment], key, environmentKey: environment)));
+
+        Assert.Single(responses, response => response.Status == HttpStatusCode.Created);
+        Assert.All(
+            responses.Where(response => response.Status != HttpStatusCode.Created),
+            response =>
+            {
+                Assert.Equal(HttpStatusCode.Conflict, response.Status);
+                Assert.Equal("/problems/idempotency-key-reused", response.ProblemType);
+            });
+        var versions = await Task.WhenAll(environments.Select(environment => CurrentVersionAsync(editor, environment)));
+        Assert.Equal([1L], versions.OfType<long>());
+    }
+
+    [Fact]
     public async Task Publishing_a_revision_older_than_the_draft_conflicts()
     {
         using var editor = await ConsoleClient.SignUpAsync(api);
@@ -125,10 +185,11 @@ public sealed class PublishingTests(ApiFactory api)
         Assert.Equal(errorType, response.Json["errors"]![0]!["type"]!.GetValue<string>());
     }
 
-    private static async Task<long?> CurrentVersionAsync(ConsoleClient client)
+    private static async Task<long?> CurrentVersionAsync(ConsoleClient client, string environmentKey = "dev")
     {
         var project = await client.GetProjectAsync("space-race");
-        var dev = project.Json["environments"]!.AsArray().Single(environment => environment!["key"]!.GetValue<string>() == "dev")!;
-        return dev["currentVersion"]?.GetValue<long>();
+        var environment = project.Json["environments"]!.AsArray()
+            .Single(environment => environment!["key"]!.GetValue<string>() == environmentKey)!;
+        return environment["currentVersion"]?.GetValue<long>();
     }
 }
