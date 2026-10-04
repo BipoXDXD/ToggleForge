@@ -37,7 +37,7 @@ else
         <p class="mt-2 text-sm text-slate-800">@summary</p>
     }
 
-    <div class="mt-6 overflow-x-auto rounded-lg border border-slate-200 bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+    <div class="mt-6 overflow-x-auto rounded-lg border border-slate-200 bg-white"
          role="region" aria-label="Flags in version @Version" tabindex="0">
         <table class="w-full text-left text-sm" aria-label="Flags in version @Version">
             <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
@@ -104,14 +104,14 @@ else
                 @if (_environment.HasUnpublishedChanges)
                 {
                     <label class="flex items-start gap-2">
-                        <input type="checkbox" @bind="_discardDraftChanges" disabled="@(_attempt is not null)" class="mt-0.5 h-4 w-4 rounded border-slate-300" />
+                        <input type="checkbox" @bind="_discardDraftChanges" disabled="@(_attempt is not null)" class="mt-0.5 h-4 w-4" />
                         <span class="text-sm text-slate-700">Discard the unpublished changes of the draft. Rolling back replaces them.</span>
                     </label>
                 }
                 <label class="block">
                     <span class="text-sm font-medium text-slate-700">Type @EnvironmentKey to confirm</span>
                     <input autocomplete="off" spellcheck="false" @bind="_confirmation" @bind:event="oninput"
-                           class="mt-1 block w-40 rounded-md border border-slate-300 px-3 py-2 font-mono text-sm focus:border-indigo-500 focus:outline-none" />
+                           class="tf-field w-40 font-mono" />
                 </label>
 
                 <ProblemMessage Problem="_problem" />
@@ -126,7 +126,7 @@ else
                 else
                 {
                     <button type="submit" disabled="@_busy"
-                            class="rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-500 disabled:opacity-60">
+                            class="rounded-md bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-800 disabled:opacity-60">
                         Check the result
                     </button>
                 }

@@ -46,12 +46,12 @@ else
             <label class="block">
                 <span class="text-sm font-medium text-slate-700">Name</span>
                 <input required maxlength="100" @bind="_name"
-                       class="mt-1 block w-full rounded-md border border-slate-500 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none" />
+                       class="tf-field w-full" />
             </label>
             <label class="block">
                 <span class="text-sm font-medium text-slate-700">Key</span>
                 <input required maxlength="64" @bind="_key" aria-describedby="project-key-hint"
-                       class="mt-1 block w-full rounded-md border border-slate-500 px-3 py-2 font-mono text-sm focus:border-indigo-500 focus:outline-none" />
+                       class="tf-field w-full font-mono" />
                 <span id="project-key-hint" class="mt-1 block text-xs text-slate-500">Lowercase letters, digits, dots, dashes and underscores. It never changes.</span>
             </label>
             <ProblemMessage Problem="_createProblem" />

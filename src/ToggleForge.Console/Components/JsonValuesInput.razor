@@ -17,7 +17,7 @@
                         Audience="@AudienceText.Others(RolloutPercent)" Placeholder="@OthersExample"
                         Text="@OffValueText" TextChanged="OffValueTextChanged" Error="@Errors.For(FieldErrors.OffValue)">
             <Actions>
-                <button type="button" @onclick="CopyOnValueAsync" class="rounded text-xs font-medium text-indigo-700 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">Copy from included</button>
+                <button type="button" @onclick="CopyOnValueAsync" class="rounded text-xs font-medium text-indigo-700 hover:underline">Copy from included</button>
             </Actions>
         </JsonValueField>
     </div>

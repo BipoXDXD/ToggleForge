@@ -5,7 +5,7 @@
 @inject IJSRuntime JS
 
 <details class="group" open="@Open">
-    <summary class="cursor-pointer list-none rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 [&::-webkit-details-marker]:hidden">
+    <summary class="cursor-pointer list-none rounded [&::-webkit-details-marker]:hidden">
         <span class="inline-block text-slate-500 transition-transform group-open:rotate-90" aria-hidden="true">▶</span>
         <ValuePreview Value="Value" TextSize="text-sm" />
     </summary>
@@ -13,7 +13,7 @@
         <div class="flex items-start justify-between gap-2">
             <pre class="max-h-80 overflow-auto px-3 py-2 font-mono text-[13px] leading-5 text-slate-800">@_indented</pre>
             <button type="button" @onclick="CopyAsync"
-                    class="m-2 shrink-0 rounded border border-slate-300 bg-white px-2 py-0.5 text-xs font-medium text-slate-700 hover:bg-slate-100">
+                    class="m-2 shrink-0 rounded border border-slate-500 bg-white px-2 py-0.5 text-xs font-medium text-slate-700 hover:bg-slate-100">
                 @(_copy == CopyState.Copied ? "Copied" : "Copy")
             </button>
         </div>

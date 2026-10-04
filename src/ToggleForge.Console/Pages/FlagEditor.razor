@@ -68,23 +68,23 @@ else
     }
     <form class="@(_flag.Value.IsJson ? "max-w-4xl" : "max-w-lg") mt-6 space-y-4" @onsubmit="SaveAsync" @onsubmit:preventDefault>
         <label class="flex items-center gap-2">
-            <input type="checkbox" @bind="_edit.Enabled" class="h-4 w-4 rounded border-slate-500" />
+            <input type="checkbox" @bind="_edit.Enabled" class="h-4 w-4" />
             <span class="text-sm text-slate-700">Enabled</span>
         </label>
         <div>
             <label for="rollout" class="block text-sm font-medium text-slate-700">Rollout (%)</label>
             <input id="rollout" @ref="_rollout" type="number" required min="0" max="100" step="0.01" @bind="_edit.RolloutPercent"
                    aria-invalid="@(RolloutError is null ? null : "true")" aria-describedby="@(RolloutError is null ? null : "rollout-error")"
-                   class="@(RolloutError is null ? "border-slate-500" : "border-red-600") mt-1 block w-40 rounded-md border bg-white px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600" />
+                   class="tf-field w-40" />
             <FieldError Id="rollout-error" Message="@RolloutError" />
         </div>
         @if (_flag.Value.IsJson)
         {
             <div class="pt-4">
-            <JsonValuesInput @ref="_values"
-                             @bind-OnValueText="_edit.OnValueText" @bind-OnValueText:after="() => _fieldErrors.Clear(FieldErrors.OnValue)"
-                             @bind-OffValueText="_edit.OffValueText" @bind-OffValueText:after="() => _fieldErrors.Clear(FieldErrors.OffValue)"
-                             RolloutPercent="_edit.RolloutPercent" Enabled="_edit.Enabled" Errors="_fieldErrors" TooLarge="_valuesTooLarge" />
+                <JsonValuesInput @ref="_values"
+                                 @bind-OnValueText="_edit.OnValueText" @bind-OnValueText:after="() => _fieldErrors.Clear(FieldErrors.OnValue)"
+                                 @bind-OffValueText="_edit.OffValueText" @bind-OffValueText:after="() => _fieldErrors.Clear(FieldErrors.OffValue)"
+                                 RolloutPercent="_edit.RolloutPercent" Enabled="_edit.Enabled" Errors="_fieldErrors" TooLarge="_valuesTooLarge" />
             </div>
         }
         else
@@ -92,7 +92,7 @@ else
             <div>
                 <label class="block">
                     <span class="text-sm font-medium text-slate-700">Value for included players</span>
-                    <select @bind="_edit.OnValueText" class="mt-1 block w-40 rounded-md border border-slate-500 bg-white px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
+                    <select @bind="_edit.OnValueText" class="tf-field w-40">
                         <option value="true">true</option>
                         <option value="false">false</option>
                     </select>
@@ -102,7 +102,7 @@ else
             <div>
                 <label class="block">
                     <span class="text-sm font-medium text-slate-700">Value for everyone else</span>
-                    <select @bind="_edit.OffValueText" class="mt-1 block w-40 rounded-md border border-slate-500 bg-white px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
+                    <select @bind="_edit.OffValueText" class="tf-field w-40">
                         <option value="true">true</option>
                         <option value="false">false</option>
                     </select>

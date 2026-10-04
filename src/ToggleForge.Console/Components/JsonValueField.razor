@@ -15,7 +15,7 @@
         <div class="flex gap-3">
             @Actions
             <button type="button" data-testid="@($"{Id}-format")" disabled="@(analysis is not JsonAnalysis.Valid)" @onclick="FormatAsync"
-                    class="rounded text-xs font-medium text-indigo-700 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:text-slate-400 disabled:no-underline">
+                    class="rounded text-xs font-medium text-indigo-700 hover:underline disabled:cursor-not-allowed disabled:text-slate-400 disabled:no-underline">
                 Format
             </button>
         </div>
@@ -24,7 +24,7 @@
     <textarea @ref="_area" id="@Id" rows="8" wrap="off" spellcheck="false" autocomplete="off" autocapitalize="off"
               placeholder="@Placeholder" value="@Text" @oninput="ChangeAsync"
               aria-invalid="@(invalid ? "true" : null)" aria-describedby="@DescribedBy(showsSyntax, error is not null)"
-              class="@(invalid ? "border-red-600" : "border-slate-500") mt-2 block w-full resize-y rounded-md border bg-white px-3 py-2 font-mono text-[13px] leading-5 text-slate-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"></textarea>
+              class="tf-field mt-2 w-full resize-y font-mono text-[13px] leading-5 text-slate-800"></textarea>
 
     @switch (analysis)
     {
