@@ -3,6 +3,7 @@ using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using ToggleForge.Console.Pages;
+using static ToggleForge.Console.Tests.FormAssertions;
 
 namespace ToggleForge.Console.Tests;
 
@@ -886,20 +887,7 @@ public sealed class FlagEditorPageTests
     private static string StringOfBytes(int bytes) => $"\"{new string('a', bytes - 2)}\"";
 
     // O bUnit põe o valor de um <textarea> ligado por value= no atributo; o helper aceita também o conteúdo.
-    private static string TextOf(AngleSharp.Dom.IElement area) => area.GetAttribute("value") ?? area.TextContent;
-
-    // O ⚠ é só reforço visual (aria-hidden); a mensagem é o resto.
-    private static string MessageOf(AngleSharp.Dom.IElement element) =>
-        string.Join(' ', element.TextContent.Replace("⚠", string.Empty, StringComparison.Ordinal)
-            .Split((char[])[' ', '\n'], StringSplitOptions.RemoveEmptyEntries));
-
     private static string MeterOf(AngleSharp.Dom.IElement meter) => string.Join(' ', meter.QuerySelectorAll("p > span").Select(MessageOf));
-
-    // O bUnit só escreve o id da referência no primeiro render; ele é lido antes de editar.
-    private static string ReferenceOf(AngleSharp.Dom.IElement element) => element.GetAttribute("blazor:elementreference") ?? string.Empty;
-
-    private static void AssertFocused(BunitContext console, string reference) =>
-        Assert.Equal(reference, Assert.IsType<ElementReference>(console.JSInterop.VerifyFocusAsyncInvoke().Arguments[0]).Id);
 
     private static StubApi ShopConfigRead() =>
         new StubApi().Answer(HttpMethod.Get, ShopConfig, HttpStatusCode.OK, ShopConfigJson, eTag: "\"4\"");
