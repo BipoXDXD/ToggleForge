@@ -66,7 +66,7 @@
             <div class="max-w-lg">
                 <ProblemMessage Problem="_problem" Heading="@ProblemHeading" />
             </div>
-            <button type="submit" disabled="@_submitting"
+            <button type="submit" @ref="_addButton" disabled="@_submitting"
                     class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60">
                 Add to draft
             </button>
@@ -75,6 +75,9 @@
 </section>
 
 @code {
+    // Alvo de foco que não é campo: o botão de envio, para onde o membro estava quando clicou.
+    private const string AddButton = "add-to-draft";
+
     // A ordem dos campos na página: o foco vai para o primeiro que tiver erro.
     private static readonly string[] _pageOrder = [FieldErrors.Key, FieldErrors.Rollout, FieldErrors.OnValue, FieldErrors.OffValue];
 
@@ -86,6 +89,9 @@
     private ElementReference _key;
     private ElementReference _rollout;
     private JsonValuesInput? _values;
+    private ElementReference _addButton;
+
+    // Um campo (pelo ponteiro de FieldErrors) ou o AddButton; nulo quando o foco fica onde está.
     private string? _focusAfterRender;
 
     /// <summary>O ambiente cujo rascunho recebe a flag.</summary>
@@ -116,29 +122,32 @@
         _submitting = false;
         if (flag.Succeeded)
         {
-            _newFlag = new NewFlag();
+            (_newFlag, _focusAfterRender) = (new NewFlag(), FieldErrors.Key);
             await Created.InvokeAsync();
             return;
         }
 
         Explain(flag.Problem, FlagTypes.IsJson(creation.Type));
+        _focusAfterRender ??= AddButton;
     }
 
-    // Depois do envio, os campos ainda estão no fieldset desabilitado até o próximo render, e um campo desabilitado
-    // não recebe foco: o foco espera o render que os reabilita.
+    // Durante o envio, o fieldset desabilitado tira o foco do campo onde ele estava e o navegador o manda para o
+    // <body>. O foco volta depois do render que reabilita o formulário: no campo a corrigir, na chave quando a flag
+    // nasce (pronta para a próxima) ou no botão quando a recusa não aponta campo (WCAG 2.4.3).
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (_focusAfterRender is not { } field)
+        if (_focusAfterRender is not { } target)
         {
             return;
         }
 
         _focusAfterRender = null;
-        await (field switch
+        await (target switch
         {
+            AddButton => _addButton.FocusAsync(),
             FieldErrors.Key => _key.FocusAsync(),
             FieldErrors.Rollout => _rollout.FocusAsync(),
-            _ => _values?.FocusAsync(field) ?? ValueTask.CompletedTask,
+            _ => _values?.FocusAsync(target) ?? ValueTask.CompletedTask,
         });
     }
 

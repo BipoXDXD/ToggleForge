@@ -247,6 +247,40 @@ public sealed class NewFlagFormTests
         form.WaitForAssertion(() => Assert.Empty(form.FindAll("fieldset[disabled]")));
     }
 
+    // Durante o envio o fieldset desabilitado tira o foco do campo; o bUnit não simula essa perda, mas prova que o
+    // foco é devolvido (WCAG 2.4.3).
+    [Fact]
+    public void A_created_flag_puts_the_focus_back_on_the_key()
+    {
+        var api = Editor(new StubApi().Answer(HttpMethod.Post, Flags, HttpStatusCode.Created, CreatedJson));
+        using var console = ConsoleRendering.Create(api);
+        var form = RenderForm(console);
+        var key = ReferenceOf(form.Find("#flag-key"));
+
+        form.Find("#flag-key").Change("shop-config");
+        form.Find("form").Submit();
+
+        form.WaitForAssertion(() => Assert.Single(api.RequestsTo(HttpMethod.Post, Flags)));
+        form.WaitForAssertion(() => AssertFocused(console, key));
+    }
+
+    [Fact]
+    public void A_refusal_without_a_field_puts_the_focus_back_on_the_button()
+    {
+        var api = Editor(new StubApi().Answer(HttpMethod.Post, Flags, HttpStatusCode.Conflict,
+            """{"type":"/problems/key-taken","title":"Key taken","status":409,"detail":"The draft already has a flag with the key shop-config."}""",
+            "application/problem+json"));
+        using var console = ConsoleRendering.Create(api);
+        var form = RenderForm(console);
+        var button = ReferenceOf(form.Find("button[type=submit]"));
+
+        form.Find("#flag-key").Change("shop-config");
+        form.Find("form").Submit();
+
+        form.WaitForElement("[role=alert]");
+        form.WaitForAssertion(() => AssertFocused(console, button));
+    }
+
     [Fact]
     public void Nothing_is_marked_invalid_before_submitting()
     {
