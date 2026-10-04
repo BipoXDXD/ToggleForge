@@ -196,6 +196,40 @@ public sealed class ConsoleJourneyTests(ApiFactory api, Browser browser) : IClas
         Assert.True(browserErrors.Count == 0, string.Join(" | ", browserErrors));
     }
 
+    [Fact]
+    public async Task A_member_simulates_a_player_on_the_draft_and_on_the_live_version()
+    {
+        const string playerId = "player-CANARY-6f0d2c1e";
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        await owner.PublishedProjectAsync("space-race");
+        var read = await owner.GetFlagAsync("space-race", "new-shop");
+        Assert.Equal(HttpStatusCode.OK, (await owner.UpdateFlagAsync("space-race", "new-shop", read.Header("ETag"), """{"rolloutBasisPoints":10000}""")).Status);
+        var live = (await owner.SimulatePublicationAsync("space-race", playerId, version: 1)).Json["results"]![0]!;
+        var (bucket, included) = (live["bucket"]!.GetValue<int>(), live["value"]!.GetValue<bool>());
+        await using var context = await browser.NewContextAsync(Host.Address);
+        var page = await context.NewPageAsync();
+        var browserErrors = CollectErrors(page);
+        var browserMessages = new List<string>();
+        page.Console += (_, message) => browserMessages.Add(message.Text);
+
+        await OpenDraftAsync(page, owner);
+        await page.GetByRole(AriaRole.Link, new() { Name = "Simulate" }).ClickAsync();
+        await page.GetByLabel("Player ID").FillAsync(playerId);
+        await page.GetByRole(AriaRole.Button, new() { Name = "Simulate" }).ClickAsync();
+        await Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Draft", Exact = true })).ToBeVisibleAsync();
+        await Expect(ResultCells(page)).ToHaveTextAsync(["new-shop", "true", "The rollout includes everyone."]);
+        await page.GetByLabel("Published version").CheckAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "Simulate" }).ClickAsync();
+
+        await Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Version 1", Exact = true })).ToBeVisibleAsync();
+        await Expect(ResultCells(page)).ToHaveTextAsync(
+            included ? ["new-shop", "true", $"Bucket {bucket} is inside the rollout."] : ["new-shop", "false", $"Bucket {bucket} is outside the rollout."]);
+        Assert.DoesNotContain("CANARY", page.Url, StringComparison.Ordinal);
+        Assert.DoesNotContain(browserMessages, message => message.Contains("CANARY", StringComparison.Ordinal));
+        Assert.DoesNotContain("CANARY", await page.EvaluateAsync<string>("JSON.stringify({ ...localStorage, ...sessionStorage })"), StringComparison.Ordinal);
+        Assert.True(browserErrors.Count == 0, string.Join(" | ", browserErrors));
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (_host is not null)
@@ -211,6 +245,9 @@ public sealed class ConsoleJourneyTests(ApiFactory api, Browser browser) : IClas
         await SignInAsync(page, member.Email, ConsoleClient.Password);
         await Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Draft flags" })).ToBeVisibleAsync();
     }
+
+    private static ILocator ResultCells(IPage page) =>
+        page.GetByRole(AriaRole.Row).Filter(new() { HasText = "new-shop" }).GetByRole(AriaRole.Cell);
 
     private static async Task SignInAsync(IPage page, string email, string password)
     {
