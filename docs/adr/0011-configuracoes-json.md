@@ -140,7 +140,8 @@ O que já existe e pesa na escolha:
   - O domínio (`PublishedFlagTypes`) recusa antes, com o 409 `flag-type-locked`, que diz a chave e o tipo já
     publicado: no publish, no rollback e, mais cedo, na criação da flag no rascunho, para o console avisar antes da
     publicação. O PATCH não troca o tipo, então não chega a essa recusa.
-  - A leitura dos tipos e a gravação da publicação acontecem com o ambiente travado (`FOR NO KEY UPDATE`), então
+  - Quem segura o invariante é a FK. O lock do ambiente (`FOR NO KEY UPDATE`), tomado antes de ler os tipos e
+    mantido até gravar a publicação, é o que faz a resposta ser 409, e não 500, quando dois editores disputam:
     nenhuma outra publicação trava um tipo no meio. Se a recusa do domínio falhasse, a FK derrubaria a gravação com
     500: um defeito, nunca um tipo trocado no jogo.
   - Sem backfill: a migration `Initial` do Authoring foi regenerada de novo com a tabela, e os bancos de

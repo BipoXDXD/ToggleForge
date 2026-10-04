@@ -767,7 +767,8 @@ paths:
         - `already-current`: the current version already has the content of `targetVersion` (it may be
           `targetVersion` itself, or an earlier rollback to it).
         - `flag-type-locked`: `targetVersion` has a key with a type other than the one it was published with in
-          this environment. Every publication keeps the types, so only data written outside the API gets here.
+          this environment. Every publication keeps the types and the database enforces it, so this is a
+          safeguard that the API does not reach.
         - `idempotency-key-reused`: the key was used with a different body.
       parameters:
         - $ref: '#/components/parameters/Antiforgery'

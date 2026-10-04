@@ -127,6 +127,7 @@ public sealed class FlagTypeLockTests(ApiFactory api)
     /// STRIDE T4r sob disputa: um editor publica a chave como booleana enquanto outro a apaga e recria como JSON. O lock
     /// do ambiente põe os dois em fila: ou a publicação vem antes, e a recriação leva 409 <c>flag-type-locked</c>, ou a
     /// recriação vem antes, e a publicação leva 409 <c>draft-changed</c>. Nunca as duas versões do tipo publicadas.
+    /// Quem segura o invariante é a FK do tipo travado; o lock é o que faz a resposta ser 409, e não 500, sob disputa.
     /// </summary>
     [Fact]
     public async Task Racing_a_publication_against_recreating_the_key_with_another_type_never_publishes_both_types()
