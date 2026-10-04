@@ -108,6 +108,30 @@ public sealed class AccessibilityTests(ApiFactory api, Browser browser) : IClass
         Assert.True(scrollWidth <= clientWidth, $"{journeyPage}: scrollWidth {scrollWidth} > clientWidth {clientWidth}");
     }
 
+    [Fact]
+    public async Task The_skip_link_is_the_first_stop_and_moves_focus_to_the_main_content_without_navigating()
+    {
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        await PrepareJourneyDataAsync(owner);
+        await using var context = await browser.NewContextAsync(Host.Address);
+        var page = await context.NewPageAsync();
+        await ConsolePages.OpenDraftAsync(page, owner);
+        var address = page.Url;
+        // Um clique no canto vazio do cabeçalho leva o ponto de partida do Tab ao topo do documento, sem recarregar:
+        // a página carregada de novo pediria os arquivos do runtime com o cookie de sessão, cada um conferindo o
+        // security stamp no banco, e esgotaria as conexões do Postgres do teste.
+        await page.Mouse.ClickAsync(4, 4);
+
+        await page.Keyboard.PressAsync("Tab");
+        var skip = page.GetByRole(AriaRole.Link, new() { Name = "Skip to content" });
+        await Expect(skip).ToBeFocusedAsync();
+        Assert.True((await skip.BoundingBoxAsync())?.Width > 1, "The focused skip link stays visually hidden.");
+        await page.Keyboard.PressAsync("Enter");
+
+        await Expect(page.Locator("main#main")).ToBeFocusedAsync();
+        Assert.Equal(address, page.Url);
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (_host is not null)
