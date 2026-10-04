@@ -401,6 +401,8 @@ public sealed class FlagEditorPageTests
 
         Assert.Equal("Nothing was saved: fix the fields marked below.", page.Find("[role=alert]").TextContent.Trim());
         Assert.Equal("{\"discount\": }", TextOf(page.Find("#off-value")));
+        Assert.Empty(page.FindAll("#off-value-error"));
+        Assert.Contains("Not valid JSON", page.Find("#off-value-syntax").TextContent, StringComparison.Ordinal);
         Assert.Empty(api.RequestsTo(HttpMethod.Patch, ShopConfig));
         AssertFocused(console, area);
     }
