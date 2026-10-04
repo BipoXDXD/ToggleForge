@@ -17,7 +17,8 @@ namespace ToggleForge.Console.Api;
 public sealed record FlagValue
 {
     // A profundidade é regra da API (8 níveis, ADR 0011), e é ela que devolve o erro de profundidade. Com o padrão de
-    // 64 do leitor, o cliente recusaria esse valor por conta própria, como se fosse erro de sintaxe.
+    // 64 do leitor, o console recusaria um valor mais fundo como erro de sintaxe; com 512, só acima de 512 níveis o
+    // console recusa assim, e a API responde pelo resto.
     private static readonly JsonDocumentOptions _reading = new() { MaxDepth = 512 };
 
     // Acentos e <, >, & ficam como foram escritos, como a API os guarda. A página nunca põe este texto em HTML sem
@@ -86,7 +87,8 @@ public sealed record FlagValue
         }
         catch (InvalidOperationException)
         {
-            // Um escape \uD800 sem par passa pelo leitor, mas compactar exige desescapá-lo; não é texto que a API aceite.
+            // Um surrogate escapado sem par (alto ou baixo) passa pelo leitor, mas compactar exige desescapá-lo; não
+            // é texto que a API aceite.
             value = null;
             return false;
         }
