@@ -112,8 +112,9 @@ O que já existe e pesa na escolha:
 
 ### Domínio e banco
 
-- `JsonFlagValue` é um value object que nasce válido, lido com o System.Text.Json do .NET
-  (`AllowDuplicateProperties = false`), sem pacote de terceiro.
+- `JsonFlagValue` é um value object que nasce válido, lido com o System.Text.Json do .NET, sem pacote de
+  terceiro. A leitura aceita chaves repetidas e a varredura seguinte as recusa, para a recusa dizer qual regra
+  quebrou (`DuplicateKey`, e não um erro genérico de leitura).
 - `FlagSettings` troca `OnValue`/`OffValue` por um par fechado, `BooleanValues` ou `JsonValues`. O tipo
   deriva do par. Um `FlagChange` com valor de outro tipo é uma falha de domínio, não uma exceção.
 - `ProjectEnvironment` impõe os 128 KiB na criação e na edição, como já impõe as 200 flags. A concorrência
