@@ -1,3 +1,4 @@
+using System.Net;
 using ToggleForge.Api.Tests.Support;
 
 namespace ToggleForge.Api.Tests;
@@ -36,5 +37,35 @@ public sealed class CrossOriginTests(ApiFactory api)
 
         Assert.False(response.Headers.Contains("Access-Control-Allow-Origin"));
         Assert.False(response.Headers.Contains("Access-Control-Allow-Methods"));
+    }
+
+    /// <summary>O caso que importa: o navegador de um membro logado, levado a outro site, manda o cookie junto.</summary>
+    [Fact]
+    public async Task Another_site_cannot_read_a_signed_in_members_session()
+    {
+        using var member = await ConsoleClient.SignUpAsync(api);
+        using var browser = api.CreateAnonymousClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, Paths.Session);
+        request.Headers.Add("Origin", OtherSite);
+        request.Headers.Add("Cookie", $"{ConsoleClient.SessionCookie}={member.SessionCookieValue()}");
+
+        using var response = await browser.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.DoesNotContain(response.Headers, header => header.Key.StartsWith("Access-Control-Allow-", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task A_preflight_for_the_session_from_another_site_is_not_approved()
+    {
+        using var visitor = api.CreateAnonymousClient();
+        using var request = new HttpRequestMessage(HttpMethod.Options, Paths.Session);
+        request.Headers.Add("Origin", OtherSite);
+        request.Headers.Add("Access-Control-Request-Method", "GET");
+
+        using var response = await visitor.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.False(response.IsSuccessStatusCode, $"The preflight answered {(int)response.StatusCode}.");
+        Assert.DoesNotContain(response.Headers, header => header.Key.StartsWith("Access-Control-Allow-", StringComparison.OrdinalIgnoreCase));
     }
 }
