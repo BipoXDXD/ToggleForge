@@ -115,6 +115,37 @@ namespace ToggleForge.Sdk
         }
 
         /// <summary>
+        /// Avalia uma flag JSON (ADR 0011) e entrega o valor convertido pelo parser do jogo, que pode usar
+        /// JsonUtility, Newtonsoft ou o que preferir. Como <see cref="EvaluateBoolean"/>, nunca lança exceção por
+        /// configuração ruim: flag ausente, de outro tipo, snapshot expirado ou valor que o parser recusa devolvem
+        /// <paramref name="defaultValue"/> com o motivo.
+        /// </summary>
+        /// <param name="parse">
+        /// Converte o texto JSON compacto do valor escolhido. Roda a cada chamada: guarde o resultado em vez de avaliar a
+        /// cada frame. Não é chamado quando o resultado é o valor padrão por falta de snapshot, snapshot expirado,
+        /// chave inválida, flag ausente ou de outro tipo, ou jogador sem ID num rollout parcial. Se lançar exceção,
+        /// volta <paramref name="defaultValue"/> com <see cref="EvaluationReason.InvalidValue"/> e a exceção se perde:
+        /// para diagnosticá-la, registre-a dentro do próprio parser.
+        /// </param>
+        /// <exception cref="ArgumentNullException"><paramref name="parse"/> é nulo.</exception>
+        public FlagResult<T> EvaluateJson<T>(string flagKey, EvaluationContext context, T defaultValue, Func<string, T> parse)
+        {
+            if (parse is null)
+            {
+                throw new ArgumentNullException(nameof(parse));
+            }
+
+            var current = Volatile.Read(ref _current);
+            if (current is not null && IsExpired(current))
+            {
+                return FlagResult<T>.Expired(defaultValue);
+            }
+
+            var evaluation = _evaluator.EvaluateJson(current?.Snapshot, flagKey, context, defaultValue, parse);
+            return new FlagResult<T>(evaluation, current?.Source ?? SnapshotSource.None);
+        }
+
+        /// <summary>
         /// Adota o snapshot guardado, se houver, começa a sincronizar em segundo plano, no intervalo configurado,
         /// até o cliente ser descartado, e espera a primeira sincronização. O <paramref name="cancellationToken"/> limita só essa espera: o jogo pode
         /// desistir dela, por exemplo ao fim da tela de abertura, e seguir com os valores padrão enquanto o SDK
