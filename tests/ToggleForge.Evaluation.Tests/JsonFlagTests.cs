@@ -58,6 +58,16 @@ public sealed class JsonFlagTests
     }
 
     [Fact]
+    public void A_parser_that_returns_null_gives_the_game_null_not_its_default()
+    {
+        var flag = ShopConfig(enabled: true, RolloutPercentage.All);
+
+        var result = flag.Evaluate<string?>(NewShopFlag.Project, NewShopFlag.Environment, ReferencePlayer(), DefaultValue, _ => null);
+
+        Assert.Equal(((string?)null, EvaluationReason.Included, false), (result.Value, result.Reason, result.IsFallback));
+    }
+
+    [Fact]
     public void Without_a_player_id_a_partial_rollout_returns_the_default_without_calling_the_parser()
     {
         var flag = ShopConfig(enabled: true, RolloutPercentage.FromPercent(50m));

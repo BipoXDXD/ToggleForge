@@ -8,7 +8,7 @@ namespace ToggleForge.SdkDemo;
 /// mesma comparação fraca do <c>If-None-Match</c> da API, e deixa o roteiro derrubar a rede ou entregar uma
 /// resposta atrasada.
 /// </summary>
-/// <param name="flagKey">A única flag publicada, ligada e com valor <c>true</c>.</param>
+/// <param name="flagKey">A flag booleana publicada em toda versão, ligada e com valor <c>true</c>.</param>
 /// <param name="seed">A semente do rollout dela.</param>
 internal sealed class SimulatedServer(string flagKey, string seed) : ISnapshotTransport
 {
@@ -22,8 +22,9 @@ internal sealed class SimulatedServer(string flagKey, string seed) : ISnapshotTr
     /// <summary>O status da última resposta; nulo se a rede estava fora.</summary>
     public int? LastStatusCode { get; private set; }
 
-    public void Publish(int rolloutBasisPoints) =>
-        _publications.Add(Snapshot(_publications.Count + 1, rolloutBasisPoints));
+    /// <param name="jsonFlag">Uma flag JSON ligada para todos, publicada junto; nula publica só a booleana.</param>
+    public void Publish(int rolloutBasisPoints, (string Key, string Value)? jsonFlag = null) =>
+        _publications.Add(Snapshot(_publications.Count + 1, rolloutBasisPoints, jsonFlag));
 
     /// <summary>A próxima resposta traz uma versão antiga, como um pacote que se atrasou na rede.</summary>
     public void DeliverLateOnce(int version) => _staleVersion = version;
@@ -66,11 +67,22 @@ internal sealed class SimulatedServer(string flagKey, string seed) : ISnapshotTr
 
     private static string WithoutWeakPrefix(string eTag) => eTag.StartsWith(WeakPrefix, StringComparison.Ordinal) ? eTag[WeakPrefix.Length..] : eTag;
 
-    private string Snapshot(long version, int rolloutBasisPoints) => string.Create(
-        CultureInfo.InvariantCulture,
-        $$"""
-        {"algorithm":"toggleforge.rollout.v1","projectKey":"space-race","environmentKey":"prod","version":{{version}},
-         "publishedAt":"2026-10-04T12:00:00Z",
-         "flags":[{"key":"{{flagKey}}","enabled":true,"onValue":true,"offValue":false,"rolloutBasisPoints":{{rolloutBasisPoints}},"seed":"{{seed}}"}]}
-        """);
+    private string Snapshot(long version, int rolloutBasisPoints, (string Key, string Value)? jsonFlag)
+    {
+        var flags = string.Create(
+            CultureInfo.InvariantCulture,
+            $$"""{"key":"{{flagKey}}","type":"boolean","enabled":true,"onValue":true,"offValue":false,"rolloutBasisPoints":{{rolloutBasisPoints}},"seed":"{{seed}}"}""");
+        if (jsonFlag is (var key, var value))
+        {
+            // O valor desligado repete o ligado, como o console sugere ao criar a flag (ADR 0011).
+            flags += $$""",{"key":"{{key}}","type":"json","enabled":true,"onValue":{{value}},"offValue":{{value}},"rolloutBasisPoints":10000,"seed":"json-seed"}""";
+        }
+
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $$"""
+            {"algorithm":"toggleforge.rollout.v1","projectKey":"space-race","environmentKey":"prod","version":{{version}},
+             "publishedAt":"2026-10-04T12:00:00Z","flags":[{{flags}}]}
+            """);
+    }
 }

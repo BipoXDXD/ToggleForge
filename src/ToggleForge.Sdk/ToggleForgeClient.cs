@@ -102,8 +102,21 @@ namespace ToggleForge.Sdk
             _stoppingToken = _stopping.Token;
         }
 
+        /// <summary>
+        /// Avalia uma flag booleana e nunca lança exceção por configuração ruim: sem snapshot, snapshot expirado, chave
+        /// inválida, flag ausente ou JSON, ou jogador sem ID num rollout parcial devolvem
+        /// <paramref name="defaultValue"/> com o motivo.
+        /// </summary>
+        /// <exception cref="ArgumentNullException">
+        /// <paramref name="context"/> é nulo, mesmo com o snapshot expirado.
+        /// </exception>
         public FlagResult<bool> EvaluateBoolean(string flagKey, EvaluationContext context, bool defaultValue)
         {
+            if (context is null)
+            {
+                throw new ArgumentNullException(nameof(context));
+            }
+
             var current = Volatile.Read(ref _current);
             if (current is not null && IsExpired(current))
             {
@@ -112,6 +125,48 @@ namespace ToggleForge.Sdk
 
             var evaluation = _evaluator.EvaluateBoolean(current?.Snapshot, flagKey, context, defaultValue);
             return new FlagResult<bool>(evaluation, current?.Source ?? SnapshotSource.None);
+        }
+
+        /// <summary>
+        /// Avalia uma flag JSON (ADR 0011) e entrega o valor convertido pelo parser do jogo, que pode usar
+        /// JsonUtility, Newtonsoft ou o que preferir. Como <see cref="EvaluateBoolean"/>, nunca lança exceção por
+        /// configuração ruim: flag ausente, de outro tipo, snapshot expirado ou valor que o parser recusa devolvem
+        /// <paramref name="defaultValue"/> com o motivo. O fallback <see cref="EvaluationReason.InvalidValue"/> só
+        /// cobre o que o parser recusa lançando exceção: o <c>JsonUtility.FromJson</c> preenche campo ausente com o
+        /// padrão do tipo e quase nunca lança, então a forma do valor se valida dentro do parser (a demo mostra o
+        /// System.Text.Json com <c>RespectRequiredConstructorParameters</c>).
+        /// </summary>
+        /// <param name="parse">
+        /// Converte o texto JSON compacto do valor escolhido. Roda a cada chamada: avalie em pontos naturais do jogo
+        /// (abrir a loja, carregar a cena), não a cada frame. Um valor guardado não vê publicação, rollback nem
+        /// expiração até a próxima avaliação. Não é chamado quando o resultado é o valor padrão por falta de snapshot,
+        /// snapshot expirado, chave inválida, flag ausente ou de outro tipo, ou jogador sem ID num rollout parcial. Se
+        /// lançar exceção, volta <paramref name="defaultValue"/> com <see cref="EvaluationReason.InvalidValue"/> e a
+        /// exceção se perde: para diagnosticá-la, registre-a dentro do próprio parser.
+        /// </param>
+        /// <exception cref="ArgumentNullException">
+        /// <paramref name="context"/> ou <paramref name="parse"/> é nulo, mesmo com o snapshot expirado.
+        /// </exception>
+        public FlagResult<T> EvaluateJson<T>(string flagKey, EvaluationContext context, T defaultValue, Func<string, T> parse)
+        {
+            if (context is null)
+            {
+                throw new ArgumentNullException(nameof(context));
+            }
+
+            if (parse is null)
+            {
+                throw new ArgumentNullException(nameof(parse));
+            }
+
+            var current = Volatile.Read(ref _current);
+            if (current is not null && IsExpired(current))
+            {
+                return FlagResult<T>.Expired(defaultValue);
+            }
+
+            var evaluation = _evaluator.EvaluateJson(current?.Snapshot, flagKey, context, defaultValue, parse);
+            return new FlagResult<T>(evaluation, current?.Source ?? SnapshotSource.None);
         }
 
         /// <summary>

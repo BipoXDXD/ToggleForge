@@ -190,6 +190,49 @@ public sealed class SnapshotCacheTests
     }
 
     [Fact]
+    public async Task A_missing_context_is_refused_even_after_the_snapshot_expired()
+    {
+        await using var client = Client(new StubTransport().Then(SnapshotResponse.Failed(statusCode: null)), StoredAtVersion(3, confirmedAgo: TimeSpan.FromDays(8)));
+
+        await client.StartAsync(TestContext.Current.CancellationToken);
+
+        Assert.Throws<ArgumentNullException>(() => client.EvaluateBoolean("new-shop", context: null!, defaultValue: false));
+    }
+
+    [Fact]
+    public async Task An_expired_snapshot_gives_the_game_its_json_default_without_calling_the_parser()
+    {
+        var store = new MemoryStore { Stored = new StoredSnapshot(Snapshots.WithShopConfig(version: 3), "\"v3\"", _time.GetUtcNow() - TimeSpan.FromDays(8)) };
+        await using var client = Client(new StubTransport().Then(SnapshotResponse.Failed(statusCode: null)), store);
+        var calls = 0;
+
+        await client.StartAsync(TestContext.Current.CancellationToken);
+
+        var result = client.EvaluateJson("shop-config", _player, "fallback", json =>
+        {
+            calls++;
+            return json;
+        });
+        Assert.Equal(
+            ("fallback", EvaluationReason.SnapshotExpired, SnapshotSource.None, (long?)null, true, 0),
+            (result.Value, result.Reason, result.Source, result.SnapshotVersion, result.IsFallback, calls));
+    }
+
+    [Fact]
+    public async Task A_json_flag_in_the_stored_snapshot_is_in_use_after_a_restart_without_network()
+    {
+        var store = new MemoryStore { Stored = new StoredSnapshot(Snapshots.WithShopConfig(version: 3), "\"v3\"", _time.GetUtcNow() - TimeSpan.FromHours(5)) };
+        await using var client = Client(new StubTransport().Then(SnapshotResponse.Failed(statusCode: null)), store);
+
+        await client.StartAsync(TestContext.Current.CancellationToken);
+
+        var result = client.EvaluateJson("shop-config", _player, "fallback", json => json);
+        Assert.Equal(
+            ("""{"discount":0.2,"featuredItems":["sword"]}""", SnapshotSource.Cache, (long?)3),
+            (result.Value, result.Source, result.SnapshotVersion));
+    }
+
+    [Fact]
     public async Task A_not_modified_answer_brings_an_expired_snapshot_back()
     {
         var transport = new StubTransport().Then(SnapshotResponse.NotModified);

@@ -98,6 +98,19 @@ O que já existe e pesa na escolha:
   Nada de snapshot pela metade. Campo que o SDK não usa, como `publishedAt`, não é conferido.
   Uma flag de um tipo que este SDK não conhece não é inválida: ela é ignorada, e o resto do snapshot vale
   (ADR 0011).
+- **Flag JSON (ADR 0011):** os valores são relidos e regravados como JSON compacto, com as chaves na ordem
+  recebida. Datas e inteiros passam como vieram. Uma fração (ou número com expoente) passa pelo `double`: o que se
+  mantém é o `double` mais próximo, e a grafia pode mudar (`1.50` vira `1.5`, `1e2` vira `100.0`, mais de 17
+  dígitos significativos arredondam, e o underflow `1e-400` vira `0.0` sem recusar o snapshot). O `decimal`
+  guardaria a grafia, mas recusaria `1e308`, que a API aceita. Um valor que, regravado, o parser do jogo leria de
+  outro jeito ou nem leria (número fora do `double`, `NaN`, `Infinity`, `undefined`, construtor) torna a flag
+  inválida e recusa o snapshot. Já aspas simples, nome de campo sem aspas, comentário e vírgula sobrando são
+  aceitos pelo Newtonsoft e saem normalizados em JSON padrão; a API nunca os manda. Ponto a conferir no build
+  Unity: o Newtonsoft grava o `double` com o formato `"R"`, e no Mono essa grafia pode não ser a mais curta.
+  Exceção: um surrogate isolado escapado (`"\ud800"`) é trocado por U+FFFD
+  dentro do próprio `JsonTextReader` e não recusa o snapshot; a API e o console já recusam esse valor, então ele só
+  chega por adulteração. Os limites da API para cada valor (4 KiB, 8 níveis) não são conferidos aqui,
+  porque podem crescer; vale só o teto de 64 níveis.
 - **Profundidade máxima de 64 níveis no JSON.** O snapshot de hoje tem três, mas as configurações JSON vão
   aninhar mais, e um SDK publicado num jogo não se corrige depois. A API deve impor às configurações um teto
   bem abaixo desse.

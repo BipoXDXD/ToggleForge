@@ -14,8 +14,9 @@ internal static class LiveMode
 
     private static readonly TimeSpan _displayEvery = TimeSpan.FromSeconds(5);
 
+    /// <param name="read">Avalia a flag para o jogador e descreve o resultado numa linha.</param>
     /// <returns>O código de saída do processo.</returns>
-    public static async Task<int> RunAsync(string flagKey, string playerId)
+    public static async Task<int> RunAsync(string flagKey, string playerId, Func<ToggleForgeClient, string, EvaluationContext, string> read)
     {
         if (!Uri.TryCreate(Environment.GetEnvironmentVariable(UrlVariable), UriKind.Absolute, out var apiUrl))
         {
@@ -65,7 +66,7 @@ internal static class LiveMode
             return ExitCodes.Success;
         }
 
-        await ShowChangesAsync(game, flagKey, player, stop.Token);
+        await ShowChangesAsync(() => read(game, flagKey, EvaluationContext.ForPlayer(player)), stop.Token);
         return ExitCodes.Success;
     }
 
@@ -73,12 +74,12 @@ internal static class LiveMode
         apiUrl.Scheme == Uri.UriSchemeHttps || (apiUrl.Scheme == Uri.UriSchemeHttp && apiUrl.IsLoopback);
 
     /// <summary>Uma linha a cada mudança de valor, motivo, origem ou versão, até o Ctrl+C.</summary>
-    private static async Task ShowChangesAsync(ToggleForgeClient game, string flagKey, PlayerId player, CancellationToken stop)
+    private static async Task ShowChangesAsync(Func<string> describe, CancellationToken stop)
     {
         string? last = null;
         while (!stop.IsCancellationRequested)
         {
-            var line = FlagResultText.Describe(flagKey, game.EvaluateBoolean(flagKey, EvaluationContext.ForPlayer(player), defaultValue: false));
+            var line = describe();
             if (line != last)
             {
                 Console.WriteLine($"{DateTimeOffset.Now:HH:mm:ss}  {line}");

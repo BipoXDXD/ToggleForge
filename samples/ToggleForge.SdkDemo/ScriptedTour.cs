@@ -6,14 +6,16 @@ namespace ToggleForge.SdkDemo;
 
 /// <summary>
 /// A história do Marco 4 contada com o SDK de verdade: rede caindo, ampliação do rollout, resposta fora de ordem,
-/// reinício com o cache em disco e cache expirado. Cada passo confere o que promete; se algo não acontecer, o
-/// processo termina com erro, e o smoke test do CI falha.
+/// reinício com o cache em disco, cache expirado e uma configuração JSON lida com a classe do jogo. Cada passo
+/// confere o que promete; se algo não acontecer, o processo termina com erro, e o smoke test do CI falha.
 /// </summary>
 internal static class ScriptedTour
 {
     private const int PlayerCount = 10_000;
     private const string Flag = "new-shop";
     private const string Seed = "seed-demo";
+    private const string ShopConfigFlag = "shop-config";
+    private const string ShopConfigJson = """{"discount":0.2,"featuredItems":["sword","shield"]}""";
 
     // Calculados pelo oráculo Python do rollout v1 (tools/rollout-vectors) com esta flag, esta semente e os
     // jogadores player-1 a player-10000; outro número quer dizer que o algoritmo, que é contrato público, mudou.
@@ -114,6 +116,19 @@ internal static class ScriptedTour
         Expect(
             server.LastStatusCode == 304 && confirmed == SyncOutcome.NotModified && back.Value && back.Source == SnapshotSource.Server && back.SnapshotVersion == 2,
             "a ETag guardada no disco rende um 304, que confirma o snapshot sem baixá-lo de novo");
+
+        Step(8, $"O estúdio publica a configuração JSON {ShopConfigFlag} (v3)");
+        server.Publish(rolloutBasisPoints: 2_500, jsonFlag: (ShopConfigFlag, ShopConfigJson));
+        Expect(await SyncAsync(game, clock) == SyncOutcome.Updated && Version(game) == 3, "a v3 chega na sincronização seguinte");
+        var shop = game.EvaluateJson(ShopConfigFlag, _players[0], ShopConfig.Closed, LoggingFailures(ShopConfig.Parse));
+        Show(ShopConfigFlag, shop, shop.Value.ToString());
+        Expect(
+            shop.Reason == EvaluationReason.Included && shop.Source == SnapshotSource.Server && shop.SnapshotVersion == 3
+                && shop.Value.Discount == 0.2m && shop.Value.FeaturedItems.SequenceEqual(["sword", "shield"]),
+            "o jogo lê a configuração com a própria classe, sem recompilar");
+        var refused = game.EvaluateJson(ShopConfigFlag, _players[0], defaultValue: -1, LoggingFailures(json => int.Parse(json, CultureInfo.InvariantCulture)));
+        Show(ShopConfigFlag, refused, refused.Value.ToString(CultureInfo.InvariantCulture));
+        Expect(refused.Value == -1 && refused.Reason == EvaluationReason.InvalidValue, "um parser que recusa o valor não derruba o jogo: ele recebe o próprio valor padrão");
         await game.DisposeAsync();
 
         Console.WriteLine();
@@ -130,6 +145,23 @@ internal static class ScriptedTour
     private static HashSet<int> Included(ToggleForgeClient game) =>
         Enumerable.Range(0, PlayerCount).Where(index => game.EvaluateBoolean(Flag, _players[index], defaultValue: false).Value).ToHashSet();
 
+    /// <summary>
+    /// O SDK troca a exceção do parser pelo valor padrão e a descarta; o jogo que quer o diagnóstico a registra
+    /// dentro do próprio parser e a deixa seguir, como o XML doc de <c>EvaluateJson</c> orienta.
+    /// </summary>
+    private static Func<string, T> LoggingFailures<T>(Func<string, T> parse) => json =>
+    {
+        try
+        {
+            return parse(json);
+        }
+        catch (Exception failure)
+        {
+            Console.WriteLine($"   o parser recusou o valor: {failure.GetType().Name}");
+            throw;
+        }
+    };
+
     private static long? Version(ToggleForgeClient game) => game.EvaluateBoolean(Flag, _players[0], defaultValue: false).SnapshotVersion;
 
     private static void Step(int number, string title)
@@ -139,6 +171,9 @@ internal static class ScriptedTour
     }
 
     private static void Show(FlagResult<bool> result) => Console.WriteLine($"   {FlagResultText.Describe(Flag, result)}");
+
+    private static void Show<T>(string flagKey, FlagResult<T> result, string value) =>
+        Console.WriteLine($"   {FlagResultText.Describe(flagKey, result, value)}");
 
     private static void Show(ToggleForgeClient game, HashSet<int> included) =>
         Console.WriteLine(string.Create(_culture, $"   v{Version(game)}: incluídos {included.Count:N0} de {PlayerCount:N0} ({(decimal)included.Count / PlayerCount:P1})"));
