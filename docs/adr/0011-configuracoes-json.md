@@ -129,6 +129,23 @@ O que já existe e pesa na escolha:
   usuário, a migration `Initial` do módulo Authoring foi **regenerada**, e todo banco de desenvolvimento existente
   é recriado (`drop` e `--migrate`). Só é aceitável porque ainda não há produção; depois do Marco 6, mudanças de
   esquema seguem expand/contract.
+- **Tipo travado por chave publicada:** uma vez publicada num ambiente com um tipo, a chave mantém esse tipo em
+  toda publicação seguinte do mesmo ambiente, e isso vale para o publish e para o rollback, porque os dois criam a
+  publicação que chega ao jogo. Apagar a flag do rascunho não libera o tipo: mudar de tipo exige uma chave nova.
+  Outros ambientes não se afetam.
+  - O invariante mora no banco, não num "checa e depois insere": a tabela `published_flag_types` tem uma linha por
+    (ambiente, chave) com o tipo, gravada na mesma transação da publicação, e cada linha de `publication_flags`
+    aponta para ela pela chave estrangeira (ambiente, chave, tipo). Uma publicação com o tipo trocado viola a FK, e
+    a linha travada não pode mudar de tipo enquanto houver publicação apontando para ela.
+  - O domínio (`PublishedFlagTypes`) recusa antes, com o 409 `flag-type-locked`, que diz a chave e o tipo já
+    publicado: no publish, no rollback e, mais cedo, na criação da flag no rascunho, para o console avisar antes da
+    publicação. O PATCH não troca o tipo, então não chega a essa recusa.
+  - A leitura dos tipos e a gravação da publicação acontecem com o ambiente travado (`FOR NO KEY UPDATE`), então
+    nenhuma outra publicação trava um tipo no meio. Se a recusa do domínio falhasse, a FK derrubaria a gravação com
+    500: um defeito, nunca um tipo trocado no jogo.
+  - Sem backfill: a migration `Initial` do Authoring foi regenerada de novo com a tabela, e os bancos de
+    desenvolvimento já precisam ser recriados nesta fatia. Depois da primeira produção, uma tabela assim nasce
+    preenchida a partir de `publication_flags` numa migration expand/contract.
 - **Tamanho no banco:** um CHECK `octet_length(... ::text) <= 4096` em `on_value` e `off_value`, nas duas tabelas,
   repete o limite de `JsonFlagValue.MaxBytes`. Sem ele, um valor gravado por fora e maior que o limite faria toda
   leitura do ambiente falhar, inclusive o snapshot. Pelo mesmo motivo, **apertar um limite do valor depois** (bytes,
@@ -145,7 +162,8 @@ O que já existe e pesa na escolha:
   No snapshot, `type` é opcional no schema (ausente quer dizer `boolean`), mas o servidor sempre o envia.
 - **Erros:** valor inválido ou fora dos limites → 400 no campo. Passar dos 128 KiB do ambiente → 409
   `json-budget-reached`, um tipo próprio (mudança aditiva), para o console explicar o erro sem adivinhar; as 200
-  flags continuam `limit-reached`. Corpo acima de 32 KiB → 413 `payload-too-large`.
+  flags continuam `limit-reached`. Recriar ou republicar uma chave com o outro tipo → 409 `flag-type-locked`, outro
+  tipo próprio. Corpo acima de 32 KiB → 413 `payload-too-large`.
   - Numa flag booleana com os dois valores errados, só `/onValue` é apontado: o domínio para na primeira falha, e
     o `/offValue` aparece na tentativa seguinte.
   - O limite de corpo é o nativo do servidor (`RequestSizeLimit` nas duas rotas), aplicado pelo Kestrel na leitura
@@ -203,12 +221,11 @@ O que já existe e pesa na escolha:
   publicação, rollback nem expiração até a próxima avaliação. Um sinal de mudança (evento ou a versão em uso) é
   candidato aditivo futuro, para quando um estúdio precisar reagir sem reavaliar.
 - Um tipo futuro (por exemplo, número) passa por builds antigos sem derrubá-los: eles só não o enxergam.
-- **Risco residual aceito:** o tipo é fixo enquanto a flag existe, mas a chave não fica presa a ele. Apagar uma
-  chave publicada e recriá-la com o outro tipo, ou fazer rollback para uma versão em que ela tinha o outro tipo,
-  continua permitido. Um build antigo que lê a chave com a classe de antes recebe `TypeMismatch` e fica no próprio
-  `defaultValue`: falha segura, nunca um valor do tipo errado. Travar a chave exigiria guardar o tipo de toda chave
-  já publicada e recusar o rollback, custo que não se paga enquanto a falha é segura
-  (`Recreating_a_published_key_with_another_type_is_accepted`).
+- **O tipo de uma chave publicada é para sempre no ambiente.** Um build no ar lê a chave com a classe dele, e
+  nenhuma publicação pode entregar a ele a chave com outro tipo: recriar com o outro tipo, ou fazer rollback para uma
+  versão assim, recebe 409 `flag-type-locked`. O custo é o redesenho de uma configuração exigir uma chave nova (por
+  exemplo, `shop-config-v2`), e a tabela de tipos cresce com cada chave já publicada, sem nunca encolher. O
+  `TypeMismatch` do núcleo continua como defesa do jogo contra um snapshot de outra origem.
 
 ## Compliance
 
@@ -216,12 +233,14 @@ O que já existe e pesa na escolha:
   de uma flag JSON iguais aos dos vetores v1.
 - **`Domain.Tests`:** partições do `JsonFlagValue` (escalar, objeto, lista, sintaxe inválida, chave duplicada
   aninhada, profundidade 8 e 9, 4.096 e 4.097 bytes com caractere multibyte, número fora do `double`,
-  compactação com a ordem das chaves preservada), os 128 KiB nos dois lados da fronteira e a troca de tipo
-  recusada.
+  compactação com a ordem das chaves preservada), os 128 KiB nos dois lados da fronteira, a troca de tipo
+  recusada e a chave publicada com o outro tipo recusada na criação, no publish e no rollback.
 - **`Api.Tests`:**
   - criar, editar, publicar, snapshot, simulação e rollback de uma flag JSON;
   - cada 400, o 409 `json-budget-reached` do teto e o 413 do corpo (num Kestrel, com e sem `Content-Length`);
-  - os CHECKs do banco;
+  - os CHECKs do banco e a FK do tipo travado (`published_flag_types`);
+  - recriar uma chave publicada com o outro tipo → 409 `flag-type-locked` na criação e, com o rascunho gravado por
+    fora, na publicação; um editor publicando enquanto outro recria a chave com o outro tipo nunca publica os dois;
   - duas criações ou duas edições concorrentes que passariam do teto: só uma entra;
   - todas as respostas conferidas contra o `openapi.yaml`.
 - **`Sdk.Tests`:** tipo ausente, flag JSON, tipo desconhecido ignorado sem recusar o snapshot, datas e inteiros
