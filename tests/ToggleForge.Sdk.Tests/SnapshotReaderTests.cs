@@ -228,8 +228,16 @@ public sealed class SnapshotReaderTests
     [InlineData("1.50", "1.5")]
     [InlineData("1e308", "1E+308")]
     [InlineData("1e-400", "0.0")]
+    [InlineData("1e2", "100.0")]
+    [InlineData("0.12345678901234567890123", "0.12345678901234568")]
     public void A_fraction_keeps_its_double_value_but_may_change_its_spelling(string value, string expected) =>
         Assert.Equal(expected, OnValueOf(Snapshots.JsonFlag(onValue: value)));
+
+    [Fact]
+    public void Lenient_json_inside_a_value_reaches_the_game_normalized() =>
+        Assert.Equal(
+            """{"a":"x","b":[1]}""",
+            OnValueOf(Snapshots.JsonFlag(onValue: "{'a':'x', b:[1, /* note */],}")));
 
     [Theory]
     [InlineData("1e400")]
