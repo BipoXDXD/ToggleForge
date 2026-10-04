@@ -68,6 +68,15 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
     }
 
+    /// <summary>SQL direto no banco do teste, para provar as constraints contra dado gravado por fora da aplicação.</summary>
+    public async Task ExecuteSqlAsync(string sql)
+    {
+        await using var connection = new NpgsqlConnection(_postgres.GetConnectionString());
+        await connection.OpenAsync(TestContext.Current.CancellationToken);
+        await using var command = new NpgsqlCommand(sql, connection);
+        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+    }
+
     public override async ValueTask DisposeAsync()
     {
         await base.DisposeAsync();

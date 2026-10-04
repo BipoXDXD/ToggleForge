@@ -123,6 +123,17 @@ internal static class FlagEndpoints
             return null;
         }
 
-        return new FlagChange(request.Enabled.OrNull, request.OnValue.OrNull, request.OffValue.OrNull, rollout);
+        return new FlagChange(request.Enabled.OrNull, JsonOf(request.OnValue), JsonOf(request.OffValue), rollout);
+    }
+
+    // Temporário até a Tarefa 9, que troca o PATCH para valores JSON.
+    private static JsonFlagValue? JsonOf(PatchField<bool> value)
+    {
+        if (!value.IsPresent)
+        {
+            return null;
+        }
+
+        return value.Value ? JsonFlagValue.True : JsonFlagValue.False;
     }
 }

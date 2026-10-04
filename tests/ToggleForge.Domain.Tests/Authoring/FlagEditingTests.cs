@@ -52,11 +52,39 @@ public sealed class FlagEditingTests
     {
         var environment = EnvironmentWithNewShop();
 
-        var changed = environment.ChangeFlag(_newShop, expectedRevision: 2, new FlagChange(IsEnabled: true, OnValue: true));
+        var changed = environment.ChangeFlag(_newShop, expectedRevision: 2, new FlagChange(IsEnabled: true, OnValue: JsonFlagValue.True));
 
         Assert.True(changed.TryGetValue(out var flag, out _));
         Assert.Equal(2, environment.DraftRevision);
         Assert.Equal(2, flag.ChangedAtRevision);
+    }
+
+    [Fact]
+    public void Changing_a_boolean_flag_to_a_value_that_is_not_true_or_false_is_refused_and_the_revision_stays()
+    {
+        var environment = EnvironmentWithNewShop();
+
+        var changed = environment.ChangeFlag(_newShop, expectedRevision: 2, new FlagChange(OnValue: JsonFlagValue.Parse("\"yes\"")));
+
+        Assert.False(changed.TryGetValue(out _, out var failure));
+        Assert.Equal(AuthoringFailures.OnValueNotOfFlagType, failure);
+        Assert.Equal(2, environment.DraftRevision);
+        Assert.Equal(Flags.Settings(), Assert.Single(environment.Flags).Settings);
+    }
+
+    [Fact]
+    public void A_json_flag_takes_a_new_value_of_any_json_type()
+    {
+        var environment = Flags.NewEnvironment();
+        var empty = JsonFlagValue.Parse("{}");
+        environment.AddFlag(_newShop, new FlagSettings(IsEnabled: true, new JsonValues(empty, empty), RolloutPercentage.All), RolloutSeed.Parse("s1"));
+
+        var changed = environment.ChangeFlag(_newShop, expectedRevision: 2, new FlagChange(OnValue: JsonFlagValue.Parse("3")));
+
+        Assert.True(changed.TryGetValue(out var flag, out _));
+        var values = Assert.IsType<JsonValues>(flag.Settings.Values);
+        Assert.Equal(("3", "{}"), (values.OnValue.Text, values.OffValue.Text));
+        Assert.Equal(3, environment.DraftRevision);
     }
 
     [Fact]

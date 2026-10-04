@@ -6,7 +6,7 @@ namespace ToggleForge.Domain.Tests.Authoring;
 internal static class Flags
 {
     public static FlagSettings Settings(int basisPoints = 1_000, bool isEnabled = true) =>
-        new(isEnabled, OnValue: true, OffValue: false, RolloutPercentage.FromBasisPoints(basisPoints));
+        new(isEnabled, new BooleanValues(On: true, Off: false), RolloutPercentage.FromBasisPoints(basisPoints));
 
     public static PublishedFlag Published(string key, int basisPoints = 1_000, string seed = "seed-1") =>
         new(FlagKey.Parse(key), Settings(basisPoints), RolloutSeed.Parse(seed));

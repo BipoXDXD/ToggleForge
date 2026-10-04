@@ -119,10 +119,12 @@ O que já existe e pesa na escolha:
   deriva do par. Um `FlagChange` com valor de outro tipo é uma falha de domínio, não uma exceção.
 - `ProjectEnvironment` impõe os 128 KiB na criação e na edição, como já impõe as 200 flags. A concorrência
   continua protegida pela revisão do rascunho.
-- **Banco:** `type text not null` com CHECK `in ('boolean', 'json')`, e `on_value`/`off_value` convertidas
-  para `json` com `USING to_json(...)`. Um CHECK garante que uma flag `boolean` só guarda `true`/`false`. A
-  conversão é feita de uma vez, sem expand/contract, porque ainda não há produção: o ToggleForge só implanta
-  no Marco 6.
+- **Banco:** `type text not null` com CHECK `in ('boolean', 'json')`, `on_value`/`off_value` do tipo `json` (com
+  `true`/`false` nas flags booleanas) e um CHECK de que uma flag `boolean` só guarda `true`/`false`. O Postgres não
+  converte `boolean` em `json` sem `USING`, e as migrations são geradas, nunca editadas à mão: por escolha do
+  usuário, a migration `Initial` do módulo Authoring foi **regenerada**, e todo banco de desenvolvimento existente
+  é recriado (`drop` e `--migrate`). Só é aceitável porque ainda não há produção; depois do Marco 6, mudanças de
+  esquema seguem expand/contract.
 
 ### Contrato
 

@@ -68,8 +68,9 @@ namespace ToggleForge.Infrastructure.Authoring.Migrations
                     key = table.Column<string>(type: "text", nullable: false),
                     environment_id = table.Column<Guid>(type: "uuid", nullable: false),
                     is_enabled = table.Column<bool>(type: "boolean", nullable: false),
-                    on_value = table.Column<bool>(type: "boolean", nullable: false),
-                    off_value = table.Column<bool>(type: "boolean", nullable: false),
+                    type = table.Column<string>(type: "text", nullable: false),
+                    on_value = table.Column<string>(type: "json", nullable: false),
+                    off_value = table.Column<string>(type: "json", nullable: false),
                     rollout = table.Column<int>(type: "integer", nullable: false),
                     seed = table.Column<string>(type: "text", nullable: false),
                     changed_at_revision = table.Column<long>(type: "bigint", nullable: false)
@@ -77,8 +78,10 @@ namespace ToggleForge.Infrastructure.Authoring.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("pk_draft_flags", x => new { x.environment_id, x.key });
+                    table.CheckConstraint("ck_draft_flags_boolean_values", "type <> 'boolean' or (json_typeof(on_value) = 'boolean' and json_typeof(off_value) = 'boolean')");
                     table.CheckConstraint("ck_draft_flags_key", "key ~ '^[a-z0-9][a-z0-9._-]{0,63}$'");
                     table.CheckConstraint("ck_draft_flags_rollout", "rollout between 0 and 10000");
+                    table.CheckConstraint("ck_draft_flags_type", "type in ('boolean', 'json')");
                     table.ForeignKey(
                         name: "fk_draft_flags_environments_environment_id",
                         column: x => x.environment_id,
@@ -151,16 +154,19 @@ namespace ToggleForge.Infrastructure.Authoring.Migrations
                     environment_id = table.Column<Guid>(type: "uuid", nullable: false),
                     version = table.Column<long>(type: "bigint", nullable: false),
                     is_enabled = table.Column<bool>(type: "boolean", nullable: false),
-                    on_value = table.Column<bool>(type: "boolean", nullable: false),
-                    off_value = table.Column<bool>(type: "boolean", nullable: false),
+                    type = table.Column<string>(type: "text", nullable: false),
+                    on_value = table.Column<string>(type: "json", nullable: false),
+                    off_value = table.Column<string>(type: "json", nullable: false),
                     rollout_basis_points = table.Column<int>(type: "integer", nullable: false),
                     seed = table.Column<string>(type: "text", nullable: false)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("pk_publication_flags", x => new { x.environment_id, x.version, x.key });
+                    table.CheckConstraint("ck_publication_flags_boolean_values", "type <> 'boolean' or (json_typeof(on_value) = 'boolean' and json_typeof(off_value) = 'boolean')");
                     table.CheckConstraint("ck_publication_flags_key", "key ~ '^[a-z0-9][a-z0-9._-]{0,63}$'");
                     table.CheckConstraint("ck_publication_flags_rollout", "rollout_basis_points between 0 and 10000");
+                    table.CheckConstraint("ck_publication_flags_type", "type in ('boolean', 'json')");
                     table.ForeignKey(
                         name: "fk_publication_flags_publications_environment_id_version",
                         columns: x => new { x.environment_id, x.version },

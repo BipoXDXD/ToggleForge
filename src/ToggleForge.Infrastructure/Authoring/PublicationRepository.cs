@@ -77,8 +77,9 @@ internal sealed class PublicationRepository(AuthoringDbContext context) : IPubli
     {
         Key = flag.Key.Value,
         IsEnabled = flag.Settings.IsEnabled,
-        OnValue = flag.Settings.OnValue,
-        OffValue = flag.Settings.OffValue,
+        Type = flag.Settings.Type,
+        OnValue = flag.Settings.Values.OnValue,
+        OffValue = flag.Settings.Values.OffValue,
         RolloutBasisPoints = flag.Settings.Rollout.BasisPoints,
         Seed = flag.Seed.Value,
     };
@@ -102,6 +103,9 @@ internal sealed class PublicationRepository(AuthoringDbContext context) : IPubli
     private static PublishedFlag ToDomain(PublicationFlagRow row) =>
         new(
             FlagKey.Parse(row.Key),
-            new FlagSettings(row.IsEnabled, row.OnValue, row.OffValue, RolloutPercentage.FromBasisPoints(row.RolloutBasisPoints)),
+            new FlagSettings(
+                row.IsEnabled,
+                FlagValues.Restore(row.Type, row.OnValue, row.OffValue),
+                RolloutPercentage.FromBasisPoints(row.RolloutBasisPoints)),
             RolloutSeed.Parse(row.Seed));
 }

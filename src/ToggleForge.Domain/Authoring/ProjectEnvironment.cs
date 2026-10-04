@@ -10,6 +10,9 @@ public sealed class ProjectEnvironment
 {
     public const int MaxFlags = 200;
 
+    /// <summary>Teto, em bytes UTF-8, da soma dos valores das flags JSON do rascunho (ADR 0011).</summary>
+    public const int MaxJsonBytes = 128 * 1024;
+
     private const long InitialDraftRevision = 1;
 
     private readonly List<DraftFlag> _flags = [];
@@ -59,6 +62,11 @@ public sealed class ProjectEnvironment
             return AuthoringFailures.FlagLimitReached;
         }
 
+        if (JsonBytes + JsonBytesOf(settings) > MaxJsonBytes)
+        {
+            return AuthoringFailures.JsonBudgetReached;
+        }
+
         DraftRevision++;
         var flag = DraftFlag.Create(key, settings, seed, DraftRevision);
         _flags.Add(flag);
@@ -78,10 +86,19 @@ public sealed class ProjectEnvironment
             return failure;
         }
 
-        var settings = change.ApplyTo(flag.Settings);
+        if (!change.ApplyTo(flag.Settings).TryGetValue(out var settings, out var invalid))
+        {
+            return invalid;
+        }
+
         if (settings == flag.Settings)
         {
             return flag;
+        }
+
+        if (JsonBytes - JsonBytesOf(flag.Settings) + JsonBytesOf(settings) > MaxJsonBytes)
+        {
+            return AuthoringFailures.JsonBudgetReached;
         }
 
         DraftRevision++;
@@ -183,6 +200,11 @@ public sealed class ProjectEnvironment
         CurrentVersion = rollback.Version;
         return rollback;
     }
+
+    /// <summary>Os bytes de valores JSON do rascunho; o lock do ambiente na edição impede que dois editores passem juntos do teto.</summary>
+    private int JsonBytes => _flags.Sum(flag => JsonBytesOf(flag.Settings));
+
+    private static int JsonBytesOf(FlagSettings settings) => settings.Values is JsonValues json ? json.ByteCount : 0;
 
     private Result<DraftFlag> FindFlag(FlagKey key, long expectedRevision)
     {

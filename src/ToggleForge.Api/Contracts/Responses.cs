@@ -37,7 +37,8 @@ internal sealed record ProjectListResponse(IReadOnlyList<ProjectResponse> Data);
 internal sealed record FlagResponse(string Key, bool Enabled, bool OnValue, bool OffValue, int RolloutBasisPoints)
 {
     public static FlagResponse Of(FlagKey key, FlagSettings settings) =>
-        new(key.Value, settings.IsEnabled, settings.OnValue, settings.OffValue, settings.Rollout.BasisPoints);
+        // Temporário: só flags booleanas são criadas pela API até a Tarefa 9, que devolve os valores como JSON.
+        new(key.Value, settings.IsEnabled, ((BooleanValues)settings.Values).On, ((BooleanValues)settings.Values).Off, settings.Rollout.BasisPoints);
 }
 
 internal sealed record DraftChangeResponse(string FlagKey, string Change);
@@ -136,8 +137,9 @@ internal sealed record SnapshotResponse(
             view.Flags.Select(flag => new SnapshotFlagResponse(
                 flag.Key.Value,
                 flag.Settings.IsEnabled,
-                flag.Settings.OnValue,
-                flag.Settings.OffValue,
+                // Temporário até a Tarefa 9, pelo mesmo motivo de FlagResponse.Of.
+                ((BooleanValues)flag.Settings.Values).On,
+                ((BooleanValues)flag.Settings.Values).Off,
                 flag.Settings.Rollout.BasisPoints,
                 flag.Seed.Value)).ToList());
 }
@@ -151,7 +153,8 @@ internal static class SimulationSources
 internal sealed record SimulationResultResponse(string FlagKey, bool Value, string Reason, int? Bucket)
 {
     public static SimulationResultResponse Of(SimulationResultView view) =>
-        new(view.FlagKey.Value, view.Value, ReasonOf(view.Reason), view.Bucket);
+        // Temporário até a Tarefa 9: só flags booleanas chegam aqui, então o texto é sempre true ou false.
+        new(view.FlagKey.Value, bool.Parse(view.Value), ReasonOf(view.Reason), view.Bucket);
 
     /// <summary>A simulação sempre tem jogador e só avalia flags que existem: os outros motivos não ocorrem.</summary>
     private static string ReasonOf(EvaluationReason reason) =>

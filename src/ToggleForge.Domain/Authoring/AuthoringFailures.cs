@@ -20,6 +20,15 @@ public static class AuthoringFailures
     public static Failure FlagLimitReached { get; } =
         new(FailureKind.Conflict, "limit-reached", $"A draft can have at most {ProjectEnvironment.MaxFlags} flags.");
 
+    public static Failure OnValueNotOfFlagType { get; } =
+        new(FailureKind.InvalidValue, "value-not-of-flag-type", "The on value of a boolean flag must be true or false.");
+
+    public static Failure OffValueNotOfFlagType { get; } =
+        new(FailureKind.InvalidValue, "value-not-of-flag-type", "The off value of a boolean flag must be true or false.");
+
+    public static Failure JsonBudgetReached { get; } =
+        new(FailureKind.Conflict, "limit-reached", $"A draft can hold at most {ProjectEnvironment.MaxJsonBytes / 1024} KiB of json values.");
+
     public static Failure FlagNotFound { get; } =
         new(FailureKind.NotFound, "not-found", "The draft has no flag with this key.");
 

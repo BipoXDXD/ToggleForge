@@ -233,12 +233,14 @@ namespace ToggleForge.Infrastructure.Authoring.Migrations
                                 .HasColumnType("boolean")
                                 .HasColumnName("is_enabled");
 
-                            b1.Property<bool>("OffValue")
-                                .HasColumnType("boolean")
+                            b1.Property<string>("OffValue")
+                                .IsRequired()
+                                .HasColumnType("json")
                                 .HasColumnName("off_value");
 
-                            b1.Property<bool>("OnValue")
-                                .HasColumnType("boolean")
+                            b1.Property<string>("OnValue")
+                                .IsRequired()
+                                .HasColumnType("json")
                                 .HasColumnName("on_value");
 
                             b1.Property<int>("Rollout")
@@ -250,14 +252,23 @@ namespace ToggleForge.Infrastructure.Authoring.Migrations
                                 .HasColumnType("text")
                                 .HasColumnName("seed");
 
+                            b1.Property<string>("Type")
+                                .IsRequired()
+                                .HasColumnType("text")
+                                .HasColumnName("type");
+
                             b1.HasKey("EnvironmentId", "Key")
                                 .HasName("pk_draft_flags");
 
                             b1.ToTable("draft_flags", "authoring", t =>
                                 {
+                                    t.HasCheckConstraint("ck_draft_flags_boolean_values", "type <> 'boolean' or (json_typeof(on_value) = 'boolean' and json_typeof(off_value) = 'boolean')");
+
                                     t.HasCheckConstraint("ck_draft_flags_key", "key ~ '^[a-z0-9][a-z0-9._-]{0,63}$'");
 
                                     t.HasCheckConstraint("ck_draft_flags_rollout", "rollout between 0 and 10000");
+
+                                    t.HasCheckConstraint("ck_draft_flags_type", "type in ('boolean', 'json')");
                                 });
 
                             b1.WithOwner()
@@ -295,12 +306,14 @@ namespace ToggleForge.Infrastructure.Authoring.Migrations
                                 .HasColumnType("boolean")
                                 .HasColumnName("is_enabled");
 
-                            b1.Property<bool>("OffValue")
-                                .HasColumnType("boolean")
+                            b1.Property<string>("OffValue")
+                                .IsRequired()
+                                .HasColumnType("json")
                                 .HasColumnName("off_value");
 
-                            b1.Property<bool>("OnValue")
-                                .HasColumnType("boolean")
+                            b1.Property<string>("OnValue")
+                                .IsRequired()
+                                .HasColumnType("json")
                                 .HasColumnName("on_value");
 
                             b1.Property<int>("RolloutBasisPoints")
@@ -312,14 +325,23 @@ namespace ToggleForge.Infrastructure.Authoring.Migrations
                                 .HasColumnType("text")
                                 .HasColumnName("seed");
 
+                            b1.Property<string>("Type")
+                                .IsRequired()
+                                .HasColumnType("text")
+                                .HasColumnName("type");
+
                             b1.HasKey("EnvironmentId", "Version", "Key")
                                 .HasName("pk_publication_flags");
 
                             b1.ToTable("publication_flags", "authoring", t =>
                                 {
+                                    t.HasCheckConstraint("ck_publication_flags_boolean_values", "type <> 'boolean' or (json_typeof(on_value) = 'boolean' and json_typeof(off_value) = 'boolean')");
+
                                     t.HasCheckConstraint("ck_publication_flags_key", "key ~ '^[a-z0-9][a-z0-9._-]{0,63}$'");
 
                                     t.HasCheckConstraint("ck_publication_flags_rollout", "rollout_basis_points between 0 and 10000");
+
+                                    t.HasCheckConstraint("ck_publication_flags_type", "type in ('boolean', 'json')");
                                 });
 
                             b1.WithOwner()

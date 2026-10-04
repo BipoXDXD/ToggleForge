@@ -71,13 +71,16 @@ internal sealed class AuthoringDbContext(DbContextOptions<AuthoringDbContext> op
                 {
                     table.HasCheckConstraint("ck_draft_flags_key", SqlChecks.Key("key"));
                     table.HasCheckConstraint("ck_draft_flags_rollout", SqlChecks.BasisPoints("rollout"));
+                    table.HasCheckConstraint("ck_draft_flags_type", SqlChecks.FlagType("type"));
+                    table.HasCheckConstraint("ck_draft_flags_boolean_values", SqlChecks.BooleanValues("type", "on_value", "off_value"));
                 });
                 flag.WithOwner().HasForeignKey("EnvironmentId");
                 flag.HasKey("EnvironmentId", nameof(DraftFlag.Key));
                 flag.Property(f => f.Key).HasConversion(ValueConverters.FlagKey);
                 flag.Property(f => f.IsEnabled);
-                flag.Property(f => f.OnValue);
-                flag.Property(f => f.OffValue);
+                flag.Property(f => f.Type).HasConversion(ValueConverters.FlagType);
+                flag.Property(f => f.OnValue).HasConversion(ValueConverters.JsonFlagValue).HasColumnType("json");
+                flag.Property(f => f.OffValue).HasConversion(ValueConverters.JsonFlagValue).HasColumnType("json");
                 flag.Property(f => f.Rollout).HasConversion(ValueConverters.RolloutPercentage);
                 flag.Property(f => f.Seed).HasConversion(ValueConverters.RolloutSeed);
                 flag.Property(f => f.ChangedAtRevision);
@@ -105,9 +108,14 @@ internal sealed class AuthoringDbContext(DbContextOptions<AuthoringDbContext> op
                 {
                     table.HasCheckConstraint("ck_publication_flags_key", SqlChecks.Key("key"));
                     table.HasCheckConstraint("ck_publication_flags_rollout", SqlChecks.BasisPoints("rollout_basis_points"));
+                    table.HasCheckConstraint("ck_publication_flags_type", SqlChecks.FlagType("type"));
+                    table.HasCheckConstraint("ck_publication_flags_boolean_values", SqlChecks.BooleanValues("type", "on_value", "off_value"));
                 });
                 flag.WithOwner().HasForeignKey("EnvironmentId", "Version");
                 flag.HasKey("EnvironmentId", "Version", nameof(PublicationFlagRow.Key));
+                flag.Property(f => f.Type).HasConversion(ValueConverters.FlagType);
+                flag.Property(f => f.OnValue).HasConversion(ValueConverters.JsonFlagValue).HasColumnType("json");
+                flag.Property(f => f.OffValue).HasConversion(ValueConverters.JsonFlagValue).HasColumnType("json");
             });
         });
 

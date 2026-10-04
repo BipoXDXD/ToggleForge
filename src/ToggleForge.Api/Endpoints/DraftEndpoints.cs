@@ -74,7 +74,7 @@ internal static class DraftEndpoints
         errors.Require(request.OffValue, "/offValue");
         var rollout = Rollout(request.RolloutBasisPoints, errors);
         return request is { Enabled: { } enabled, OnValue: { } onValue, OffValue: { } offValue } && rollout is not null
-            ? new FlagSettings(enabled, onValue, offValue, rollout)
+            ? new FlagSettings(enabled, new BooleanValues(onValue, offValue), rollout)
             : null;
     }
 
