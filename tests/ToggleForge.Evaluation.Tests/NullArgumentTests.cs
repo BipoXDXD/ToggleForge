@@ -10,7 +10,7 @@ public sealed class NullArgumentTests
 
     private static EnvironmentKey Environment => NewShopFlag.Environment;
 
-    private static FlagKey Flag => NewShopFlag.Key;
+    private static FlagKey Key => NewShopFlag.Key;
 
     private static RolloutSeed Seed => NewShopFlag.Seed;
 
@@ -21,8 +21,8 @@ public sealed class NullArgumentTests
     [Fact]
     public void FlagIdentity_rejects_null_keys()
     {
-        AssertNullRejected("projectKey", () => new FlagIdentity(null!, Environment, Flag));
-        AssertNullRejected("environmentKey", () => new FlagIdentity(Project, null!, Flag));
+        AssertNullRejected("projectKey", () => new FlagIdentity(null!, Environment, Key));
+        AssertNullRejected("environmentKey", () => new FlagIdentity(Project, null!, Key));
         AssertNullRejected("flagKey", () => new FlagIdentity(Project, Environment, null!));
     }
 
@@ -49,7 +49,7 @@ public sealed class NullArgumentTests
     [Fact]
     public void BooleanFlag_Evaluate_rejects_null_keys_and_context()
     {
-        var flag = new BooleanFlag(Flag, isEnabled: true, onValue: true, offValue: false, Rollout);
+        var flag = new BooleanFlag(Key, isEnabled: true, onValue: true, offValue: false, Rollout);
         var player = EvaluationContext.ForPlayer(PlayerId.Parse("player"));
 
         AssertNullRejected("projectKey", () => flag.Evaluate(null!, Environment, player, defaultValue: false));
@@ -88,22 +88,22 @@ public sealed class NullArgumentTests
     public void BooleanFlag_rejects_null_key_and_targeting()
     {
         AssertNullRejected("key", () => new BooleanFlag(null!, true, true, false, Rollout));
-        AssertNullRejected("targeting", () => new BooleanFlag(Flag, true, true, false, null!));
+        AssertNullRejected("targeting", () => new BooleanFlag(Key, true, true, false, null!));
     }
 
     [Fact]
     public void JsonFlag_rejects_null_key_values_and_targeting()
     {
         AssertNullRejected("key", () => new JsonFlag(null!, true, "{}", "{}", Rollout));
-        AssertNullRejected("onValue", () => new JsonFlag(Flag, true, null!, "{}", Rollout));
-        AssertNullRejected("offValue", () => new JsonFlag(Flag, true, "{}", null!, Rollout));
-        AssertNullRejected("targeting", () => new JsonFlag(Flag, true, "{}", "{}", null!));
+        AssertNullRejected("onValue", () => new JsonFlag(Key, true, null!, "{}", Rollout));
+        AssertNullRejected("offValue", () => new JsonFlag(Key, true, "{}", null!, Rollout));
+        AssertNullRejected("targeting", () => new JsonFlag(Key, true, "{}", "{}", null!));
     }
 
     [Fact]
     public void JsonFlag_Evaluate_rejects_null_keys_context_and_parser()
     {
-        var flag = new JsonFlag(Flag, isEnabled: true, onValue: "{}", offValue: "{}", Rollout);
+        var flag = new JsonFlag(Key, isEnabled: true, onValue: "{}", offValue: "{}", Rollout);
         var player = EvaluationContext.ForPlayer(PlayerId.Parse("player"));
 
         AssertNullRejected("projectKey", () => flag.Evaluate(null!, Environment, player, "", json => json));

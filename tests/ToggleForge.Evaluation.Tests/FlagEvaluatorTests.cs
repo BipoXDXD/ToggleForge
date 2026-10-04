@@ -23,7 +23,7 @@ public sealed class FlagEvaluatorTests
     [InlineData("New Shop")]
     public void Invalid_flag_key_returns_the_default_value(string? flagKey)
     {
-        var snapshot = SnapshotWith(Flag("new-shop", enabled: true, RolloutPercentage.All));
+        var snapshot = SnapshotWith(BooleanFlagWith("new-shop", enabled: true, RolloutPercentage.All));
 
         var result = _evaluator.EvaluateBoolean(snapshot, flagKey, ReferencePlayer(), defaultValue: true);
 
@@ -34,7 +34,7 @@ public sealed class FlagEvaluatorTests
     [Fact]
     public void Unknown_flag_returns_the_default_value()
     {
-        var snapshot = SnapshotWith(Flag("new-shop", enabled: true, RolloutPercentage.All));
+        var snapshot = SnapshotWith(BooleanFlagWith("new-shop", enabled: true, RolloutPercentage.All));
 
         var result = _evaluator.EvaluateBoolean(snapshot, "battle-pass", ReferencePlayer(), defaultValue: true);
 
@@ -45,7 +45,7 @@ public sealed class FlagEvaluatorTests
     [Fact]
     public void Disabled_flag_returns_the_off_value_even_at_full_rollout()
     {
-        var snapshot = SnapshotWith(Flag("new-shop", enabled: false, RolloutPercentage.All));
+        var snapshot = SnapshotWith(BooleanFlagWith("new-shop", enabled: false, RolloutPercentage.All));
 
         var result = _evaluator.EvaluateBoolean(snapshot, "new-shop", ReferencePlayer(), defaultValue: true);
 
@@ -56,7 +56,7 @@ public sealed class FlagEvaluatorTests
     [Fact]
     public void Partial_rollout_without_player_id_returns_the_default_value()
     {
-        var snapshot = SnapshotWith(Flag("new-shop", enabled: true, RolloutPercentage.FromPercent(10m)));
+        var snapshot = SnapshotWith(BooleanFlagWith("new-shop", enabled: true, RolloutPercentage.FromPercent(10m)));
 
         var result = _evaluator.EvaluateBoolean(snapshot, "new-shop", EvaluationContext.Anonymous, defaultValue: true);
 
@@ -70,7 +70,7 @@ public sealed class FlagEvaluatorTests
     public void Enabled_flag_returns_on_value_to_included_players_and_off_value_to_the_rest(
         int basisPoints, bool expectedValue, EvaluationReason expectedReason)
     {
-        var snapshot = SnapshotWith(Flag("new-shop", enabled: true, RolloutPercentage.FromBasisPoints(basisPoints)));
+        var snapshot = SnapshotWith(BooleanFlagWith("new-shop", enabled: true, RolloutPercentage.FromBasisPoints(basisPoints)));
 
         var result = _evaluator.EvaluateBoolean(snapshot, "new-shop", ReferencePlayer(), defaultValue: false);
 
@@ -99,7 +99,7 @@ public sealed class FlagEvaluatorTests
     [Fact]
     public void A_partial_rollout_result_carries_the_player_bucket()
     {
-        var snapshot = SnapshotWith(Flag("new-shop", enabled: true, RolloutPercentage.FromPercent(50m)));
+        var snapshot = SnapshotWith(BooleanFlagWith("new-shop", enabled: true, RolloutPercentage.FromPercent(50m)));
 
         var result = _evaluator.EvaluateBoolean(snapshot, "new-shop", ReferencePlayer(), defaultValue: false);
 
@@ -113,7 +113,7 @@ public sealed class FlagEvaluatorTests
     [InlineData("battle-pass", true, 5_000)]
     public void A_result_that_does_not_depend_on_the_player_has_no_bucket(string flagKey, bool enabled, int basisPoints)
     {
-        var snapshot = SnapshotWith(Flag("new-shop", enabled, RolloutPercentage.FromBasisPoints(basisPoints)));
+        var snapshot = SnapshotWith(BooleanFlagWith("new-shop", enabled, RolloutPercentage.FromBasisPoints(basisPoints)));
 
         var result = _evaluator.EvaluateBoolean(snapshot, flagKey, ReferencePlayer(), defaultValue: false);
 
@@ -168,7 +168,7 @@ public sealed class FlagEvaluatorTests
     public void EvaluateJson_falls_back_without_calling_the_parser_when_no_json_flag_answers(
         string flagKey, EvaluationReason expectedReason)
     {
-        var snapshot = SnapshotWith(ShopConfig(), Flag("new-shop", enabled: true, RolloutPercentage.All));
+        var snapshot = SnapshotWith(ShopConfig(), BooleanFlagWith("new-shop", enabled: true, RolloutPercentage.All));
         var calls = 0;
 
         var result = _evaluator.EvaluateJson(snapshot, flagKey, ReferencePlayer(), "game-default", json => { calls++; return json; });
@@ -186,7 +186,7 @@ public sealed class FlagEvaluatorTests
         Assert.Equal(expectedVersion, result.SnapshotVersion);
     }
 
-    private static BooleanFlag Flag(string key, bool enabled, RolloutPercentage percentage) =>
+    private static BooleanFlag BooleanFlagWith(string key, bool enabled, RolloutPercentage percentage) =>
         new(
             FlagKey.Parse(key),
             enabled,
