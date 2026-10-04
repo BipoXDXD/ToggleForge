@@ -105,6 +105,33 @@ public sealed class ConsoleContrastTests(ApiFactory api, Browser browser) : ICla
     }
 
     /// <summary>
+    /// A dica de cada cartão de tipo é texto de 12 px: precisa de 4,5:1 sobre o branco do cartão livre e sobre o
+    /// indigo translúcido do cartão escolhido, que se compõe com o fundo da página.
+    /// </summary>
+    [Theory]
+    [InlineData("Boolean")]
+    [InlineData("JSON")]
+    public async Task The_hints_of_the_type_cards_meet_text_contrast_with_either_type_chosen(string chosenType)
+    {
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        Assert.Equal(HttpStatusCode.Created, (await owner.CreateProjectAsync("space-race")).Status);
+        await using var context = await browser.NewContextAsync(Host.Address);
+        var page = await context.NewPageAsync();
+        var hints = page.Locator("label:has(input[name=flag-type]) > span > span:nth-child(2)");
+
+        await ConsolePages.OpenDraftAsync(page, owner);
+        await page.GetByRole(AriaRole.Radio, new() { Name = chosenType }).CheckAsync();
+        await Expect(hints).ToHaveCountAsync(2);
+        var ratios = new List<(string Hint, double Ratio)>();
+        foreach (var hint in await hints.AllAsync())
+        {
+            ratios.Add((await hint.TextContentAsync() ?? "", await ContrastProbe.TextRatioAsync(hint)));
+        }
+
+        Assert.All(ratios, measured => Assert.True(measured.Ratio >= TextMinimum, $"{measured.Hint}: {measured.Ratio:F2}:1"));
+    }
+
+    /// <summary>
     /// O rádio esconde o próprio contorno, e o cartão inteiro mostra o foco, só quando ele vem do teclado: o cartão
     /// clicado com o mouse fica com o foco e sem contorno (A10, F7).
     /// </summary>
