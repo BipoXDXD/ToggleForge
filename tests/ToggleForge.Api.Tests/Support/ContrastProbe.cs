@@ -26,8 +26,9 @@ public static class ContrastProbe
             context.fillStyle = '#000';
             context.fillStyle = color;
             context.fillRect(0, 0, 1, 1);
+            // O ImageData vem sem pré-multiplicação: os canais já são a cor, e o alfa entra só na composição.
             const [r, g, b, a] = context.getImageData(0, 0, 1, 1).data;
-            return a === 0 ? [0, 0, 0, 0] : [r * 255 / a, g * 255 / a, b * 255 / a, a / 255];
+            return [r, g, b, a / 255];
           };
           const over = (top, bottom) => [0, 1, 2].map(i => top[i] * top[3] + bottom[i] * (1 - top[3])).concat(1);
           const background = element => {
