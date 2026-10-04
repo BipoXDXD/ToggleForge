@@ -5,7 +5,7 @@ namespace ToggleForge.Console.Tests;
 
 public sealed class FlagEditTests
 {
-    private static readonly Flag _original = new("new-shop", Enabled: true, OnValue: true, OffValue: false, RolloutBasisPoints: 1_250);
+    private static readonly Flag _original = new("new-shop", Enabled: true, OnValue: FlagValue.True, OffValue: FlagValue.False, RolloutBasisPoints: 1_250);
 
     [Fact]
     public void The_form_starts_with_the_values_read()
@@ -36,7 +36,7 @@ public sealed class FlagEditTests
 
         edit.TryGetChanges(_original, out var changes);
 
-        Assert.Equal(new FlagModification(OffValue: true, RolloutBasisPoints: 5_000), changes);
+        Assert.Equal(new FlagModification(OffValue: FlagValue.True, RolloutBasisPoints: 5_000), changes);
     }
 
     [Theory]
@@ -51,7 +51,7 @@ public sealed class FlagEditTests
 
         edit.TryGetChanges(_original, out var changes);
 
-        Assert.Equal(new FlagModification(Enabled: enabledSent, OnValue: onValueSent, OffValue: offValueSent), changes);
+        Assert.Equal(new FlagModification(Enabled: enabledSent, OnValue: ValueOf(onValueSent), OffValue: ValueOf(offValueSent)), changes);
     }
 
     [Theory]
@@ -64,4 +64,6 @@ public sealed class FlagEditTests
 
         Assert.False(edit.TryGetChanges(_original, out _));
     }
+
+    private static FlagValue? ValueOf(bool? value) => value is { } sent ? FlagValue.Of(sent) : null;
 }

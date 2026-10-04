@@ -37,9 +37,9 @@ else if (Session.MembershipIn(OrganizationId) is not { CanEditDrafts: true })
         <dt class="text-slate-500">Rollout</dt>
         <dd>@RolloutShare.Format(_flag.Value.RolloutBasisPoints)</dd>
         <dt class="text-slate-500">Value for included players</dt>
-        <dd>@BooleanText(_flag.Value.OnValue)</dd>
+        <dd>@_flag.Value.OnValue.Text</dd>
         <dt class="text-slate-500">Value for everyone else</dt>
-        <dd>@BooleanText(_flag.Value.OffValue)</dd>
+        <dd>@_flag.Value.OffValue.Text</dd>
     </dl>
 }
 else

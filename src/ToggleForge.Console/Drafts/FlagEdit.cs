@@ -17,8 +17,8 @@ public sealed class FlagEdit
     {
         Enabled = flag.Enabled,
         RolloutPercent = RolloutShare.ToPercent(flag.RolloutBasisPoints),
-        OnValue = flag.OnValue,
-        OffValue = flag.OffValue,
+        OnValue = flag.OnValue == FlagValue.True,
+        OffValue = flag.OffValue == FlagValue.True,
     };
 
     /// <param name="original">A flag como foi lida da API.</param>
@@ -34,8 +34,8 @@ public sealed class FlagEdit
 
         changes = new FlagModification(
             Enabled: Changed(original.Enabled, Enabled),
-            OnValue: Changed(original.OnValue, OnValue),
-            OffValue: Changed(original.OffValue, OffValue),
+            OnValue: ChangedValue(original.OnValue, FlagValue.Of(OnValue)),
+            OffValue: ChangedValue(original.OffValue, FlagValue.Of(OffValue)),
             RolloutBasisPoints: Changed(original.RolloutBasisPoints, basisPoints));
         return true;
     }
@@ -43,4 +43,6 @@ public sealed class FlagEdit
     private static T? Changed<T>(T original, T edited)
         where T : struct =>
         EqualityComparer<T>.Default.Equals(original, edited) ? null : edited;
+
+    private static FlagValue? ChangedValue(FlagValue original, FlagValue edited) => original == edited ? null : edited;
 }

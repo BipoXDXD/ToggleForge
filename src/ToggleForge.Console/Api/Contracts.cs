@@ -31,7 +31,7 @@ public sealed record DraftChange(string FlagKey, string Change);
 
 /// <param name="OnValue">O valor de quem cai no rollout.</param>
 /// <param name="OffValue">O valor de quem fica fora e de todos quando a flag está desligada.</param>
-public sealed record Flag(string Key, bool Enabled, bool OnValue, bool OffValue, int RolloutBasisPoints);
+public sealed record Flag(string Key, bool Enabled, FlagValue OnValue, FlagValue OffValue, int RolloutBasisPoints);
 
 /// <summary>Um ambiente de um projeto da organização.</summary>
 public sealed record EnvironmentAddress(Guid OrganizationId, string ProjectKey, string EnvironmentKey);
@@ -43,7 +43,7 @@ public sealed record Credentials(string Email, string Password);
 
 public sealed record ProjectCreation(string Key, string Name);
 
-public sealed record FlagCreation(string Key, bool Enabled, bool OnValue, bool OffValue, int RolloutBasisPoints);
+public sealed record FlagCreation(string Key, bool Enabled, FlagValue OnValue, FlagValue OffValue, int RolloutBasisPoints);
 
 /// <param name="DraftRevision">A revisão que o membro revisou; se o rascunho mudou depois, a API recusa.</param>
 /// <param name="Summary">Opcional; a API recusa texto vazio, então ausente vai como nulo e fica fora do JSON.</param>
@@ -88,10 +88,12 @@ public sealed record Simulation(long? Version, IReadOnlyList<SimulationResult> R
 
 /// <param name="Reason"><c>disabled</c>, <c>included</c> ou <c>excluded</c>; a lista pode crescer.</param>
 /// <param name="Bucket">O bucket do jogador (0 a 9999); nulo quando o resultado não dependeu dele.</param>
-public sealed record SimulationResult(string FlagKey, bool Value, string Reason, int? Bucket);
+public sealed record SimulationResult(string FlagKey, FlagValue Value, string Reason, int? Bucket);
 
 /// <summary>Merge patch: só os campos que mudaram vão para a API, e campo nulo nem é enviado.</summary>
-public sealed record FlagModification(bool? Enabled = null, bool? OnValue = null, bool? OffValue = null, int? RolloutBasisPoints = null)
+/// <remarks>O JSON null de um valor é <see cref="FlagValue.Null"/>, não a referência nula; a API o recusa aqui.</remarks>
+public sealed record FlagModification(
+    bool? Enabled = null, FlagValue? OnValue = null, FlagValue? OffValue = null, int? RolloutBasisPoints = null)
 {
     // Não vai no corpo: a API recusa campo que não conhece (proteção contra mass assignment).
     [JsonIgnore]
