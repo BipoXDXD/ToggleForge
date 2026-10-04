@@ -14,5 +14,12 @@ public interface IPublicationRepository
     Task<IReadOnlyDictionary<Guid, Publication>> FindCurrentByEnvironmentAsync(
         IReadOnlyCollection<Guid> projectIds, CancellationToken cancellationToken);
 
-    void Add(Publication publication);
+    /// <summary>O tipo de cada chave já publicada no ambiente, inclusive as que saíram do rascunho.</summary>
+    Task<PublishedFlagTypes> FindPublishedTypesAsync(Guid environmentId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Grava a publicação e trava o tipo das chaves que ela publica pela primeira vez, fora de
+    /// <paramref name="alreadyPublished"/>. O banco recusa uma chave com tipo diferente do travado.
+    /// </summary>
+    void Add(Publication publication, PublishedFlagTypes alreadyPublished);
 }

@@ -1,8 +1,8 @@
 namespace ToggleForge.Domain.Authoring;
 
 /// <summary>
-/// Escolhido na criação e fixo enquanto a flag existe. A chave pode voltar com o outro tipo depois de apagada, ou por
-/// rollback; o build antigo que a lê com a classe de antes recebe <c>TypeMismatch</c> e fica no default (ADR 0011).
+/// Escolhido na criação e fixo enquanto a flag existe. Depois de publicada num ambiente, a chave mantém o tipo em toda
+/// publicação seguinte ali, mesmo apagada e recriada ou por rollback (<see cref="PublishedFlagTypes"/>, ADR 0011).
 /// </summary>
 public enum FlagType
 {

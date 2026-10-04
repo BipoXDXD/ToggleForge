@@ -56,9 +56,24 @@ internal sealed class PublicationRepository(AuthoringDbContext context) : IPubli
         return rows.ToDictionary(row => row.EnvironmentId, ToDomain);
     }
 
-    public void Add(Publication publication)
+    public async Task<PublishedFlagTypes> FindPublishedTypesAsync(Guid environmentId, CancellationToken cancellationToken)
+    {
+        var rows = await context.PublishedFlagTypes
+            .AsNoTracking()
+            .Where(t => t.EnvironmentId == environmentId)
+            .Select(t => new { t.Key, t.Type })
+            .ToListAsync(cancellationToken);
+        return new PublishedFlagTypes(rows.Select(row => KeyValuePair.Create(ValueConverters.ParseFlagKey(row.Key), row.Type)));
+    }
+
+    public void Add(Publication publication, PublishedFlagTypes alreadyPublished)
     {
         ArgumentNullException.ThrowIfNull(publication);
+        ArgumentNullException.ThrowIfNull(alreadyPublished);
+
+        context.PublishedFlagTypes.AddRange(publication.Flags
+            .Where(flag => !alreadyPublished.Contains(flag.Key))
+            .Select(flag => new PublishedFlagTypeRow { EnvironmentId = publication.EnvironmentId, Key = flag.Key.Value, Type = flag.Settings.Type }));
 
         context.Publications.Add(new PublicationRow
         {

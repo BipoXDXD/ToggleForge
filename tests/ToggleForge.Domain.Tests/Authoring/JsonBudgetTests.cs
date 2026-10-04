@@ -20,7 +20,7 @@ public sealed class JsonBudgetTests
 
         for (var flag = 1; flag <= FlagsThatFillTheBudget; flag++)
         {
-            Assert.True(environment.AddFlag(FlagKey.Parse($"config-{flag}"), FullJsonSettings(), RolloutSeed.Parse("s1")).TryGetValue(out _, out _));
+            Assert.True(environment.AddFlag(FlagKey.Parse($"config-{flag}"), FullJsonSettings(), RolloutSeed.Parse("s1"), PublishedFlagTypes.None).TryGetValue(out _, out _));
         }
     }
 
@@ -31,7 +31,7 @@ public sealed class JsonBudgetTests
         var revision = environment.DraftRevision;
 
         // A menor flag JSON tem 2 bytes: "0" de cada lado.
-        var added = environment.AddFlag(FlagKey.Parse("one-more"), JsonSettings("0", "0"), RolloutSeed.Parse("s1"));
+        var added = environment.AddFlag(FlagKey.Parse("one-more"), JsonSettings("0", "0"), RolloutSeed.Parse("s1"), PublishedFlagTypes.None);
 
         Assert.False(added.TryGetValue(out _, out var failure));
         Assert.Equal(AuthoringFailures.JsonBudgetReached, failure);
@@ -40,7 +40,7 @@ public sealed class JsonBudgetTests
 
     [Fact]
     public void Boolean_flags_do_not_count_toward_the_budget() =>
-        Assert.True(FullEnvironment().AddFlag(FlagKey.Parse("new-shop"), Flags.Settings(), RolloutSeed.Parse("s1")).TryGetValue(out _, out _));
+        Assert.True(FullEnvironment().AddFlag(FlagKey.Parse("new-shop"), Flags.Settings(), RolloutSeed.Parse("s1"), PublishedFlagTypes.None).TryGetValue(out _, out _));
 
     [Fact]
     public void A_change_that_grows_a_value_one_byte_past_the_budget_is_refused_and_keeps_the_flag()
@@ -87,7 +87,7 @@ public sealed class JsonBudgetTests
         var environment = Flags.NewEnvironment();
         for (var flag = 1; flag <= FlagsThatFillTheBudget; flag++)
         {
-            environment.AddFlag(FlagKey.Parse($"config-{flag}"), FullJsonSettings(), RolloutSeed.Parse("s1"));
+            environment.AddFlag(FlagKey.Parse($"config-{flag}"), FullJsonSettings(), RolloutSeed.Parse("s1"), PublishedFlagTypes.None);
         }
 
         return environment;
@@ -99,11 +99,11 @@ public sealed class JsonBudgetTests
         var environment = Flags.NewEnvironment();
         for (var flag = 1; flag < FlagsThatFillTheBudget; flag++)
         {
-            environment.AddFlag(FlagKey.Parse($"config-{flag}"), FullJsonSettings(), RolloutSeed.Parse("s1"));
+            environment.AddFlag(FlagKey.Parse($"config-{flag}"), FullJsonSettings(), RolloutSeed.Parse("s1"), PublishedFlagTypes.None);
         }
 
-        environment.AddFlag(_growing, JsonSettings(_full, "0"), RolloutSeed.Parse("s1"));
-        environment.AddFlag(FlagKey.Parse("tiny"), JsonSettings("0", "0"), RolloutSeed.Parse("s1"));
+        environment.AddFlag(_growing, JsonSettings(_full, "0"), RolloutSeed.Parse("s1"), PublishedFlagTypes.None);
+        environment.AddFlag(FlagKey.Parse("tiny"), JsonSettings("0", "0"), RolloutSeed.Parse("s1"), PublishedFlagTypes.None);
         return environment;
     }
 

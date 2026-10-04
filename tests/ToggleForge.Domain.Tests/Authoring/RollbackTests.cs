@@ -47,7 +47,7 @@ public sealed class RollbackTests
         Flags.Add(environment, "new-shop");
         var first = Publish(environment, current: null);
         Remove(environment, "new-shop");
-        Assert.True(environment.AddFlag(FlagKey.Parse("new-shop"), Flags.Settings(), RolloutSeed.Parse("seed-recreated")).TryGetValue(out _, out _));
+        Assert.True(environment.AddFlag(FlagKey.Parse("new-shop"), Flags.Settings(), RolloutSeed.Parse("seed-recreated"), PublishedFlagTypes.None).TryGetValue(out _, out _));
         var second = Publish(environment, first);
 
         RollBack(environment, first, second);
@@ -61,7 +61,7 @@ public sealed class RollbackTests
         var (environment, _, second) = TwoPublications();
         var revisionBefore = environment.DraftRevision;
 
-        var rolledBack = environment.RollBack(target: null, expectedCurrentVersion: 2, discardDraftChanges: false, _editor, _now, second);
+        var rolledBack = environment.RollBack(target: null, expectedCurrentVersion: 2, discardDraftChanges: false, _editor, _now, second, PublishedFlagTypes.None);
 
         AssertFails(AuthoringFailures.RollbackTargetNotFound, rolledBack);
         Assert.Equal(2, environment.CurrentVersion);
@@ -75,7 +75,7 @@ public sealed class RollbackTests
     {
         var (environment, first, second) = TwoPublications();
 
-        var rolledBack = environment.RollBack(first, expectedCurrentVersion, discardDraftChanges: false, _editor, _now, second);
+        var rolledBack = environment.RollBack(first, expectedCurrentVersion, discardDraftChanges: false, _editor, _now, second, PublishedFlagTypes.None);
 
         AssertFails(AuthoringFailures.CurrentVersionChanged, rolledBack);
         Assert.Equal(2, environment.CurrentVersion);
@@ -86,7 +86,7 @@ public sealed class RollbackTests
     {
         var (environment, _, second) = TwoPublications();
 
-        var rolledBack = environment.RollBack(second, expectedCurrentVersion: 2, discardDraftChanges: false, _editor, _now, second);
+        var rolledBack = environment.RollBack(second, expectedCurrentVersion: 2, discardDraftChanges: false, _editor, _now, second, PublishedFlagTypes.None);
 
         AssertFails(AuthoringFailures.AlreadyCurrent, rolledBack);
     }
@@ -97,7 +97,7 @@ public sealed class RollbackTests
         var (environment, first, second) = TwoPublications();
         var third = RollBack(environment, first, second);
 
-        var rolledBack = environment.RollBack(first, expectedCurrentVersion: 3, discardDraftChanges: false, _editor, _now, third);
+        var rolledBack = environment.RollBack(first, expectedCurrentVersion: 3, discardDraftChanges: false, _editor, _now, third, PublishedFlagTypes.None);
 
         AssertFails(AuthoringFailures.AlreadyCurrent, rolledBack);
         Assert.Equal(3, environment.CurrentVersion);
@@ -110,7 +110,7 @@ public sealed class RollbackTests
         Flags.Add(environment, "season-event");
         var revisionBefore = environment.DraftRevision;
 
-        var rolledBack = environment.RollBack(first, expectedCurrentVersion: 2, discardDraftChanges: false, _editor, _now, second);
+        var rolledBack = environment.RollBack(first, expectedCurrentVersion: 2, discardDraftChanges: false, _editor, _now, second, PublishedFlagTypes.None);
 
         AssertFails(AuthoringFailures.DraftHasPendingChanges, rolledBack);
         Assert.Equal(revisionBefore, environment.DraftRevision);
@@ -135,7 +135,7 @@ public sealed class RollbackTests
         var (environment, first, _) = TwoPublications();
 
         Assert.Throws<InvalidOperationException>(
-            () => environment.RollBack(first, expectedCurrentVersion: 2, discardDraftChanges: false, _editor, _now, first));
+            () => environment.RollBack(first, expectedCurrentVersion: 2, discardDraftChanges: false, _editor, _now, first, PublishedFlagTypes.None));
     }
 
     [Fact]
@@ -145,7 +145,7 @@ public sealed class RollbackTests
         var (_, otherFirst, _) = TwoPublications();
 
         Assert.Throws<InvalidOperationException>(
-            () => environment.RollBack(otherFirst, expectedCurrentVersion: 2, discardDraftChanges: false, _editor, _now, second));
+            () => environment.RollBack(otherFirst, expectedCurrentVersion: 2, discardDraftChanges: false, _editor, _now, second, PublishedFlagTypes.None));
     }
 
     /// <summary>Versão 1 com <c>new-shop</c> a 10%; versão 2 com o rollout em 50% e <c>battle-pass</c>.</summary>
@@ -165,14 +165,14 @@ public sealed class RollbackTests
     private static Publication RollBack(
         ProjectEnvironment environment, Publication target, Publication current, bool discardDraftChanges = false)
     {
-        var rolledBack = environment.RollBack(target, current.Version, discardDraftChanges, _editor, _now, current);
+        var rolledBack = environment.RollBack(target, current.Version, discardDraftChanges, _editor, _now, current, PublishedFlagTypes.None);
         Assert.True(rolledBack.TryGetValue(out var rollback, out var failure), failure?.Detail);
         return rollback;
     }
 
     private static Publication Publish(ProjectEnvironment environment, Publication? current)
     {
-        var published = environment.Publish(environment.DraftRevision, summary: null, _editor, _now, current);
+        var published = environment.Publish(environment.DraftRevision, summary: null, _editor, _now, current, PublishedFlagTypes.None);
         Assert.True(published.TryGetValue(out var publication, out var failure), failure?.Detail);
         return publication;
     }

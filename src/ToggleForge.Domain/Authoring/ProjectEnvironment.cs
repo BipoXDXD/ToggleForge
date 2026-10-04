@@ -46,15 +46,22 @@ public sealed class ProjectEnvironment
     internal static ProjectEnvironment Create(Guid projectId, EnvironmentKey key, DisplayName name) =>
         new(Guid.NewGuid(), projectId, key, name, InitialDraftRevision, currentVersion: null);
 
-    public Result<DraftFlag> AddFlag(FlagKey key, FlagSettings settings, RolloutSeed seed)
+    /// <param name="publishedTypes">Os tipos já publicados neste ambiente: a chave publicada não volta com outro tipo.</param>
+    public Result<DraftFlag> AddFlag(FlagKey key, FlagSettings settings, RolloutSeed seed, PublishedFlagTypes publishedTypes)
     {
         ArgumentNullException.ThrowIfNull(key);
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(seed);
+        ArgumentNullException.ThrowIfNull(publishedTypes);
 
         if (_flags.Any(flag => flag.Key == key))
         {
             return AuthoringFailures.FlagKeyTaken;
+        }
+
+        if (publishedTypes.Refuse(key, settings.Type) is { } typeLocked)
+        {
+            return typeLocked;
         }
 
         if (_flags.Count >= MaxFlags)
@@ -126,9 +133,17 @@ public sealed class ProjectEnvironment
         return DraftComparison.Changes(DraftContent(), current?.Flags ?? []);
     }
 
+    /// <param name="publishedTypes">Os tipos já publicados neste ambiente, que a nova publicação precisa manter.</param>
     public Result<Publication> Publish(
-        long reviewedDraftRevision, ChangeSummary? summary, Guid publishedBy, DateTimeOffset publishedAt, Publication? current)
+        long reviewedDraftRevision,
+        ChangeSummary? summary,
+        Guid publishedBy,
+        DateTimeOffset publishedAt,
+        Publication? current,
+        PublishedFlagTypes publishedTypes)
     {
+        ArgumentNullException.ThrowIfNull(publishedTypes);
+
         if (reviewedDraftRevision != DraftRevision)
         {
             return AuthoringFailures.DraftChanged;
@@ -139,6 +154,12 @@ public sealed class ProjectEnvironment
             return AuthoringFailures.NothingToPublish;
         }
 
+        var content = DraftContent();
+        if (publishedTypes.Refuse(content) is { } typeLocked)
+        {
+            return typeLocked;
+        }
+
         var publication = new Publication(
             Id,
             (CurrentVersion ?? 0) + 1,
@@ -147,7 +168,7 @@ public sealed class ProjectEnvironment
             PublicationOrigin.Publication,
             restoredVersion: null,
             summary,
-            DraftContent());
+            content);
         CurrentVersion = publication.Version;
         return publication;
     }
@@ -155,7 +176,8 @@ public sealed class ProjectEnvironment
     /// <summary>
     /// Publica de novo o conteúdo de <paramref name="target"/>, nula quando a versão pedida não existe, e troca
     /// o rascunho por ele, para a próxima publicação não reaplicar a mudança revertida. Mudanças não publicadas
-    /// só são descartadas com <paramref name="discardDraftChanges"/>.
+    /// só são descartadas com <paramref name="discardDraftChanges"/>. O rollback também cria uma publicação, então
+    /// mantém os tipos de <paramref name="publishedTypes"/>.
     /// </summary>
     public Result<Publication> RollBack(
         Publication? target,
@@ -163,8 +185,11 @@ public sealed class ProjectEnvironment
         bool discardDraftChanges,
         Guid rolledBackBy,
         DateTimeOffset rolledBackAt,
-        Publication? current)
+        Publication? current,
+        PublishedFlagTypes publishedTypes)
     {
+        ArgumentNullException.ThrowIfNull(publishedTypes);
+
         if (target is null)
         {
             return AuthoringFailures.RollbackTargetNotFound;
@@ -185,6 +210,11 @@ public sealed class ProjectEnvironment
         if (pendingChanges.Count > 0 && !discardDraftChanges)
         {
             return AuthoringFailures.DraftHasPendingChanges;
+        }
+
+        if (publishedTypes.Refuse(target.Flags) is { } typeLocked)
+        {
+            return typeLocked;
         }
 
         var rollback = new Publication(

@@ -91,7 +91,7 @@ public sealed class FlagEditingTests
     {
         var environment = Flags.NewEnvironment();
         var empty = JsonFlagValue.Parse("{}");
-        environment.AddFlag(_newShop, new FlagSettings(IsEnabled: true, new JsonValues(empty, empty), RolloutPercentage.All), RolloutSeed.Parse("s1"));
+        environment.AddFlag(_newShop, new FlagSettings(IsEnabled: true, new JsonValues(empty, empty), RolloutPercentage.All), RolloutSeed.Parse("s1"), PublishedFlagTypes.None);
 
         var changed = environment.ChangeFlag(_newShop, expectedRevision: 2, new FlagChange(OnValue: JsonFlagValue.Parse("3")));
 
@@ -158,7 +158,7 @@ public sealed class FlagEditingTests
         var environment = EnvironmentWithNewShop();
         environment.RemoveFlag(_newShop, expectedRevision: 2);
 
-        var added = environment.AddFlag(_newShop, Flags.Settings(), RolloutSeed.Parse("fresh-seed"));
+        var added = environment.AddFlag(_newShop, Flags.Settings(), RolloutSeed.Parse("fresh-seed"), PublishedFlagTypes.None);
 
         Assert.True(added.TryGetValue(out var flag, out _));
         Assert.Equal(RolloutSeed.Parse("fresh-seed"), flag.Seed);

@@ -120,6 +120,9 @@ public sealed class FlagStorageTests(ApiFactory api)
             insert into authoring.publications (environment_id, version, published_at, published_by, origin)
             select environment.id, 1, now(), '{owner.MemberId}', 'publication'
             {DevEnvironmentOf(owner)};
+            insert into authoring.published_flag_types (environment_id, key, type)
+            select environment.id, 'config', 'json'
+            {DevEnvironmentOf(owner)};
             insert into authoring.publication_flags (environment_id, version, key, is_enabled, type, on_value, off_value, rollout_basis_points, seed)
             select environment.id, 1, 'config', true, 'json', {Literal($$"""{"k":"{{canary}}","k":1}""")}, 'null', 1000, 'seed-1'
             {DevEnvironmentOf(owner)};

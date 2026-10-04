@@ -305,29 +305,6 @@ public sealed class JsonFlagTests(ApiFactory api)
         Assert.Equal(JsonValueKind.False, boolean.GetProperty("offValue").ValueKind);
     }
 
-    /// <summary>
-    /// Risco residual aceito (ADR 0011): a chave publicada pode voltar com outro tipo. Um build antigo que a lê com a
-    /// classe de antes recebe <c>TypeMismatch</c> e fica no próprio default, nunca com um valor do tipo errado.
-    /// </summary>
-    [Fact]
-    public async Task Recreating_a_published_key_with_another_type_is_accepted()
-    {
-        using var owner = await OwnerWithProjectAsync();
-        var boolean = await owner.CreateFlagAsync(Project, "k");
-        Assert.Equal(HttpStatusCode.Created, (await owner.PublishAsync(Project, ConsoleClient.Revision(boolean), ConsoleClient.NewIdempotencyKey())).Status);
-        Assert.Equal(HttpStatusCode.NoContent, (await owner.DeleteFlagAsync(Project, "k", boolean.Header("ETag"))).Status);
-        var json = await owner.CreateJsonFlagAsync(Project, "k", """{"a":1}""", "null");
-        Assert.Equal(HttpStatusCode.Created, json.Status);
-
-        var published = await owner.PublishAsync(Project, ConsoleClient.Revision(json), ConsoleClient.NewIdempotencyKey());
-
-        Assert.Equal(HttpStatusCode.Created, published.Status);
-        var secret = (await owner.CreateCredentialAsync(Project)).Json["secret"]!.GetValue<string>();
-        var flag = SnapshotFlag(await GameClient.GetSnapshotAsync(api, secret), "k");
-        Assert.Equal("json", flag.GetProperty("type").GetString());
-        Assert.Equal("""{"a":1}""", flag.GetProperty("onValue").GetRawText());
-    }
-
     [Fact]
     public async Task The_simulation_returns_the_json_value_the_player_gets()
     {

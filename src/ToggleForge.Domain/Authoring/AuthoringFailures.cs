@@ -1,3 +1,5 @@
+using ToggleForge.Evaluation;
+
 namespace ToggleForge.Domain.Authoring;
 
 public static class AuthoringFailures
@@ -28,6 +30,21 @@ public static class AuthoringFailures
 
     public static Failure JsonBudgetReached { get; } =
         new(FailureKind.Conflict, "json-budget-reached", $"A draft can hold at most {ProjectEnvironment.MaxJsonBytes / 1024} KiB of json values.");
+
+    /// <summary>
+    /// Só a própria organização chega aqui (o ambiente já foi achado pelo dono), então a chave e o tipo no texto não
+    /// vazam nada de outro tenant.
+    /// </summary>
+    public static Failure FlagTypeLocked(FlagKey key, FlagType publishedType)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+
+        var type = publishedType.ToString().ToLowerInvariant();
+        return new(
+            FailureKind.Conflict,
+            "flag-type-locked",
+            $"The key '{key.Value}' was already published in this environment as a {type} flag, and a published key keeps its type. Use a new key for a flag of another type.");
+    }
 
     public static Failure FlagNotFound { get; } =
         new(FailureKind.NotFound, "not-found", "The draft has no flag with this key.");

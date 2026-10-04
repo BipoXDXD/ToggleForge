@@ -20,7 +20,7 @@ internal static class Flags
 
     public static void Add(ProjectEnvironment environment, string key, int basisPoints = 1_000)
     {
-        var added = environment.AddFlag(FlagKey.Parse(key), Settings(basisPoints), RolloutSeed.Parse($"seed-{key}"));
+        var added = environment.AddFlag(FlagKey.Parse(key), Settings(basisPoints), RolloutSeed.Parse($"seed-{key}"), PublishedFlagTypes.None);
         Assert.True(added.TryGetValue(out _, out var failure), failure?.Detail);
     }
 }
