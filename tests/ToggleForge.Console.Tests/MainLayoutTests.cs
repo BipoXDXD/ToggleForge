@@ -44,6 +44,8 @@ public sealed class MainLayoutTests
         var layout = console.Render<MainLayout>(parameters => parameters.Add(main => main.Body, "page"));
 
         Assert.Equal("Loading ToggleForge…", layout.Find("main [role=status]").TextContent.Trim());
+        // Sem h1: o FocusOnNavigate focaria um título que some quando a página chega, e o Tab recomeçaria no meio dela.
+        Assert.Empty(layout.FindAll("main h1"));
         release();
     }
 }
