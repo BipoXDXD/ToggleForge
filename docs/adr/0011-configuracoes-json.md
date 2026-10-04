@@ -243,6 +243,10 @@ O que já existe e pesa na escolha:
   - recriar uma chave publicada com o outro tipo → 409 `flag-type-locked` na criação e, com o rascunho gravado por
     fora, na publicação; um editor publicando enquanto outro recria a chave com o outro tipo nunca publica os dois;
   - duas criações ou duas edições concorrentes que passariam do teto: só uma entra;
+  - o SDK real lê a flag JSON publicada como a API a compactou, com a data e o inteiro acima de `long` intactos, e
+    escolhe o mesmo valor, motivo e bucket da simulação nos dois lados do rollout; um build que lê a chave com o
+    outro tipo, JSON como booleana ou booleana como JSON, fica no padrão com `TypeMismatch`, sem chamar o parser do
+    jogo (`SdkClientTests`);
   - todas as respostas conferidas contra o `openapi.yaml`.
 - **`Sdk.Tests`:** tipo ausente, flag JSON, tipo desconhecido ignorado sem recusar o snapshot, datas e inteiros
   preservados, fração pelo `double`, valor fora do padrão recusa o snapshot, parser que lança.
