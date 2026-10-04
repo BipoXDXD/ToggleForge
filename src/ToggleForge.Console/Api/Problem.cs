@@ -20,5 +20,10 @@ public sealed record Problem(string Type, string Title, int Status, string? Deta
             : [Detail ?? Title];
 }
 
-/// <remarks>O console só mostra o texto; <c>source</c> fica de fora até a interface marcar o campo com erro.</remarks>
-public sealed record ProblemError(string Detail);
+/// <param name="Source">Onde está o erro; o <c>pointer</c> leva a mensagem para o campo certo do formulário.</param>
+public sealed record ProblemError(string Detail, ProblemSource? Source = null);
+
+/// <param name="Pointer">JSON Pointer no corpo do pedido, como <c>/onValue</c>; nulo para erro fora do corpo.</param>
+#pragma warning disable CA1720 // "Pointer" é o JSON Pointer (RFC 6901) do campo source.pointer do contrato, não um ponteiro de memória.
+public sealed record ProblemSource(string? Pointer = null);
+#pragma warning restore CA1720

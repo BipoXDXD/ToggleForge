@@ -32,11 +32,11 @@ public sealed class EnvironmentDraftPageTests
         var api = DraftWithOneFlag()
             .ThenAnswer(HttpMethod.Get, Draft, HttpStatusCode.OK, """
                 {"revision":3,"basedOnVersion":null,"changes":[{"flagKey":"dark-mode","change":"added"},{"flagKey":"new-shop","change":"added"}],
-                 "flags":[{"key":"dark-mode","enabled":false,"onValue":true,"offValue":false,"rolloutBasisPoints":0},
-                          {"key":"new-shop","enabled":true,"onValue":true,"offValue":false,"rolloutBasisPoints":1250}]}
+                 "flags":[{"key":"dark-mode","type":"boolean","enabled":false,"onValue":true,"offValue":false,"rolloutBasisPoints":0},
+                          {"key":"new-shop","type":"boolean","enabled":true,"onValue":true,"offValue":false,"rolloutBasisPoints":1250}]}
                 """)
             .Answer(HttpMethod.Post, Draft + "/flags", HttpStatusCode.Created,
-                """{"key":"new-shop","enabled":true,"onValue":true,"offValue":false,"rolloutBasisPoints":1250}""");
+                """{"key":"new-shop","type":"boolean","enabled":true,"onValue":true,"offValue":false,"rolloutBasisPoints":1250}""");
         ConsoleRendering.SignInAs(api, "owner");
         using var console = ConsoleRendering.Create(api);
         var page = RenderDraft(console);
@@ -137,7 +137,7 @@ public sealed class EnvironmentDraftPageTests
             """)
         .Answer(HttpMethod.Get, Draft, HttpStatusCode.OK, """
             {"revision":2,"basedOnVersion":null,"changes":[{"flagKey":"dark-mode","change":"added"}],
-             "flags":[{"key":"dark-mode","enabled":false,"onValue":true,"offValue":false,"rolloutBasisPoints":0}]}
+             "flags":[{"key":"dark-mode","type":"boolean","enabled":false,"onValue":true,"offValue":false,"rolloutBasisPoints":0}]}
             """);
 
     private static IRenderedComponent<EnvironmentDraft> RenderDraft(BunitContext console) =>

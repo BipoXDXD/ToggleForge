@@ -5,7 +5,7 @@ namespace ToggleForge.Console.Tests;
 
 public sealed class FlagEditTests
 {
-    private static readonly Flag _original = new("new-shop", Enabled: true, OnValue: FlagValue.True, OffValue: FlagValue.False, RolloutBasisPoints: 1_250);
+    private static readonly Flag _original = new("new-shop", FlagTypes.Boolean, Enabled: true, OnValue: FlagValue.True, OffValue: FlagValue.False, RolloutBasisPoints: 1_250);
 
     [Fact]
     public void The_form_starts_with_the_values_read()

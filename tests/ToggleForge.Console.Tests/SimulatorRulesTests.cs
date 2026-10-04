@@ -13,7 +13,7 @@ public sealed class SimulatorRulesTests
     [InlineData("excluded", null, "The rollout includes no one.")]
     [InlineData("segment-matched", 120, "segment-matched")]
     public void Each_result_says_what_decided_it(string reason, int? bucket, string expected) =>
-        Assert.Equal(expected, SimulationText.Why(new SimulationResult("new-shop", Value: FlagValue.True, reason, bucket)));
+        Assert.Equal(expected, SimulationText.Why(new SimulationResult("new-shop", FlagTypes.Boolean, FlagValue.True, reason, bucket)));
 
     [Theory]
     [InlineData(null, "Draft")]

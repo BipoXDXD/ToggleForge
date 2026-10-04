@@ -1,0 +1,13 @@
+@*
+    O começo de um valor, para caber numa célula; o valor compacto inteiro fica no title. Sempre texto, nunca
+    markup: o valor é do usuário (canvas, T6).
+*@
+<code title="@Value.Text" class="font-mono text-xs leading-5 text-slate-700">@Value.Preview(MaxLength)</code>
+
+@code {
+    // Cabe ao lado das outras colunas da tabela sem quebrar a linha numa tela de notebook (design spec, 2.3).
+    private const int MaxLength = 40;
+
+    [Parameter, EditorRequired]
+    public FlagValue Value { get; set; } = FlagValue.Null;
+}

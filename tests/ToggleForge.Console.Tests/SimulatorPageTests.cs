@@ -18,9 +18,9 @@ public sealed class SimulatorPageTests
     {
         var api = LiveAtVersion(3).Answer(HttpMethod.Post, Simulations, HttpStatusCode.OK, """
             {"source":"draft","version":null,"results":[
-              {"flagKey":"beta-map","value":false,"reason":"excluded","bucket":7310},
-              {"flagKey":"new-shop","value":true,"reason":"included","bucket":412},
-              {"flagKey":"old-ui","value":false,"reason":"disabled","bucket":null}]}
+              {"flagKey":"beta-map","type":"boolean","value":false,"reason":"excluded","bucket":7310},
+              {"flagKey":"new-shop","type":"boolean","value":true,"reason":"included","bucket":412},
+              {"flagKey":"old-ui","type":"boolean","value":false,"reason":"disabled","bucket":null}]}
             """);
         using var console = ConsoleRendering.Create(api);
         var page = RenderSimulator(console);
@@ -44,7 +44,7 @@ public sealed class SimulatorPageTests
     public void A_published_version_is_simulated_starting_from_the_live_one()
     {
         var api = LiveAtVersion(3).Answer(HttpMethod.Post, Simulations, HttpStatusCode.OK,
-            """{"source":"publication","version":3,"results":[{"flagKey":"new-shop","value":true,"reason":"included","bucket":null}]}""");
+            """{"source":"publication","version":3,"results":[{"flagKey":"new-shop","type":"boolean","value":true,"reason":"included","bucket":null}]}""");
         using var console = ConsoleRendering.Create(api);
         var page = RenderSimulator(console);
 
@@ -151,7 +151,7 @@ public sealed class SimulatorPageTests
     public void A_refused_simulation_replaces_the_previous_results_with_the_reason()
     {
         var api = LiveAtVersion(3).Answer(HttpMethod.Post, Simulations, HttpStatusCode.OK,
-            """{"source":"draft","version":null,"results":[{"flagKey":"new-shop","value":true,"reason":"included","bucket":412}]}""");
+            """{"source":"draft","version":null,"results":[{"flagKey":"new-shop","type":"boolean","value":true,"reason":"included","bucket":412}]}""");
         using var console = ConsoleRendering.Create(api);
         var page = RenderSimulator(console);
         page.Find("input[autocomplete=off]").Change(PlayerId);

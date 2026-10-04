@@ -172,7 +172,7 @@ else
         _submitting = true;
         // O console do tracer bullet só cria flags booleanas comuns: incluído recebe true, excluído recebe false.
         var flag = await Api.CreateFlagAsync(
-            OrganizationId, ProjectKey, EnvironmentKey, new FlagCreation(_flagKey, _enabled, OnValue: FlagValue.True, OffValue: FlagValue.False, basisPoints), Leaving);
+            OrganizationId, ProjectKey, EnvironmentKey, new FlagCreation(_flagKey, FlagTypes.Boolean, _enabled, OnValue: FlagValue.True, OffValue: FlagValue.False, basisPoints), Leaving);
         _submitting = false;
         if (!flag.Succeeded)
         {

@@ -188,7 +188,7 @@ public sealed class HistoryPagesTests
 
     private static string VersionJson(long version) => $$$"""
         {"version":{{{version}}},"publishedAt":"2026-10-01T12:00:00Z","publishedBy":{{{Member}}},"origin":"publication","restoredVersion":null,
-         "flags":[{"key":"new-shop","enabled":true,"onValue":true,"offValue":false,"rolloutBasisPoints":1000}]}
+         "flags":[{"key":"new-shop","type":"boolean","enabled":true,"onValue":true,"offValue":false,"rolloutBasisPoints":1000}]}
         """;
 
     private static IRenderedComponent<PublicationDetail> RenderVersionOne(BunitContext console) => RenderVersion(console, 1);

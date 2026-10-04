@@ -11,9 +11,9 @@ public sealed class FlagEditorPageTests
     private const string NewShop =
         "/api/v1/organizations/3f1c7d8e-2b4a-4c6d-9e8f-0a1b2c3d4e5f/projects/space-race/environments/dev/draft/flags/new-shop";
 
-    private const string AtTenPercent = """{"key":"new-shop","enabled":true,"onValue":true,"offValue":false,"rolloutBasisPoints":1000}""";
-    private const string AtFiftyPercent = """{"key":"new-shop","enabled":true,"onValue":true,"offValue":false,"rolloutBasisPoints":5000}""";
-    private const string AtThirtyPercent = """{"key":"new-shop","enabled":true,"onValue":true,"offValue":false,"rolloutBasisPoints":3000}""";
+    private const string AtTenPercent = """{"key":"new-shop","type":"boolean","enabled":true,"onValue":true,"offValue":false,"rolloutBasisPoints":1000}""";
+    private const string AtFiftyPercent = """{"key":"new-shop","type":"boolean","enabled":true,"onValue":true,"offValue":false,"rolloutBasisPoints":5000}""";
+    private const string AtThirtyPercent = """{"key":"new-shop","type":"boolean","enabled":true,"onValue":true,"offValue":false,"rolloutBasisPoints":3000}""";
 
     [Fact]
     public void Saving_sends_only_what_changed_with_the_etag_read()
