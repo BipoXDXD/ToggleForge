@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.HttpsPolicy;
 using Microsoft.Extensions.Options;
 using Microsoft.Net.Http.Headers;
+using ToggleForge.Api.Http;
 
 namespace ToggleForge.Api;
 
@@ -28,14 +29,20 @@ internal static class ApiSecurityHeaders
     private static readonly PathString _sdkPath = new("/sdk");
 
     /// <summary>
-    /// Um ano, o valor comum depois que o HTTPS está estável; o TLS termina no ingress gerenciado desde o primeiro
-    /// deploy. Sem includeSubDomains nem preload: os dois prendem domínios que esta API não controla e são difíceis
-    /// de desfazer.
+    /// O <c>max-age</c> vem de <see cref="StrictTransportSecuritySettings"/>, validado na partida. Sem
+    /// includeSubDomains nem preload: os dois prendem domínios que esta API não controla e são difíceis de desfazer.
     /// </summary>
-    private static readonly TimeSpan _strictTransportSecurityMaxAge = TimeSpan.FromDays(365);
-
-    public static IServiceCollection AddToggleForgeStrictTransportSecurity(this IServiceCollection services) =>
-        services.AddHsts(options => options.MaxAge = _strictTransportSecurityMaxAge);
+    public static IServiceCollection AddToggleForgeStrictTransportSecurity(this IServiceCollection services)
+    {
+        services.AddOptions<StrictTransportSecuritySettings>()
+            .BindConfiguration(StrictTransportSecuritySettings.Section)
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+        services.AddHsts(_ => { });
+        services.AddOptions<HstsOptions>().Configure<IOptions<StrictTransportSecuritySettings>>(
+            (hsts, settings) => hsts.MaxAge = settings.Value.MaxAge);
+        return services;
+    }
 
     /// <summary>
     /// Escreve os headers quando a resposta começa, não quando a requisição chega: o exception handler limpa os

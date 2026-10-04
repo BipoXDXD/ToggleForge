@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using ToggleForge.Api.Tests.Support;
 using ToggleForge.Application.Access;
 
@@ -20,15 +21,40 @@ public sealed class StrictTransportSecurityTests(ApiFactory api)
 
     private static readonly Uri _publicAddress = new("https://console.toggleforge.test");
 
+    /// <summary>O primeiro deploy pina por um dia só, para poder voltar atrás (ADR 0012); o appsettings.json traz esse valor.</summary>
     [Fact]
-    public async Task Outside_development_https_responses_pin_https_for_a_year()
+    public async Task Outside_development_https_responses_pin_https_for_the_configured_day()
     {
         await using var production = Production();
         using var visitor = production.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = _publicAddress });
 
         using var response = await visitor.GetAsync(Paths.AntiforgeryToken, TestContext.Current.CancellationToken);
 
+        Assert.Equal("max-age=86400", Assert.Single(response.Headers.GetValues("Strict-Transport-Security")));
+    }
+
+    [Fact]
+    public async Task The_pin_lasts_as_long_as_configured()
+    {
+        await using var production = Production(builder => builder.UseSetting("StrictTransportSecurity:MaxAge", "365.00:00:00"));
+        using var visitor = production.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = _publicAddress });
+
+        using var response = await visitor.GetAsync(Paths.AntiforgeryToken, TestContext.Current.CancellationToken);
+
         Assert.Equal("max-age=31536000", Assert.Single(response.Headers.GetValues("Strict-Transport-Security")));
+    }
+
+    [Theory]
+    [InlineData("00:00:00")]
+    [InlineData("-1.00:00:00")]
+    [InlineData("731.00:00:00")]
+    public async Task A_pin_duration_out_of_range_keeps_the_api_from_starting(string maxAge)
+    {
+        await using var production = Production(builder => builder.UseSetting("StrictTransportSecurity:MaxAge", maxAge));
+
+        var error = Assert.Throws<OptionsValidationException>(() => production.CreateClient());
+
+        Assert.Contains("MaxAge", error.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -47,7 +73,7 @@ public sealed class StrictTransportSecurityTests(ApiFactory api)
     {
         using var response = await ForwardedHttpsAsync(sender: Ingress);
 
-        Assert.Equal("max-age=31536000", Assert.Single(response.Headers.GetValues("Strict-Transport-Security")));
+        Assert.Equal("max-age=86400", Assert.Single(response.Headers.GetValues("Strict-Transport-Security")));
     }
 
     /// <summary>Quem não é o ingress não diz o esquema: a requisição continua sendo HTTP, e HTTP não leva HSTS.</summary>
@@ -73,7 +99,7 @@ public sealed class StrictTransportSecurityTests(ApiFactory api)
         using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-        Assert.Equal("max-age=31536000", Assert.Single(response.Headers.GetValues("Strict-Transport-Security")));
+        Assert.Equal("max-age=86400", Assert.Single(response.Headers.GetValues("Strict-Transport-Security")));
     }
 
     private async Task<HttpResponseMessage> ForwardedHttpsAsync(string sender)
