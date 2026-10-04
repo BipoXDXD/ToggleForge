@@ -430,7 +430,8 @@ paths:
       summary: Create a flag in the draft
       description: |
         Owner and editor only: viewers get 403. The server generates the rollout seed.
-        409 `key-taken` when the key exists in the draft; 409 `limit-reached` at 200 flags.
+        409 `key-taken` when the key exists in the draft; 409 `limit-reached` at 200 flags or at 128 KiB of json
+        values in the draft. Bodies over 32 KiB get 413.
       parameters:
         - $ref: '#/components/parameters/Antiforgery'
       requestBody:
@@ -508,6 +509,8 @@ paths:
       description: |
         Owner and editor only. Absent fields keep their value; `null` is rejected because no field can
         be cleared. The key and the seed never change.
+        409 `limit-reached` when the change would take the draft over 128 KiB of json values. The type of a flag
+        never changes: `type` is an unknown field here. Bodies over 32 KiB get 413.
       parameters:
         - $ref: '#/components/parameters/Antiforgery'
         - $ref: '#/components/parameters/IfMatch'
@@ -535,6 +538,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '412':
           $ref: '#/components/responses/PreconditionFailed'
         '413':
@@ -1348,6 +1353,17 @@ components:
         hasUnpublishedChanges:
           type: boolean
 
+    FlagType:
+      type: string
+      enum: [boolean, json]
+      description: Chosen when the flag is created and never changes (ADR 0011).
+
+    FlagValue:
+      description: |
+        `true` or `false` for a boolean flag. Any JSON value for a json flag: at most 4 KiB in UTF-8 once
+        compacted, at most 8 levels deep, no key repeated in an object and every number within the range of a
+        double. The server returns it compacted, with the keys in the order they were sent.
+
     FlagCreation:
       type: object
       additionalProperties: false
@@ -1355,13 +1371,16 @@ components:
       properties:
         key:
           $ref: '#/components/schemas/Key'
+        type:
+          $ref: '#/components/schemas/FlagType'
+          description: Defaults to boolean.
         enabled:
           type: boolean
         onValue:
-          type: boolean
+          $ref: '#/components/schemas/FlagValue'
           description: Value for players included in the rollout.
         offValue:
-          type: boolean
+          $ref: '#/components/schemas/FlagValue'
           description: Value for excluded players and when the flag is disabled.
         rolloutBasisPoints:
           $ref: '#/components/schemas/RolloutBasisPoints'
@@ -1374,25 +1393,27 @@ components:
         enabled:
           type: boolean
         onValue:
-          type: boolean
+          $ref: '#/components/schemas/FlagValue'
         offValue:
-          type: boolean
+          $ref: '#/components/schemas/FlagValue'
         rolloutBasisPoints:
           $ref: '#/components/schemas/RolloutBasisPoints'
 
     Flag:
       type: object
       additionalProperties: false
-      required: [key, enabled, onValue, offValue, rolloutBasisPoints]
+      required: [key, type, enabled, onValue, offValue, rolloutBasisPoints]
       properties:
         key:
           $ref: '#/components/schemas/Key'
+        type:
+          $ref: '#/components/schemas/FlagType'
         enabled:
           type: boolean
         onValue:
-          type: boolean
+          $ref: '#/components/schemas/FlagValue'
         offValue:
-          type: boolean
+          $ref: '#/components/schemas/FlagValue'
         rolloutBasisPoints:
           $ref: '#/components/schemas/RolloutBasisPoints'
 
@@ -1479,12 +1500,14 @@ components:
     SimulationResult:
       type: object
       additionalProperties: false
-      required: [flagKey, value, reason, bucket]
+      required: [flagKey, type, value, reason, bucket]
       properties:
         flagKey:
           $ref: '#/components/schemas/Key'
+        type:
+          $ref: '#/components/schemas/FlagType'
         value:
-          type: boolean
+          $ref: '#/components/schemas/FlagValue'
         reason:
           type: string
           enum: [disabled, included, excluded]
@@ -1684,12 +1707,19 @@ components:
       properties:
         key:
           $ref: '#/components/schemas/Key'
+        type:
+          type: string
+          maxLength: 32
+          pattern: '^[a-z][a-z0-9-]{0,31}$'
+          description: |
+            Lower-case name of the flag type; new types may appear. Missing means boolean. Clients must skip a
+            flag whose type they do not know.
         enabled:
           type: boolean
         onValue:
-          type: boolean
+          $ref: '#/components/schemas/FlagValue'
         offValue:
-          type: boolean
+          $ref: '#/components/schemas/FlagValue'
         rolloutBasisPoints:
           $ref: '#/components/schemas/RolloutBasisPoints'
         seed:
