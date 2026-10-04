@@ -9,8 +9,9 @@ public sealed class JsonBudgetTests
     // 16 flags com dois valores de 4 KiB somam exatamente 128 KiB.
     private const int FlagsThatFillTheBudget = 16;
 
-    // Um texto JSON de 4.096 bytes: aspas mais 4.094 caracteres.
-    private static readonly string _full = "\"" + new string('x', 4094) + "\"";
+    private static readonly FlagKey _growing = FlagKey.Parse("growing");
+
+    private static readonly string _full = JsonTextOf(bytes: 4_096);
 
     [Fact]
     public void A_draft_holds_exactly_128_KiB_of_json_values()
@@ -24,11 +25,12 @@ public sealed class JsonBudgetTests
     }
 
     [Fact]
-    public void One_more_byte_of_json_is_refused_and_the_revision_stays()
+    public void The_smallest_json_flag_past_the_budget_is_refused_and_the_revision_stays()
     {
         var environment = FullEnvironment();
         var revision = environment.DraftRevision;
 
+        // A menor flag JSON tem 2 bytes: "0" de cada lado.
         var added = environment.AddFlag(FlagKey.Parse("one-more"), JsonSettings("0", "0"), RolloutSeed.Parse("s1"));
 
         Assert.False(added.TryGetValue(out _, out var failure));
@@ -41,24 +43,32 @@ public sealed class JsonBudgetTests
         Assert.True(FullEnvironment().AddFlag(FlagKey.Parse("new-shop"), Flags.Settings(), RolloutSeed.Parse("s1")).TryGetValue(out _, out _));
 
     [Fact]
-    public void A_change_that_grows_a_value_past_the_budget_is_refused()
+    public void A_change_that_grows_a_value_one_byte_past_the_budget_is_refused_and_keeps_the_flag()
     {
-        var environment = Flags.NewEnvironment();
-        for (var flag = 1; flag < FlagsThatFillTheBudget; flag++)
-        {
-            environment.AddFlag(FlagKey.Parse($"config-{flag}"), FullJsonSettings(), RolloutSeed.Parse("s1"));
-        }
+        var environment = EnvironmentWithRoomFor4093Bytes();
+        var flag = environment.Flags.Single(flag => flag.Key == _growing);
+        var (revision, settings) = (environment.DraftRevision, flag.Settings);
 
-        environment.AddFlag(FlagKey.Parse("growing"), JsonSettings(_full, "0"), RolloutSeed.Parse("s1"));
-        environment.AddFlag(FlagKey.Parse("tiny"), JsonSettings("0", "0"), RolloutSeed.Parse("s1"));
-        // 15 × 8.192 + 4.097 + 2 = 126.979 bytes: sobram 4.093, e trocar "0" por 4.096 bytes soma 4.095.
-        var growing = FlagKey.Parse("growing");
-        var revision = environment.Flags.Single(flag => flag.Key == growing).ChangedAtRevision;
-
-        var changed = environment.ChangeFlag(growing, revision, new FlagChange(OffValue: JsonFlagValue.Parse(_full)));
+        // Trocar "0" (1 byte) por 4.095 bytes soma 4.094: 131.073 bytes, um além do teto.
+        var changed = environment.ChangeFlag(_growing, flag.ChangedAtRevision, new FlagChange(OffValue: JsonFlagValue.Parse(JsonTextOf(bytes: 4_095))));
 
         Assert.False(changed.TryGetValue(out _, out var failure));
         Assert.Equal(AuthoringFailures.JsonBudgetReached, failure);
+        Assert.Equal(revision, environment.DraftRevision);
+        Assert.Equal(settings, flag.Settings);
+    }
+
+    [Fact]
+    public void A_change_that_fills_the_budget_exactly_is_accepted()
+    {
+        var environment = EnvironmentWithRoomFor4093Bytes();
+        var revision = environment.Flags.Single(flag => flag.Key == _growing).ChangedAtRevision;
+
+        // Trocar "0" (1 byte) por 4.094 bytes soma 4.093: exatamente 131.072 bytes.
+        var changed = environment.ChangeFlag(_growing, revision, new FlagChange(OffValue: JsonFlagValue.Parse(JsonTextOf(bytes: 4_094))));
+
+        Assert.True(changed.TryGetValue(out var flag, out _));
+        Assert.Equal(4_094, Assert.IsType<JsonValues>(flag.Settings.Values).OffValue.ByteCount);
     }
 
     [Fact]
@@ -81,6 +91,23 @@ public sealed class JsonBudgetTests
 
         return environment;
     }
+
+    /// <summary>15 × 8.192 + 4.097 + 2 = 126.979 bytes: sobram 4.093 até o teto.</summary>
+    private static ProjectEnvironment EnvironmentWithRoomFor4093Bytes()
+    {
+        var environment = Flags.NewEnvironment();
+        for (var flag = 1; flag < FlagsThatFillTheBudget; flag++)
+        {
+            environment.AddFlag(FlagKey.Parse($"config-{flag}"), FullJsonSettings(), RolloutSeed.Parse("s1"));
+        }
+
+        environment.AddFlag(_growing, JsonSettings(_full, "0"), RolloutSeed.Parse("s1"));
+        environment.AddFlag(FlagKey.Parse("tiny"), JsonSettings("0", "0"), RolloutSeed.Parse("s1"));
+        return environment;
+    }
+
+    /// <summary>Uma string JSON com exatamente <paramref name="bytes"/> bytes, contando as aspas.</summary>
+    private static string JsonTextOf(int bytes) => "\"" + new string('x', bytes - 2) + "\"";
 
     private static FlagSettings FullJsonSettings() => JsonSettings(_full, _full);
 
