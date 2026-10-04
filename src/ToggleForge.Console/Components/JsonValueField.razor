@@ -31,7 +31,7 @@
         case JsonAnalysis.Valid valid:
             <div id="@($"{Id}-size")" class="mt-2">
                 <div aria-hidden="true" class="h-1 rounded-full bg-slate-200">
-                    <div class="@MeterStyle(valid.Level).Bar h-1 rounded-full" style="width: @MeterWidth(valid.ByteCount)"></div>
+                    <div class="@MeterStyle(valid.Level).Bar @MeterWidth(valid.ByteCount) h-1 rounded-full"></div>
                 </div>
                 <p class="@MeterStyle(valid.Level).Text mt-1 flex justify-between gap-3 text-xs tabular-nums">
                     @switch (valid.Level)
@@ -158,11 +158,39 @@
         _ => ("bg-slate-400", "text-slate-500"),
     };
 
+    // A CSP do console é style-src 'self', e o Blazor põe atributos com setAttribute: um style="width" seria bloqueado.
+    // A largura vai em degraus de 5%, cada classe escrita por extenso para o Tailwind achá-la no código.
     private static string MeterWidth(int bytes)
     {
+        const int Step = 5;
         const int Full = 100;
-        var percent = Math.Min(Full, bytes * Full / JsonText.MaxValueBytes);
-        return percent.ToString(System.Globalization.CultureInfo.InvariantCulture) + "%";
+        var percent = (int)Math.Round(bytes * (double)Full / JsonText.MaxValueBytes / Step, MidpointRounding.AwayFromZero) * Step;
+
+        // Acima do teto a barra fica cheia: o default cobre tudo de 100% para cima.
+        return percent switch
+        {
+            0 => "w-[0%]",
+            5 => "w-[5%]",
+            10 => "w-[10%]",
+            15 => "w-[15%]",
+            20 => "w-[20%]",
+            25 => "w-[25%]",
+            30 => "w-[30%]",
+            35 => "w-[35%]",
+            40 => "w-[40%]",
+            45 => "w-[45%]",
+            50 => "w-[50%]",
+            55 => "w-[55%]",
+            60 => "w-[60%]",
+            65 => "w-[65%]",
+            70 => "w-[70%]",
+            75 => "w-[75%]",
+            80 => "w-[80%]",
+            85 => "w-[85%]",
+            90 => "w-[90%]",
+            95 => "w-[95%]",
+            _ => "w-[100%]",
+        };
     }
 
     private static string Bytes(int count) => count == 1 ? "1 byte" : $"{Thousands(count)} bytes";

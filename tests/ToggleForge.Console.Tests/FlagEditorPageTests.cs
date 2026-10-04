@@ -377,6 +377,42 @@ public sealed class FlagEditorPageTests
         Assert.Equal(shown, MeterOf(page.Find("#off-value-size")));
     }
 
+    [Theory]
+    [InlineData(2, "w-[0%]")]
+    [InlineData(102, "w-[0%]")]
+    [InlineData(103, "w-[5%]")]
+    [InlineData(2_048, "w-[50%]")]
+    [InlineData(4_096, "w-[100%]")]
+    [InlineData(5_000, "w-[100%]")]
+    public void The_meter_bar_grows_in_five_percent_steps_and_stops_at_full(int bytes, string width)
+    {
+        var api = ShopConfigRead();
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+
+        page.Find("#off-value").Input(StringOfBytes(bytes));
+
+        var bar = page.Find("#off-value-size [aria-hidden=true] > div");
+        Assert.Contains(width, bar.ClassList);
+        Assert.Single(bar.ClassList, name => name.StartsWith("w-", StringComparison.Ordinal));
+    }
+
+    // A CSP do console é style-src 'self': um atributo style posto pelo Blazor é bloqueado pelo navegador.
+    [Fact]
+    public void The_json_editor_sets_no_inline_style()
+    {
+        var api = ShopConfigRead();
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+
+        page.Find("#off-value").Input(StringOfBytes(3_500));
+        page.Find("#on-value").Input(StringOfBytes(4_200));
+
+        Assert.Empty(page.FindAll("[style]"));
+    }
+
     [Fact]
     public void A_value_over_the_limit_is_marked_invalid_while_typing()
     {
