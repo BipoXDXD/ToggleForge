@@ -9,8 +9,8 @@ namespace ToggleForge.Console.Drafts;
 /// que a API vai contar), inválido (com onde) ou fundo demais para ler.
 /// </summary>
 /// <remarks>
-/// Só sintaxe e tamanho: chave repetida, profundidade acima de 8 e número fora do <see cref="double"/> são regra da
-/// API, que devolve o erro no campo (ADR 0011).
+/// Só sintaxe e tamanho: profundidade acima de 8 e número fora do <see cref="double"/> são regra da API, que devolve o
+/// erro no campo (ADR 0011). A chave repetida é conferida só ao salvar (<see cref="RepeatsAKey"/>).
 /// </remarks>
 public static class JsonText
 {
@@ -35,12 +35,43 @@ public static class JsonText
         return HasHalfCharacter(text) ? new JsonAnalysis.NotEncodable() : Locate(text);
     }
 
+    /// <summary>
+    /// Se algum objeto do valor tem a mesma chave duas vezes, comparando as chaves já desescapadas (<c>"a"</c> e
+    /// <c>"\u0061"</c> são a mesma), como a API compara.
+    /// </summary>
+    public static bool RepeatsAKey(FlagValue value)
+    {
+        using var document = JsonDocument.Parse(value.Text, new JsonDocumentOptions { MaxDepth = FlagValue.MaxReadingDepth });
+        return RepeatsAKey(document.RootElement);
+    }
+
     public static MeterLevel LevelOf(int bytes) => bytes switch
     {
         > MaxValueBytes => MeterLevel.OverLimit,
         >= NearLimitBytes => MeterLevel.NearLimit,
         _ => MeterLevel.Comfortable,
     };
+
+    private static bool RepeatsAKey(JsonElement element) => element.ValueKind switch
+    {
+        JsonValueKind.Object => RepeatsAKeyInObject(element),
+        JsonValueKind.Array => element.EnumerateArray().Any(RepeatsAKey),
+        _ => false,
+    };
+
+    private static bool RepeatsAKeyInObject(JsonElement element)
+    {
+        var keys = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var property in element.EnumerateObject())
+        {
+            if (!keys.Add(property.Name) || RepeatsAKey(property.Value))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     // Uma segunda leitura, só para achar onde o texto quebra: o FlagValue diz se é JSON, não onde deixou de ser. O
     // leitor aceita um nível a mais que o FlagValue para o texto fundo demais aparecer como tal, e não como erro de

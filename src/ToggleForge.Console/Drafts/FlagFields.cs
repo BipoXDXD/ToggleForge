@@ -26,13 +26,14 @@ internal static class FlagFields
     /// <param name="field"><see cref="FieldErrors.OnValue"/> ou <see cref="FieldErrors.OffValue"/>.</param>
     /// <returns>O valor compacto, ou nulo com o erro no <paramref name="field"/>.</returns>
     /// <remarks>
-    /// O teto de 4 KiB é conferido aqui para o membro não esperar a API, mas é dela a palavra final (ADR 0011);
-    /// profundidade e chave repetida ficam só com ela.
+    /// O teto de 4 KiB é conferido aqui para o membro não esperar a API, mas é dela a palavra final (ADR 0011); a
+    /// profundidade fica só com ela. A chave repetida também é regra dela, mas a API a recusa ao ler o corpo, com um
+    /// erro que não diz o campo; conferida aqui, a mensagem cai sob a área certa.
     /// </remarks>
     public static FlagValue? Value(string text, string field, FieldErrors errors)
     {
         var analysis = JsonText.Analyze(text);
-        if (analysis is JsonAnalysis.Valid { Level: not MeterLevel.OverLimit } valid)
+        if (analysis is JsonAnalysis.Valid { Level: not MeterLevel.OverLimit } valid && !JsonText.RepeatsAKey(valid.Value))
         {
             return valid.Value;
         }
@@ -41,7 +42,9 @@ internal static class FlagFields
         {
             JsonAnalysis.Empty => $"Enter a JSON value for {AudienceOf(field)}.",
             JsonAnalysis.TooDeep => TooDeep,
-            JsonAnalysis.Valid => $"The value for {AudienceOf(field)} is over 4 KiB once compacted. Make it smaller: every player downloads it.",
+            JsonAnalysis.Valid { Level: MeterLevel.OverLimit } =>
+                $"The value for {AudienceOf(field)} is over 4 KiB once compacted. Make it smaller: every player downloads it.",
+            JsonAnalysis.Valid => $"The value for {AudienceOf(field)} repeats a key in an object. Each key can appear only once.",
             _ => NotJson(field),
         });
         return null;

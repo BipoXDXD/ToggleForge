@@ -129,6 +129,35 @@ public sealed class FlagEditTests
         Assert.True(changes.IsEmpty);
     }
 
+    // A API recusa chave repetida com um erro genérico do corpo, sem dizer o campo; o console aponta o campo antes.
+    [Theory]
+    [InlineData("""{"discount":0.2,"discount":0.3}""")]
+    [InlineData("""{"shop":{"open":true,"open":false}}""")]
+    [InlineData("""[1,{"a":1,"b":2,"a":3}]""")]
+    [InlineData("""{"a":1,"\u0061":2}""")]
+    public void A_value_that_repeats_a_key_in_an_object_is_refused_on_its_field(string offValue)
+    {
+        var edit = FlagEdit.Of(_shopConfig);
+        edit.OffValueText = offValue;
+
+        Assert.False(edit.TryGetChanges(_shopConfig, out var changes, out var errors));
+        Assert.Equal("The value for everyone else repeats a key in an object. Each key can appear only once.", errors.For(FieldErrors.OffValue));
+        Assert.True(changes.IsEmpty);
+    }
+
+    [Theory]
+    [InlineData("""[{"a":1},{"a":2}]""")]
+    [InlineData("""{"a":{"a":1}}""")]
+    [InlineData("""{"a":1,"A":2}""")]
+    public void The_same_key_in_different_objects_is_not_a_repetition(string onValue)
+    {
+        var edit = FlagEdit.Of(_shopConfig);
+        edit.OnValueText = onValue;
+
+        Assert.True(edit.TryGetChanges(_shopConfig, out var changes, out _));
+        Assert.Equal(Values.Json(onValue), changes.OnValue);
+    }
+
     [Fact]
     public void Both_values_are_checked_at_once()
     {

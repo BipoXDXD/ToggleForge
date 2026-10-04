@@ -74,6 +74,15 @@ public sealed class NewFlagTests
     }
 
     [Fact]
+    public void A_json_value_that_repeats_a_key_is_refused_on_its_field()
+    {
+        var form = new NewFlag { Key = "shop-config", Type = FlagTypes.Json, OnValueText = """{"a":1,"a":2}""", OffValueText = "{}" };
+
+        Assert.False(form.TryGetCreation(out _, out var errors));
+        Assert.Equal("The value for included players repeats a key in an object. Each key can appear only once.", errors.For(FieldErrors.OnValue));
+    }
+
+    [Fact]
     public void A_rollout_that_is_not_basis_points_is_refused_on_its_field()
     {
         var form = new NewFlag { Key = "new-shop", RolloutPercent = 12.345m };
