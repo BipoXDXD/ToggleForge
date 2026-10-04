@@ -231,7 +231,7 @@ public sealed class FlagEditorPageTests
 
         var page = RenderEditor(console, "shop-config");
 
-        var describedBy = page.Find("fieldset").GetAttribute("aria-describedby");
+        var describedBy = page.Find("fieldset[aria-describedby]").GetAttribute("aria-describedby");
         Assert.Equal("json-public", describedBy);
         Assert.Contains("Never put API keys", page.Find($"#{describedBy}").TextContent, StringComparison.Ordinal);
         Assert.Equal("JSON values", page.Find("fieldset > legend.sr-only").TextContent);
@@ -894,6 +894,148 @@ public sealed class FlagEditorPageTests
         Assert.Equal("""{"rolloutBasisPoints":5000}""", api.BodyOf(api.RequestsTo(HttpMethod.Patch, ShopConfig).Single()));
     }
 
+    [Fact]
+    public void The_whole_form_is_locked_while_the_flag_is_being_saved()
+    {
+        var api = ShopConfigRead()
+            .Answer(HttpMethod.Patch, ShopConfig, HttpStatusCode.OK, ShopConfigJson, eTag: "\"5\"")
+            .Hold(HttpMethod.Patch, ShopConfig, out var release);
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+        page.Find("#on-value").Input("[1]");
+
+        page.Find("form").Submit();
+
+        page.WaitForAssertion(() => Assert.Single(api.RequestsTo(HttpMethod.Patch, ShopConfig)));
+        Assert.All(
+            ["input[type=checkbox]", "#rollout", "#on-value", "#off-value"],
+            control => Assert.NotNull(page.Find(control).Closest("fieldset[disabled]")));
+        release();
+        page.WaitForAssertion(() => Assert.Empty(page.FindAll("fieldset[disabled]")));
+    }
+
+    [Fact]
+    public void The_boolean_values_are_locked_while_the_flag_is_being_saved()
+    {
+        var api = NewShopAtTenPercent()
+            .Answer(HttpMethod.Patch, NewShop, HttpStatusCode.OK, AtFiftyPercent, eTag: "\"8\"")
+            .Hold(HttpMethod.Patch, NewShop, out var release);
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console);
+        page.Find("#rollout").Change("50");
+
+        page.Find("form").Submit();
+
+        page.WaitForAssertion(() => Assert.Single(api.RequestsTo(HttpMethod.Patch, NewShop)));
+        Assert.All(page.FindAll("select"), choice => Assert.NotNull(choice.Closest("fieldset[disabled]")));
+        release();
+        page.WaitForAssertion(() => Assert.Empty(page.FindAll("fieldset[disabled]")));
+    }
+
+    // Um leitor de tela anuncia o campo como ele está quando o foco chega: o erro já tem de estar ligado a ele.
+    [Fact]
+    public void A_value_refused_before_sending_is_marked_by_the_time_the_focus_reaches_it()
+    {
+        var api = ShopConfigRead();
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+        var witness = WatchFocus(console, () => page.Find("#on-value").GetAttribute("aria-describedby"));
+
+        page.Find("#on-value").Input(string.Empty);
+        page.Find("form").Submit();
+
+        page.WaitForAssertion(() => Assert.Equal(["on-value-audience on-value-size on-value-error"], witness.Seen));
+    }
+
+    [Fact]
+    public void A_value_the_api_refuses_is_marked_by_the_time_the_focus_reaches_it()
+    {
+        var api = ShopConfigRead().Answer(HttpMethod.Patch, ShopConfig, HttpStatusCode.BadRequest, """
+            {"type":"/problems/invalid-input","title":"Invalid input","status":400,
+             "errors":[{"type":"INVALID_VALUE","detail":"The value nests deeper than 8 levels.","source":{"location":"body","pointer":"/offValue"}}]}
+            """, "application/problem+json");
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+        var witness = WatchFocus(console, () => page.Find("#off-value").GetAttribute("aria-invalid"));
+
+        page.Find("#off-value").Input("[1]");
+        page.Find("form").Submit();
+
+        page.WaitForAssertion(() => Assert.Equal(["true"], witness.Seen));
+    }
+
+    [Fact]
+    public void The_focus_moves_once_and_then_stays_where_the_member_types()
+    {
+        var api = ShopConfigRead();
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+        page.Find("#on-value").Input(string.Empty);
+        page.Find("form").Submit();
+
+        page.Find("#off-value").Input("[2]");
+        page.Find("#rollout").Change("12.5");
+
+        Assert.Single(console.JSInterop.Invocations, invocation => invocation.Identifier.EndsWith(".focus", StringComparison.Ordinal));
+    }
+
+    // Durante o envio o formulário travado tira o foco de onde ele estava; o bUnit não simula essa perda, mas prova
+    // que o foco é devolvido (WCAG 2.4.3).
+    [Fact]
+    public void A_saved_flag_puts_the_focus_back_on_save()
+    {
+        var api = NewShopAtTenPercent().Answer(HttpMethod.Patch, NewShop, HttpStatusCode.OK, AtFiftyPercent, eTag: "\"8\"");
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console);
+        var save = ReferenceOf(page.Find("button[type=submit]"));
+
+        page.Find("#rollout").Change("50");
+        page.Find("form").Submit();
+
+        page.WaitForElement("[role=status]");
+        page.WaitForAssertion(() => AssertFocused(console, save));
+    }
+
+    [Fact]
+    public void A_refusal_without_a_field_puts_the_focus_back_on_save()
+    {
+        var api = ShopConfigRead().Answer(HttpMethod.Patch, ShopConfig, HttpStatusCode.Conflict,
+            """{"type":"/problems/json-budget-reached","title":"JSON budget reached","status":409,"detail":"Over."}""",
+            "application/problem+json");
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+        var save = ReferenceOf(page.Find("button[type=submit]"));
+
+        page.Find("#on-value").Input("[1]");
+        page.Find("form").Submit();
+
+        page.WaitForElement("[role=alert]");
+        page.WaitForAssertion(() => AssertFocused(console, save));
+    }
+
+    [Fact]
+    public void A_flag_gone_from_the_draft_moves_no_focus()
+    {
+        var api = NewShopAtTenPercent().Answer(HttpMethod.Patch, NewShop, HttpStatusCode.NotFound,
+            """{"type":"/problems/not-found","title":"Not found","status":404}""", "application/problem+json");
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console);
+
+        page.Find("#rollout").Change("50");
+        page.Find("form").Submit();
+
+        page.WaitForAssertion(() => Assert.Contains("This flag left the draft after you opened it.", page.Markup, StringComparison.Ordinal));
+        Assert.DoesNotContain(console.JSInterop.Invocations, invocation => invocation.Identifier.EndsWith(".focus", StringComparison.Ordinal));
+    }
+
     private static StubApi MarkupRead() =>
         new StubApi().Answer(HttpMethod.Get, ShopConfig, HttpStatusCode.OK,
             """{"key":"shop-config","type":"json","enabled":true,"onValue":"<script>x</script>","offValue":"<img src=x onerror=x>","rolloutBasisPoints":10000}""",
@@ -909,6 +1051,13 @@ public sealed class FlagEditorPageTests
 
     private static StubApi NewShopAtTenPercent() =>
         new StubApi().Answer(HttpMethod.Get, NewShop, HttpStatusCode.OK, AtTenPercent, eTag: "\"7\"");
+
+    private static FocusWitness WatchFocus(BunitContext console, Func<string?> read)
+    {
+        var witness = new FocusWitness(read);
+        console.JSInterop.AddInvocationHandler(witness);
+        return witness;
+    }
 
     private static IRenderedComponent<FlagEditor> RenderEditor(BunitContext console, string flagKey = "new-shop") =>
         console.Render<FlagEditor>(parameters => parameters
