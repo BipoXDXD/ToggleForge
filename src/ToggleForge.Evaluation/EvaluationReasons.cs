@@ -13,6 +13,7 @@ namespace ToggleForge.Evaluation
                 or EvaluationReason.InvalidFlagKey
                 or EvaluationReason.FlagNotFound
                 or EvaluationReason.MissingPlayerId
+                or EvaluationReason.SnapshotExpired
                 or EvaluationReason.TypeMismatch
                 or EvaluationReason.InvalidValue;
     }
