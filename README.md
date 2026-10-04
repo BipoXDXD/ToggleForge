@@ -129,7 +129,23 @@ await client.StartAsync();
 var newShop = client.EvaluateBoolean("new-shop", EvaluationContext.ForPlayer(PlayerId.Parse(playerId)), defaultValue: false);
 ```
 
-O app demonstrativo e as configurações JSON entram nas próximas fatias.
+O app demonstrativo conta essa história com o SDK de verdade. Sem argumentos, ele roda um roteiro autocontido,
+contra um servidor simulado: primeira abertura sem rede, publicação a 10%, ampliação a 25% sem perder ninguém,
+resposta atrasada descartada, reinício sem rede com o cache, oito dias offline e a volta da rede com um 304.
+Cada passo confere o que promete, e o CI roda o roteiro como smoke test. Com `--live`, ele conecta numa API
+rodando e mostra a flag mudar a cada publicação ou rollback feito pelo console.
+
+```bash
+dotnet run --project samples/ToggleForge.SdkDemo
+TOGGLEFORGE_API_URL=http://localhost:5080/ TOGGLEFORGE_CREDENTIAL=tfsdk_... \
+  dotnet run --project samples/ToggleForge.SdkDemo -- --live new-shop player-42
+```
+
+O SDK só manda a credencial, sem cookie, então em desenvolvimento a API pode ouvir também em HTTP local
+(`ASPNETCORE_URLS="https://localhost:7443;http://localhost:5080"`). O HTTPS de desenvolvimento só funciona com
+o certificado confiável (`dotnet dev-certs https --trust`).
+
+As configurações JSON entram na próxima fatia.
 
 ## Desenvolvimento
 
@@ -159,9 +175,10 @@ python3 tools/rollout-vectors/generate.py --check
 | `tests/ToggleForge.Console.Tests` | Componentes e cliente do console com bUnit |
 | `tests/ToggleForge.Sdk.Tests` | Leitura do snapshot, ordem das versões e transporte do SDK, sem rede |
 | `samples/ToggleForge.RolloutDemo` | Simulação de rollout em etapas |
+| `samples/ToggleForge.SdkDemo` | O SDK com rede caindo, resposta fora de ordem e reinício; `--live` contra a API |
 | `tools/rollout-vectors` | Implementação de referência do algoritmo em Python |
 | `docs/` | ADRs, especificação do rollout, contrato e ameaças da API |
 | `tools/api-lint` | Spectral com o ruleset OWASP sobre o contrato |
 
 O CI roda formatação, build com avisos tratados como erro, testes (inclusive os da API, com Postgres em
-container), checagem dos vetores, smoke test da demo, lint do contrato e scan de segredos (gitleaks).
+container), checagem dos vetores, smoke test das duas demos, lint do contrato e scan de segredos (gitleaks).

@@ -13,6 +13,7 @@ dotnet format ToggleForge.slnx --verify-no-changes
 python3 tools/rollout-vectors/generate.py              # regenera os vetores do rollout
 python3 tools/rollout-vectors/generate.py --check      # confere o JSON commitado (roda no CI)
 dotnet run --project samples/ToggleForge.RolloutDemo
+dotnet run --project samples/ToggleForge.SdkDemo              # roteiro do SDK; --live usa TOGGLEFORGE_API_URL/CREDENTIAL
 npm ci --prefix tools/api-lint && npm run lint --prefix tools/api-lint   # Spectral + OWASP na spec
 dotnet run --project src/ToggleForge.Api -- --migrate  # aplica as migrations; precisa de ConnectionStrings:ToggleForge
 dotnet run --project src/ToggleForge.Api -- --purge-idempotency-records  # job agendado: esquece chaves com mais de 24 h
