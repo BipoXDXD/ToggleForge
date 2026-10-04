@@ -10,6 +10,7 @@ if (string.IsNullOrWhiteSpace(connectionString))
 
 builder.Services.AddToggleForgeApi(connectionString);
 builder.AddToggleForgeDataProtection();
+builder.AddToggleForgeKestrel();
 var app = builder.Build();
 
 if (await MaintenanceCommands.TryRunAsync(app, args))

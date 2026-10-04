@@ -17,17 +17,36 @@ namespace ToggleForge.Api.Tests.Support;
 public sealed class BrowserHost : WebApplicationFactory<Program>
 {
     private readonly ApiFactory _api;
+    private readonly X509Certificate2 _certificate = SelfSignedTlsCertificate();
 
     public BrowserHost(ApiFactory api)
     {
         _api = api;
-        UseKestrel(kestrel => kestrel.Listen(IPAddress.Loopback, 0, listen => listen.UseHttps(SelfSignedTlsCertificate())));
+        UseKestrel(kestrel => kestrel.Listen(IPAddress.Loopback, 0, listen => listen.UseHttps(_certificate)));
         StartServer();
     }
 
     public Uri Address => new(
         (Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()
             ?? throw new InvalidOperationException("Kestrel did not report the address it listens on.")).Addresses.Single());
+
+    /// <summary>Um cliente HTTP de verdade, com cookies, que confia só no certificado deste host.</summary>
+    public HttpClient CreateHttpClient()
+    {
+        var thumbprint = _certificate.Thumbprint;
+        var handler = new SocketsHttpHandler
+        {
+            CookieContainer = new CookieContainer(),
+            SslOptions = { RemoteCertificateValidationCallback = (_, certificate, _, _) => certificate?.GetCertHashString() == thumbprint },
+        };
+        return new HttpClient(handler) { BaseAddress = Address };
+    }
+
+    public override async ValueTask DisposeAsync()
+    {
+        await base.DisposeAsync();
+        _certificate.Dispose();
+    }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder) => _api.ConfigureTestHost(builder);
 
