@@ -49,12 +49,14 @@ public sealed class ConsoleHostingTests(ApiFactory api)
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
     }
 
-    [Fact]
-    public async Task The_console_page_allows_scripts_only_from_its_own_origin()
+    [Theory]
+    [InlineData("/sign-in")]
+    [InlineData("/index.html")]
+    public async Task The_console_page_allows_scripts_only_from_its_own_origin(string path)
     {
         using var visitor = api.CreateAnonymousClient();
 
-        using var response = await visitor.GetAsync("/sign-in", TestContext.Current.CancellationToken);
+        using var response = await visitor.GetAsync(path, TestContext.Current.CancellationToken);
 
         Assert.Equal(
             "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data:; " +

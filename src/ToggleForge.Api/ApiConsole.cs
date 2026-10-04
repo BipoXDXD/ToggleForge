@@ -25,20 +25,24 @@ internal static class ApiConsole
 
     public static WebApplication MapToggleForgeConsole(this WebApplication app)
     {
-        app.MapStaticAssets().AllowAnonymous().DisableRateLimiting();
+        // A página também é um arquivo estático (/index.html): a CSP vai em toda resposta do console, não só no fallback.
+        app.MapStaticAssets().AllowAnonymous().DisableRateLimiting().Add(WithContentSecurityPolicy);
         app.MapFallbackToFile($"{{*path:nonfile:{ConsoleRoute}}}", "index.html")
             .AllowAnonymous()
             .DisableRateLimiting()
-            .Add(endpoint =>
-            {
-                var serveIndex = endpoint.RequestDelegate!;
-                endpoint.RequestDelegate = context =>
-                {
-                    context.Response.Headers.ContentSecurityPolicy = ContentSecurityPolicy;
-                    return serveIndex(context);
-                };
-            });
+            .Add(WithContentSecurityPolicy);
         return app;
+    }
+
+    private static void WithContentSecurityPolicy(EndpointBuilder endpoint)
+    {
+        var serve = endpoint.RequestDelegate
+            ?? throw new InvalidOperationException($"The console endpoint {endpoint.DisplayName} has no request delegate yet.");
+        endpoint.RequestDelegate = context =>
+        {
+            context.Response.Headers.ContentSecurityPolicy = ContentSecurityPolicy;
+            return serve(context);
+        };
     }
 
     /// <summary>
