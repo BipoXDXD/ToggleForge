@@ -41,6 +41,33 @@ public sealed class ContrastProbeTests(Browser browser) : IClassFixture<Browser>
         Assert.Equal(5.54, ratio, 2);
     }
 
+    // A mesma conta do texto opaco: #767676 sobre #fff dá 4,54.
+    [Fact]
+    public async Task A_field_border_is_measured_against_the_background_outside_it()
+    {
+        await using var context = await browser.NewContextAsync(_nowhere);
+        var page = await OpenAsync(context, """<body style="margin:0;background:#fff"><input id="field" style="border:1px solid #767676"></body>""");
+
+        var ratio = await ContrastProbe.BorderRatioAsync(page.Locator("#field"));
+
+        Assert.Equal(4.54, ratio, 2);
+    }
+
+    // Sem borda desenhada, a cor computada ainda existe (o currentColor), mas não aparece: a razão é a de cor nenhuma.
+    [Theory]
+    [InlineData("border:none")]
+    [InlineData("border:0 solid #000")]
+    [InlineData("border:1px hidden #000")]
+    public async Task A_field_without_a_drawn_border_has_no_border_contrast(string border)
+    {
+        await using var context = await browser.NewContextAsync(_nowhere);
+        var page = await OpenAsync(context, $"""<body style="margin:0;background:#fff"><input id="field" style="{border}"></body>""");
+
+        var ratio = await ContrastProbe.BorderRatioAsync(page.Locator("#field"));
+
+        Assert.Equal(1.0, ratio, 2);
+    }
+
     private static async Task<IPage> OpenAsync(IBrowserContext context, string html)
     {
         var page = await context.NewPageAsync();

@@ -56,9 +56,15 @@ public static class ContrastProbe
             return (light + 0.05) / (dark + 0.05);
           };
           const behind = element => background(element.parentElement ?? element);
+          // Sem borda desenhada, a cor computada (o currentColor) não aparece na tela: a razão é 1, a de cor nenhuma. A
+          // largura computada já é 0 com border-style none ou hidden (CSS Backgrounds 3), então ela cobre os três casos.
           const borderRatio = element => {
+            const style = getComputedStyle(element);
+            if (parseFloat(style.borderTopWidth) === 0) {
+              return 1;
+            }
             const outside = behind(element);
-            return ratio(over(rgba(getComputedStyle(element).borderTopColor), outside), outside);
+            return ratio(over(rgba(style.borderTopColor), outside), outside);
           };
           const textRatio = element => {
             const back = background(element);
