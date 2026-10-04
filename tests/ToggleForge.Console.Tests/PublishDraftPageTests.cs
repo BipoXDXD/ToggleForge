@@ -37,7 +37,7 @@ public sealed class PublishDraftPageTests
         Assert.Equal("Changes since version 3", page.Find("#changes").TextContent.Trim());
         Assert.Equal(
             ["new-shop added", "dark-mode modified"],
-            page.FindAll("[aria-label=Changes] li").Select(change => string.Join(" ", change.QuerySelectorAll("span").Select(part => part.TextContent))));
+            page.FindAll("[aria-label=Changes] li").Select(change => string.Join(" ", change.Children.Select(part => part.TextContent.Trim()))));
     }
 
     [Fact]
@@ -118,6 +118,44 @@ public sealed class PublishDraftPageTests
         var page = RenderPublish(console);
 
         Assert.Equal("Publish", AccessibleNames.CurrentBreadcrumb(page));
+    }
+
+    [Fact]
+    public void A_json_flag_change_shows_the_json_badge()
+    {
+        using var console = ConsoleRendering.Create(ChangesOf("shop-config", "json"));
+
+        var page = RenderPublish(console);
+
+        page.WaitForAssertion(() => Assert.Equal("JSON", page.Find("[aria-label=Changes] li [data-testid=flag-type]").TextContent));
+    }
+
+    [Fact]
+    public void A_boolean_flag_change_shows_the_boolean_badge()
+    {
+        using var console = ConsoleRendering.Create(ChangesOf("new-shop", "boolean"));
+
+        var page = RenderPublish(console);
+
+        page.WaitForAssertion(() => Assert.Equal("boolean", page.Find("[aria-label=Changes] li [data-testid=flag-type]").TextContent));
+    }
+
+    /// <summary>Um rascunho com uma flag adicionada do tipo dado.</summary>
+    private static StubApi ChangesOf(string flagKey, string type)
+    {
+        var value = type == "json" ? """{"discount":0.2}""" : "true";
+        var api = new StubApi()
+            .Answer(HttpMethod.Get, Project, HttpStatusCode.OK, """
+                {"key":"space-race","name":"Space Race","environments":[
+                  {"key":"prod","name":"Production","currentVersion":3,"draftRevision":9,"hasUnpublishedChanges":true}]}
+                """)
+            .Answer(HttpMethod.Get, Draft, HttpStatusCode.OK, $$"""
+                {"revision":9,"basedOnVersion":3,
+                 "flags":[{"key":"{{flagKey}}","type":"{{type}}","enabled":true,"onValue":{{value}},"offValue":{{value}},"rolloutBasisPoints":0}],
+                 "changes":[{"flagKey":"{{flagKey}}","change":"added"}]}
+                """);
+        ConsoleRendering.SignInAs(api, "editor");
+        return api;
     }
 
     private static StubApi TwoChangesSinceVersionThree()

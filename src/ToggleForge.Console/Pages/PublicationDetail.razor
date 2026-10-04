@@ -37,8 +37,9 @@ else
         <p class="mt-2 text-sm text-slate-800">@summary</p>
     }
 
-    <div class="mt-6 overflow-hidden rounded-lg border border-slate-200 bg-white">
-        <table aria-label="Flags in version @Version" class="w-full text-left text-sm">
+    <div class="mt-6 overflow-x-auto rounded-lg border border-slate-200 bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+         role="region" aria-label="Flags in version @Version" tabindex="0">
+        <table class="w-full text-left text-sm" aria-label="Flags in version @Version">
             <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <tr>
                     <th scope="col" class="px-4 py-2">Flag</th>
@@ -59,7 +60,21 @@ else
                         </td>
                         <td class="px-4 py-2">@(flag.Enabled ? "Enabled" : "Disabled")</td>
                         <td class="px-4 py-2">@RolloutShare.Format(flag.RolloutBasisPoints)</td>
-                        <td class="px-4 py-2"><ValuePair OnValue="flag.OnValue" OffValue="flag.OffValue" /></td>
+                        <td class="px-4 py-2">
+                            @* Sem editor nesta página: um valor que não cabe abre aqui mesmo, inteiro e indentado. *@
+                            <ValuePair OnValue="flag.OnValue" OffValue="flag.OffValue">
+                                <ValueTemplate Context="value">
+                                    @if (ValuePreview.Fits(value))
+                                    {
+                                        <ValuePreview Value="value" />
+                                    }
+                                    else
+                                    {
+                                        <JsonValueBlock Value="value" />
+                                    }
+                                </ValueTemplate>
+                            </ValuePair>
+                        </td>
                     </tr>
                 }
             </tbody>

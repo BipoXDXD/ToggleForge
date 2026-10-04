@@ -209,6 +209,37 @@ public sealed class HistoryPagesTests
         Assert.Equal(["\"<script>x</script>\"", "\"<img src=x onerror=x>\""], page.FindAll("tbody code").Select(value => value.TextContent));
     }
 
+    [Fact]
+    public void The_publication_detail_shows_the_whole_json_value_in_a_disclosure()
+    {
+        var api = LiveAtVersion(3, pendingChanges: false).Answer(HttpMethod.Get, Publications + "/3", HttpStatusCode.OK, VersionWith(3, """
+            [{"key":"shop-config","type":"json","enabled":true,"onValue":{"discount":0.2,"featuredItems":["sword","shield"]},"offValue":{"discount":0},"rolloutBasisPoints":10000}]
+            """));
+        using var console = ConsoleRendering.Create(api);
+
+        var page = RenderVersion(console, 3);
+
+        var disclosure = Assert.Single(page.FindAll("tbody details"));
+        Assert.Equal("{\n  \"discount\": 0.2,\n  \"featuredItems\": [\n    \"sword\",\n    \"shield\"\n  ]\n}", disclosure.QuerySelector("pre")?.TextContent);
+        Assert.Equal("{\"discount\":0}", page.FindAll("tbody dd")[1].TextContent.Trim());
+    }
+
+    [Fact]
+    public void The_version_table_scrolls_inside_a_named_region_instead_of_clipping()
+    {
+        var api = LiveAtVersion(3, pendingChanges: false).Answer(HttpMethod.Get, Publications + "/3", HttpStatusCode.OK, VersionJson(3));
+        using var console = ConsoleRendering.Create(api);
+
+        var page = RenderVersion(console, 3);
+
+        var region = page.Find("table").ParentElement;
+        Assert.NotNull(region);
+        Assert.Equal(["region", "0", "Flags in version 3"], [region.GetAttribute("role"), region.GetAttribute("tabindex"), region.GetAttribute("aria-label")]);
+        Assert.Contains("overflow-x-auto", region.ClassList);
+        Assert.DoesNotContain("overflow-hidden", region.ClassList);
+        Assert.Equal("Flags in version 3", page.Find("table").GetAttribute("aria-label"));
+    }
+
     private static StubApi LiveAtVersion(long version, bool pendingChanges)
     {
         var api = new StubApi().Answer(HttpMethod.Get, Environment, HttpStatusCode.OK, EnvironmentJson(version, pendingChanges));

@@ -211,6 +211,24 @@ public sealed class EnvironmentDraftPageTests
         Assert.Empty(page.FindAll("[data-testid=json-budget]"));
     }
 
+    [Fact]
+    public void The_flags_table_scrolls_inside_a_named_region_instead_of_clipping()
+    {
+        var api = DraftWithOneFlag();
+        ConsoleRendering.SignInAs(api, "viewer");
+        using var console = ConsoleRendering.Create(api);
+
+        var page = RenderDraft(console);
+
+        page.WaitForAssertion(() => Assert.Single(page.FindAll("tbody tr")));
+        var region = page.Find("table").ParentElement;
+        Assert.NotNull(region);
+        Assert.Equal(["region", "0", "draft-flags"], [region.GetAttribute("role"), region.GetAttribute("tabindex"), region.GetAttribute("aria-labelledby")]);
+        Assert.Contains("overflow-x-auto", region.ClassList);
+        Assert.DoesNotContain("overflow-hidden", region.ClassList);
+        Assert.Equal("draft-flags", page.Find("table").GetAttribute("aria-labelledby"));
+    }
+
     private static string JsonBudgetText(IRenderedComponent<EnvironmentDraft> page) =>
         System.Text.RegularExpressions.Regex.Replace(page.Find("[data-testid=json-budget]").TextContent, @"\s+", " ").Trim();
 

@@ -13,9 +13,9 @@ public static class JsonBudget
 {
     public const int MaxKibibytes = 128;
 
-    private const int BytesPerKibibyte = 1024;
-
     public const int MaxBytes = MaxKibibytes * BytesPerKibibyte;
+
+    private const int BytesPerKibibyte = 1024;
 
     // Acima de três quartos do teto o rascunho avisa; abaixo disso o número basta (design spec, 2.3).
     private const int NearLimitBytes = MaxBytes / 4 * 3;

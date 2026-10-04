@@ -5,9 +5,9 @@
 @inject IJSRuntime JS
 
 <details class="group">
-    <summary class="cursor-pointer list-none">
+    <summary class="cursor-pointer list-none rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 [&::-webkit-details-marker]:hidden">
         <span class="inline-block text-slate-500 transition-transform group-open:rotate-90" aria-hidden="true">▶</span>
-        <ValuePreview Value="Value" />
+        <ValuePreview Value="Value" TextSize="text-sm" />
     </summary>
     <div class="mt-2 rounded-md border border-slate-200 bg-slate-50">
         <div class="flex items-start justify-between gap-2">
@@ -29,6 +29,9 @@
         Failed,
     }
 
+    // O último valor mostrado: o pai redesenha com o mesmo valor (a cada tecla no formulário, por exemplo), e só um
+    // valor novo apaga o resultado da cópia.
+    private FlagValue? _shown;
     private string _indented = string.Empty;
     private CopyState _copy;
 
@@ -44,6 +47,12 @@
 
     protected override void OnParametersSet()
     {
+        if (Equals(Value, _shown))
+        {
+            return;
+        }
+
+        _shown = Value;
         _indented = Value.Indented();
         _copy = CopyState.NotCopied;
     }

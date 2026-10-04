@@ -51,7 +51,13 @@ else
                 @foreach (var change in _draft.Changes)
                 {
                     <li class="flex justify-between px-4 py-2">
-                        <span class="font-mono">@change.FlagKey</span>
+                        <span class="flex items-center gap-2">
+                            <span class="font-mono">@change.FlagKey</span>
+                            @if (TypeOf(change) is { } type)
+                            {
+                                <FlagTypeBadge Type="@type" />
+                            }
+                        </span>
                         <span class="text-slate-500">@change.Change</span>
                     </li>
                 }
@@ -123,6 +129,9 @@ else
     private EnvironmentAddress Address => new(OrganizationId, ProjectKey, EnvironmentKey);
 
     private bool Confirmed => string.Equals(_confirmation, EnvironmentKey, StringComparison.Ordinal);
+
+    // Uma flag removida não está mais no rascunho, e o tipo dela só viria da publicação base; fica sem selo.
+    private string? TypeOf(DraftChange change) => _draft?.Flags.FirstOrDefault(flag => flag.Key == change.FlagKey)?.Type;
 
     private string ChangeCount => _draft?.Changes.Count == 1 ? "1 change" : $"{_draft?.Changes.Count} changes";
 

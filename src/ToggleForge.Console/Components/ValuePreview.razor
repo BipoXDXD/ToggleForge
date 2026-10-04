@@ -1,8 +1,12 @@
 @*
     O começo de um valor, para caber numa célula; o valor compacto inteiro fica no title. Sempre texto, nunca
-    markup: o valor é do usuário (canvas, T6).
+    markup: o valor é do usuário (canvas, T6). O title não chega ao teclado nem ao toque, então quem corta avisa o
+    leitor de tela, e o valor inteiro fica no editor ou num JsonValueBlock.
 *@
-<code title="@Value.Text" class="font-mono text-xs leading-5 text-slate-700">@Value.Preview(MaxLength)</code>
+<code title="@Value.Text" class="@TextSize font-mono text-slate-700">@Value.Preview(MaxLength)</code>@if (!Fits(Value))
+{
+    <span class="sr-only">, shortened</span>
+}
 
 @code {
     // Cabe ao lado das outras colunas da tabela sem quebrar a linha numa tela de notebook (design spec, 2.3).
@@ -10,4 +14,11 @@
 
     [Parameter, EditorRequired]
     public FlagValue Value { get; set; } = FlagValue.Null;
+
+    /// <summary>Classes de tamanho do texto; nas tabelas, o padrão.</summary>
+    [Parameter]
+    public string TextSize { get; set; } = "text-xs leading-5";
+
+    /// <summary>Se o valor aparece inteiro, sem corte.</summary>
+    public static bool Fits(FlagValue value) => value.Text.Length <= MaxLength;
 }

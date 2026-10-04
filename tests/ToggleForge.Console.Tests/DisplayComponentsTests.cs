@@ -40,4 +40,26 @@ public sealed class DisplayComponentsTests
         Assert.Empty(preview.FindAll("script"));
         Assert.Equal("\"<script>x</script>\"", preview.Find("code").TextContent);
     }
+
+    [Fact]
+    public void A_shortened_preview_says_it_is_shortened()
+    {
+        using var console = new BunitContext();
+        var value = Values.Json($"\"{new string('a', 58)}\"");
+
+        var preview = console.Render<ValuePreview>(parameters => parameters.Add(component => component.Value, value));
+
+        Assert.Equal(", shortened", preview.Find(".sr-only").TextContent);
+    }
+
+    [Fact]
+    public void A_preview_that_fits_does_not_say_it_is_shortened()
+    {
+        using var console = new BunitContext();
+        var value = Values.Json($"\"{new string('a', 38)}\"");
+
+        var preview = console.Render<ValuePreview>(parameters => parameters.Add(component => component.Value, value));
+
+        Assert.Empty(preview.FindAll(".sr-only"));
+    }
 }

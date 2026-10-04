@@ -443,6 +443,41 @@ public sealed class SimulatorPageTests
         Assert.Equal("Copy", page.Find("tbody details button").TextContent.Trim());
     }
 
+    [Fact]
+    public void A_failed_copy_stays_explained_while_the_member_types_another_player()
+    {
+        var api = LiveAtVersion(3).Answer(HttpMethod.Post, Simulations, HttpStatusCode.OK, ShopConfigResult);
+        using var console = ConsoleRendering.Create(api);
+        console.JSInterop.SetupVoid("navigator.clipboard.writeText", _ => true).SetException(new JSException("Write permission denied."));
+        var page = RenderSimulator(console);
+        Simulate(page);
+        page.WaitForAssertion(() => Assert.Single(page.FindAll("tbody details")));
+        page.Find("tbody details button").Click();
+        page.WaitForAssertion(() => Assert.NotEmpty(page.Find("tbody details [role=status]").TextContent.Trim()));
+
+        page.Find("input[autocomplete=off]").Change("player-2");
+
+        Assert.Equal("Copy failed. Select the text and copy it by hand.", page.Find("tbody details [role=status]").TextContent.Trim());
+    }
+
+    [Fact]
+    public void The_results_table_scrolls_inside_a_named_region_instead_of_clipping()
+    {
+        var api = LiveAtVersion(3).Answer(HttpMethod.Post, Simulations, HttpStatusCode.OK, ShopConfigResult);
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderSimulator(console);
+
+        Simulate(page);
+
+        page.WaitForAssertion(() => Assert.Single(page.FindAll("tbody tr")));
+        var region = page.Find("table").ParentElement;
+        Assert.NotNull(region);
+        Assert.Equal(["region", "0", "simulation-results"], [region.GetAttribute("role"), region.GetAttribute("tabindex"), region.GetAttribute("aria-labelledby")]);
+        Assert.Contains("overflow-x-auto", region.ClassList);
+        Assert.DoesNotContain("overflow-hidden", region.ClassList);
+        Assert.Equal("simulation-results", page.Find("table").GetAttribute("aria-labelledby"));
+    }
+
     private const string ShopConfigResult = """
         {"source":"draft","version":null,"results":[
           {"flagKey":"shop-config","type":"json","value":{"discount":0.2},"reason":"included","bucket":null}]}

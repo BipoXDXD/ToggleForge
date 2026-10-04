@@ -1,9 +1,9 @@
 @* A coluna "Values" das tabelas de flags: o que recebe quem cai no rollout e o que recebem os outros. *@
 <dl class="grid grid-cols-[auto_1fr] gap-x-2">
     <dt class="text-xs leading-5 text-slate-500">Included</dt>
-    <dd class="min-w-0"><ValuePreview Value="OnValue" /></dd>
+    <dd class="min-w-0">@Show(OnValue)</dd>
     <dt class="text-xs leading-5 text-slate-500">Others</dt>
-    <dd class="min-w-0"><ValuePreview Value="OffValue" /></dd>
+    <dd class="min-w-0">@Show(OffValue)</dd>
 </dl>
 
 @code {
@@ -12,4 +12,16 @@
 
     [Parameter, EditorRequired]
     public FlagValue OffValue { get; set; } = FlagValue.Null;
+
+    /// <summary>Como mostrar cada valor; sem ele, a prévia.</summary>
+    [Parameter]
+    public RenderFragment<FlagValue>? ValueTemplate { get; set; }
+
+    private RenderFragment Show(FlagValue value) =>
+        ValueTemplate?.Invoke(value) ?? (builder =>
+        {
+            builder.OpenComponent<ValuePreview>(0);
+            builder.AddComponentParameter(1, nameof(ValuePreview.Value), value);
+            builder.CloseComponent();
+        });
 }
