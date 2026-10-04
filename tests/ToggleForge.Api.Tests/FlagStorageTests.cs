@@ -7,13 +7,15 @@ namespace ToggleForge.Api.Tests;
 /// <summary>As constraints do tipo e dos valores de uma flag (ADR 0011), contra dado gravado por fora da aplicação.</summary>
 public sealed class FlagStorageTests(ApiFactory api)
 {
-    [Fact]
-    public async Task The_database_refuses_a_boolean_flag_that_stores_a_json_value()
+    [Theory]
+    [InlineData("on_value")]
+    [InlineData("off_value")]
+    public async Task The_database_refuses_a_boolean_flag_that_stores_a_json_value(string column)
     {
         using var owner = await OwnerWithNewShopAsync();
 
         var error = await Assert.ThrowsAnyAsync<PostgresException>(() =>
-            api.ExecuteSqlAsync(UpdateNewShop(owner, "on_value = '3'")));
+            api.ExecuteSqlAsync(UpdateNewShop(owner, $"{column} = '3'")));
 
         Assert.Equal("ck_draft_flags_boolean_values", error.ConstraintName);
     }
