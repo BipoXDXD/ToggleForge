@@ -49,7 +49,8 @@ public sealed class PublishingService(
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(idempotencyKey);
 
-        var attempt = new Attempt(memberId, idempotencyKey, Fingerprint("rollBack", locator, command));
+        var request = new { command.TargetVersion, command.ExpectedCurrentVersion, command.DiscardDraftChanges };
+        var attempt = new Attempt(memberId, idempotencyKey, Fingerprint("rollBack", locator, request));
         return RecordAsync(
             locator,
             attempt,
@@ -150,7 +151,9 @@ public sealed class PublishingService(
 
     /// <summary>
     /// A operação entra no fingerprint para a mesma chave não servir a publicar e a reverter. O pedido é
-    /// serializado pelo tipo concreto, então só pode ter valores primitivos.
+    /// serializado pelo tipo concreto, então só pode ter valores primitivos. Cada operação projeta o pedido num
+    /// objeto anônimo explícito: um campo novo no comando não muda em silêncio o fingerprint das chaves já
+    /// gravadas, e a ordem e os nomes das propriedades são parte do formato guardado.
     /// </summary>
     private static string Fingerprint(string operation, EnvironmentLocator locator, object request)
     {
