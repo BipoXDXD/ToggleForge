@@ -118,20 +118,20 @@ O que já existe e pesa na escolha:
 - **Ritmo:** depois, a cada 60 s com ±10% de variação. O intervalo é configurável de 15 s (piso que protege a
   API) a 1 h (acima disso, uma correção ou um rollback demorariam demais a chegar).
 - Cada pedido tem timeout de 10 s, que cobre também a leitura do corpo.
-- **Em caso de falha:** backoff exponencial a partir do intervalo, dobrando a cada falha, com teto de 10 min
-  antes da variação. Um sucesso zera a contagem. Um snapshot ilegível conta como falha, porque tentar de novo
-  logo não o torna legível.
+- **Em caso de falha:** backoff exponencial a partir do intervalo, dobrando a cada falha, com teto de 10 min, ou
+  o próprio intervalo quando ele for maior, antes da variação. Um sucesso zera a contagem. Um snapshot ilegível
+  conta como falha, porque tentar de novo logo não o torna legível.
 - **`Retry-After`:** quando é maior que a espera calculada, vence, com teto de 1 h (o máximo do contrato). A
   variação sobre ele é só para cima, de 0 a 10%: nunca antes do que o servidor pediu, e os jogadores que levaram
   o mesmo 429 não voltam todos no mesmo segundo.
 - **Casos especiais:**
   - 304 conta como sucesso e renova a confirmação;
   - 404 (nunca publicado) volta ao intervalo normal;
-  - 401 e 403 (credencial revogada ou recusada) mantêm o cache e tentam de novo no teto do backoff.
+  - 401 e 403 (credencial revogada ou recusada) mantêm o cache e tentam de novo no teto do backoff descrito acima.
 - **`RefreshAsync`:** sincroniza na hora, por exemplo quando o jogo volta do segundo plano. Para o jogo não furar
   o ritmo que protege a API, ele não sai antes de 15 s da última tentativa, do prazo de um `Retry-After` ou do
   teto depois de um 401/403. Nesses casos devolve `Skipped` sem chamar o servidor. O teto depois de um 401/403 é o
-  mesmo do laço: o maior entre o intervalo e o backoff máximo.
+  mesmo teto do laço.
 - **Encerramento:** `DisposeAsync` cancela o laço, inclusive uma sincronização em andamento, e espera ele
   terminar. `Dispose` só cancela, para o `OnDestroy` da Unity, que não pode esperar. Um cliente descartado não
   inicia de novo.
