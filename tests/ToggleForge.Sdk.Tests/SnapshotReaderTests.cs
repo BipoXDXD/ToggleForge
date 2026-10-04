@@ -63,6 +63,7 @@ public sealed class SnapshotReaderTests
     [InlineData("\"rolloutBasisPoints\":10000", "\"rolloutBasisPoints\":-1")]
     [InlineData("\"rolloutBasisPoints\":10000", "\"rolloutBasisPoints\":5000.5")]
     [InlineData("\"rolloutBasisPoints\":10000", "\"rolloutBasisPoints\":4294967296")]
+    [InlineData("\"rolloutBasisPoints\":10000", "\"rolloutBasisPoints\":-4294967296")]
     [InlineData("\"seed\":\"s1\"", "\"seed\":\"  \"")]
     [InlineData(",\"seed\":\"s1\"", "")]
     public void One_wrong_flag_refuses_the_whole_snapshot(string field, string replacement) =>
@@ -99,4 +100,20 @@ public sealed class SnapshotReaderTests
     [Fact]
     public void A_seed_with_a_control_character_refuses_the_snapshot() =>
         Assert.Null(SnapshotReader.Read(Snapshots.Json().Replace("\"seed\":\"s1\"", "\"seed\":\"\\u0000\"", StringComparison.Ordinal)));
+
+    [Theory]
+    [InlineData(" {}")]
+    [InlineData(" trailing")]
+    public void Content_after_the_snapshot_refuses_it(string trailing) =>
+        Assert.Null(SnapshotReader.Read(Snapshots.Json() + trailing));
+
+    [Fact]
+    public void Text_that_looks_like_a_date_is_read_as_written()
+    {
+        var snapshot = SnapshotReader.Read(Snapshots.Json().Replace("\"seed\":\"s1\"", "\"seed\":\"2026-10-04T12:00:00Z\"", StringComparison.Ordinal));
+
+        Assert.NotNull(snapshot);
+        Assert.True(snapshot.TryGetFlag(FlagKey.Parse("new-shop"), out var flag));
+        Assert.Equal("2026-10-04T12:00:00Z", Assert.IsType<PercentageRollout>(flag.Targeting).Seed.Value);
+    }
 }

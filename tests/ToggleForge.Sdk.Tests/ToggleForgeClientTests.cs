@@ -86,6 +86,26 @@ public sealed class ToggleForgeClientTests
     }
 
     [Fact]
+    public async Task A_snapshot_of_another_project_replaces_the_one_in_use_whatever_its_version()
+    {
+        var client = await SyncedAtVersionThree(SnapshotResponse.Fetched(Snapshots.Disabled(version: 1).Replace("\"space-race\"", "\"moon-race\"", StringComparison.Ordinal), "\"m1\""));
+
+        Assert.Equal(SyncOutcome.Updated, await client.RefreshAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(1, client.EvaluateBoolean("new-shop", _player, defaultValue: false).SnapshotVersion);
+    }
+
+    [Fact]
+    public async Task A_rollout_result_carries_the_bucket_of_the_player()
+    {
+        var halfRollout = Snapshots.Json().Replace("\"rolloutBasisPoints\":10000", "\"rolloutBasisPoints\":5000", StringComparison.Ordinal);
+        var client = new ToggleForgeClient(new StubTransport().Then(SnapshotResponse.Fetched(halfRollout, "\"v1\"")));
+        await client.RefreshAsync(TestContext.Current.CancellationToken);
+
+        // O bucket de player-42 em space-race/dev/new-shop/s1, calculado pelo oráculo em tools/rollout-vectors.
+        Assert.Equal(3693, client.EvaluateBoolean("new-shop", _player, defaultValue: false).Bucket);
+    }
+
+    [Fact]
     public async Task An_invalid_snapshot_keeps_the_one_in_use()
     {
         var client = await SyncedAtVersionThree(SnapshotResponse.Fetched(Snapshots.Json(version: 4).Replace("rollout.v1", "rollout.v2", StringComparison.Ordinal), "\"v4\""));

@@ -99,13 +99,56 @@ public sealed class HttpSnapshotTransportTests
     }
 
     [Fact]
-    public async Task A_body_declared_over_the_limit_is_a_failure_before_reading_it()
+    public async Task A_body_declared_over_the_limit_is_refused_without_reading_it()
     {
-        var body = new string(' ', HttpSnapshotTransport.MaxSnapshotBytes + 1);
+        var body = new CountingStream(Encoding.UTF8.GetBytes(Snapshots.Json()));
+        var handler = new StubHandler(_ =>
+        {
+            var content = new StreamContent(body);
+            content.Headers.ContentLength = HttpSnapshotTransport.MaxSnapshotBytes + 1;
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = content };
+        });
+
+        var response = await Transport(handler).GetAsync(eTag: null, TestContext.Current.CancellationToken);
+
+        Assert.Equal((SnapshotResponseKind.Failed, (int?)200, 0L), (response.Kind, response.StatusCode, body.BytesRead));
+    }
+
+    [Fact]
+    public async Task A_body_without_length_is_read_only_up_to_the_limit()
+    {
+        var size = 4 * HttpSnapshotTransport.MaxSnapshotBytes;
+        var body = new CountingStream(Encoding.UTF8.GetBytes(new string(' ', size)));
+
+        var response = await Transport(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(body) }))
+            .GetAsync(eTag: null, TestContext.Current.CancellationToken);
+
+        Assert.Equal(SnapshotResponseKind.Failed, response.Kind);
+        Assert.InRange(body.BytesRead, HttpSnapshotTransport.MaxSnapshotBytes, size / 2);
+    }
+
+    [Fact]
+    public async Task Cancelling_while_the_body_arrives_stops_the_sync()
+    {
+        using var stop = new CancellationTokenSource();
+        var handler = new StubHandler(_ =>
+        {
+            // Os headers chegaram; o jogo desiste antes do corpo.
+            stop.Cancel();
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(new MemoryStream(Encoding.UTF8.GetBytes(Snapshots.Json()))) };
+        });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Transport(handler).GetAsync(eTag: null, stop.Token));
+    }
+
+    [Fact]
+    public async Task The_body_is_read_as_utf8()
+    {
+        var body = Snapshots.Json().Replace("\"flags\"", "\"note\":\"promoção ✓\",\"flags\"", StringComparison.Ordinal);
 
         var response = await Transport(new StubHandler(_ => Ok(body, eTag: null))).GetAsync(eTag: null, TestContext.Current.CancellationToken);
 
-        Assert.Equal(SnapshotResponseKind.Failed, response.Kind);
+        Assert.Equal(body, response.Body);
     }
 
     [Theory]
@@ -190,6 +233,62 @@ public sealed class HttpSnapshotTransportTests
         {
             await Task.Delay(Timeout.Infinite, cancellationToken);
             return 0;
+        }
+    }
+
+    /// <summary>Um corpo sem tamanho conhecido (não navegável) que conta quantos bytes o transporte leu.</summary>
+    private sealed class CountingStream(byte[] content) : Stream
+    {
+        private readonly MemoryStream _inner = new(content);
+
+        public long BytesRead { get; private set; }
+
+        public override bool CanRead => true;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => false;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            var read = _inner.Read(buffer, offset, count);
+            BytesRead += read;
+            return read;
+        }
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            var read = await _inner.ReadAsync(buffer, cancellationToken);
+            BytesRead += read;
+            return read;
+        }
+
+        public override void Flush()
+        {
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _inner.Dispose();
+            }
+
+            base.Dispose(disposing);
         }
     }
 }

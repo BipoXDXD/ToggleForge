@@ -34,4 +34,29 @@ public sealed class SdkCredentialTests
 
         Assert.DoesNotContain("CANARY", error.Message, StringComparison.Ordinal);
     }
+
+    [Theory]
+    [InlineData('A')]
+    [InlineData('Z')]
+    [InlineData('a')]
+    [InlineData('z')]
+    [InlineData('0')]
+    [InlineData('9')]
+    [InlineData('-')]
+    [InlineData('_')]
+    public void Every_base64url_character_is_accepted(char character) =>
+        Assert.True(SdkCredential.TryParse("tfsdk_" + new string('a', 42) + character, out _));
+
+    [Theory]
+    [InlineData('@')]
+    [InlineData('[')]
+    [InlineData('`')]
+    [InlineData('{')]
+    [InlineData('/')]
+    [InlineData(':')]
+    [InlineData('=')]
+    [InlineData(' ')]
+    [InlineData('é')]
+    public void A_character_outside_base64url_is_refused(char character) =>
+        Assert.False(SdkCredential.TryParse("tfsdk_" + new string('a', 42) + character, out _));
 }
