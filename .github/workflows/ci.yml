@@ -59,6 +59,10 @@ jobs:
       - name: Smoke test da demo
         run: dotnet run --project samples/ToggleForge.RolloutDemo --configuration Release --no-build
 
+      # O roteiro confere cada passo e termina com erro se o SDK não cumprir o que promete.
+      - name: Smoke test da demo do SDK
+        run: dotnet run --project samples/ToggleForge.SdkDemo --configuration Release --no-build
+
   api-contract:
     name: Lint do contrato da API
     runs-on: ubuntu-latest
