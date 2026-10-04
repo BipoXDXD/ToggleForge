@@ -17,5 +17,10 @@ namespace ToggleForge.Sdk
 
         /// <summary>Rede, timeout ou erro do servidor; o anterior continua em uso.</summary>
         Failed,
+
+        /// <summary>
+        /// Pedido cedo demais, antes do ritmo mínimo ou do prazo que o servidor pediu; nada foi enviado.
+        /// </summary>
+        Skipped,
     }
 }

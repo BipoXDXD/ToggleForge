@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Time.Testing;
 using ToggleForge.Evaluation;
 
 namespace ToggleForge.Sdk.Tests;
@@ -6,10 +7,13 @@ public sealed class ToggleForgeClientTests
 {
     private static readonly EvaluationContext _player = EvaluationContext.ForPlayer(PlayerId.Parse("player-42"));
 
+    // Relógio parado: cada teste avança o piso entre sincronizações quando precisa de mais de uma.
+    private readonly FakeTimeProvider _time = new();
+
     [Fact]
     public void Before_any_sync_the_game_gets_its_default_value()
     {
-        var client = new ToggleForgeClient(new StubTransport());
+        var client = Client(new StubTransport());
 
         var result = client.EvaluateBoolean("new-shop", _player, defaultValue: false);
 
@@ -20,7 +24,7 @@ public sealed class ToggleForgeClientTests
     [Fact]
     public async Task A_synced_snapshot_decides_the_flags_from_then_on()
     {
-        var client = new ToggleForgeClient(new StubTransport().Then(SnapshotResponse.Fetched(Snapshots.Json(version: 3), "\"v3\"")));
+        var client = Client(new StubTransport().Then(SnapshotResponse.Fetched(Snapshots.Json(version: 3), "\"v3\"")));
 
         var outcome = await client.RefreshAsync(TestContext.Current.CancellationToken);
 
@@ -36,8 +40,9 @@ public sealed class ToggleForgeClientTests
         var transport = new StubTransport()
             .Then(SnapshotResponse.Fetched(Snapshots.Json(version: 3), "\"v3\""))
             .Then(SnapshotResponse.NotModified);
-        var client = new ToggleForgeClient(transport);
+        var client = Client(transport);
         await client.RefreshAsync(TestContext.Current.CancellationToken);
+        _time.Advance(ToggleForgeOptions.MinSyncInterval);
 
         var outcome = await client.RefreshAsync(TestContext.Current.CancellationToken);
 
@@ -98,7 +103,7 @@ public sealed class ToggleForgeClientTests
     public async Task A_rollout_result_carries_the_bucket_of_the_player()
     {
         var halfRollout = Snapshots.Json().Replace("\"rolloutBasisPoints\":10000", "\"rolloutBasisPoints\":5000", StringComparison.Ordinal);
-        var client = new ToggleForgeClient(new StubTransport().Then(SnapshotResponse.Fetched(halfRollout, "\"v1\"")));
+        var client = Client(new StubTransport().Then(SnapshotResponse.Fetched(halfRollout, "\"v1\"")));
         await client.RefreshAsync(TestContext.Current.CancellationToken);
 
         // O bucket de player-42 em space-race/dev/new-shop/s1, calculado pelo oráculo em tools/rollout-vectors.
@@ -130,7 +135,7 @@ public sealed class ToggleForgeClientTests
     [Fact]
     public async Task A_failed_first_sync_leaves_the_game_on_its_defaults()
     {
-        var client = new ToggleForgeClient(new StubTransport().Then(SnapshotResponse.Failed(statusCode: null)));
+        var client = Client(new StubTransport().Then(SnapshotResponse.Failed(statusCode: null)));
 
         Assert.Equal(SyncOutcome.Failed, await client.RefreshAsync(TestContext.Current.CancellationToken));
         Assert.Equal(SnapshotSource.None, client.EvaluateBoolean("new-shop", _player, defaultValue: true).Source);
@@ -139,7 +144,7 @@ public sealed class ToggleForgeClientTests
     [Fact]
     public async Task A_transport_that_throws_is_a_failed_sync_not_an_exception_in_the_game()
     {
-        var client = new ToggleForgeClient(new ThrowingTransport(new InvalidOperationException("adapter bug")));
+        var client = Client(new ThrowingTransport(new InvalidOperationException("adapter bug")));
 
         Assert.Equal(SyncOutcome.Failed, await client.RefreshAsync(TestContext.Current.CancellationToken));
     }
@@ -149,7 +154,7 @@ public sealed class ToggleForgeClientTests
     {
         using var stop = new CancellationTokenSource();
         await stop.CancelAsync();
-        var client = new ToggleForgeClient(new ThrowingTransport(new OperationCanceledException(stop.Token)));
+        var client = Client(new ThrowingTransport(new OperationCanceledException(stop.Token)));
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => client.RefreshAsync(stop.Token));
     }
@@ -159,9 +164,10 @@ public sealed class ToggleForgeClientTests
     {
         var versions = Enumerable.Range(1, 200).OrderBy(version => (version * 7919) % 200).ToList();
         var transport = new GatedTransport(versions);
-        var client = new ToggleForgeClient(transport);
+        var client = Client(transport);
         var syncs = versions.Select(_ => Task.Run(() => client.RefreshAsync(TestContext.Current.CancellationToken), TestContext.Current.CancellationToken)).ToList();
         var seen = new List<long>();
+        await transport.AllArrivedAsync();
         transport.ReleaseAll();
         while (syncs.Any(sync => !sync.IsCompleted))
         {
@@ -174,10 +180,46 @@ public sealed class ToggleForgeClientTests
         Assert.Equal(seen.Order(), seen);
     }
 
-    private static async Task<ToggleForgeClient> SyncedAtVersionThree(SnapshotResponse next)
+    [Fact]
+    public async Task A_refresh_right_after_a_sync_is_skipped_without_calling_the_server()
     {
-        var client = new ToggleForgeClient(new StubTransport().Then(SnapshotResponse.Fetched(Snapshots.Json(version: 3), "\"v3\"")).Then(next));
+        var transport = new StubTransport().Then(SnapshotResponse.NotModified).Then(SnapshotResponse.NotModified);
+        var client = Client(transport);
         await client.RefreshAsync(TestContext.Current.CancellationToken);
+        _time.Advance(ToggleForgeOptions.MinSyncInterval - TimeSpan.FromMilliseconds(1));
+
+        Assert.Equal(SyncOutcome.Skipped, await client.RefreshAsync(TestContext.Current.CancellationToken));
+        Assert.Single(transport.SentETags);
+
+        _time.Advance(TimeSpan.FromMilliseconds(1));
+        Assert.Equal(SyncOutcome.NotModified, await client.RefreshAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task A_refresh_waits_as_long_as_the_server_asked()
+    {
+        var transport = new StubTransport().Then(SnapshotResponse.Failed(429, TimeSpan.FromMinutes(2))).Then(SnapshotResponse.NotModified);
+        var client = Client(transport);
+        await client.RefreshAsync(TestContext.Current.CancellationToken);
+        _time.Advance(TimeSpan.FromSeconds(119));
+
+        Assert.Equal(SyncOutcome.Skipped, await client.RefreshAsync(TestContext.Current.CancellationToken));
+
+        _time.Advance(TimeSpan.FromSeconds(1));
+        Assert.Equal(SyncOutcome.NotModified, await client.RefreshAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task The_first_refresh_goes_out_at_once() =>
+        Assert.Equal(SyncOutcome.NotModified, await Client(new StubTransport().Then(SnapshotResponse.NotModified)).RefreshAsync(TestContext.Current.CancellationToken));
+
+    private ToggleForgeClient Client(ISnapshotTransport transport) => new(transport, options: null, _time);
+
+    private async Task<ToggleForgeClient> SyncedAtVersionThree(SnapshotResponse next)
+    {
+        var client = Client(new StubTransport().Then(SnapshotResponse.Fetched(Snapshots.Json(version: 3), "\"v3\"")).Then(next));
+        await client.RefreshAsync(TestContext.Current.CancellationToken);
+        _time.Advance(ToggleForgeOptions.MinSyncInterval);
         return client;
     }
 
@@ -196,13 +238,22 @@ public sealed class ToggleForgeClientTests
     private sealed class GatedTransport(IEnumerable<int> versions) : ISnapshotTransport
     {
         private readonly TaskCompletionSource _gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _allArrived = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly System.Collections.Concurrent.ConcurrentQueue<int> _versions = new(versions);
 
         public void ReleaseAll() => _gate.SetResult();
 
+        /// <summary>Todas as sincronizações chegaram ao transporte antes de qualquer uma terminar.</summary>
+        public Task AllArrivedAsync() => _allArrived.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+
         public async Task<SnapshotResponse> GetAsync(string? eTag, CancellationToken cancellationToken)
         {
             _versions.TryDequeue(out var version);
+            if (_versions.IsEmpty)
+            {
+                _allArrived.TrySetResult();
+            }
+
             await _gate.Task;
             return SnapshotResponse.Fetched(Snapshots.Json(version), $"\"v{version}\"");
         }

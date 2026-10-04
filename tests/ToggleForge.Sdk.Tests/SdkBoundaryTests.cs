@@ -8,11 +8,11 @@ public sealed class SdkBoundaryTests
     private static readonly Assembly _sdk = typeof(ToggleForgeClient).Assembly;
 
     [Fact]
-    public void The_sdk_depends_only_on_the_evaluation_core_and_newtonsoft()
+    public void The_sdk_depends_only_on_the_evaluation_core_newtonsoft_and_the_time_provider()
     {
         var references = _sdk.GetReferencedAssemblies().Select(reference => reference.Name).Order(StringComparer.Ordinal);
 
-        Assert.Equal(["Newtonsoft.Json", "ToggleForge.Evaluation", "netstandard"], references);
+        Assert.Equal(["Microsoft.Bcl.TimeProvider", "Newtonsoft.Json", "ToggleForge.Evaluation", "netstandard"], references);
     }
 
     [Fact]
