@@ -1036,6 +1036,31 @@ public sealed class FlagEditorPageTests
         Assert.DoesNotContain(console.JSInterop.Invocations, invocation => invocation.Identifier.EndsWith(".focus", StringComparison.Ordinal));
     }
 
+    // Hoje o console só manda true ou false, mas o contrato tem value-not-of-flag-type: o erro fica ligado ao select.
+    [Theory]
+    [InlineData("/onValue", 0, "on-value-error")]
+    [InlineData("/offValue", 1, "off-value-error")]
+    public void A_boolean_value_the_api_refuses_is_marked_on_its_choice_and_focused(string field, int choice, string errorId)
+    {
+        var api = NewShopAtTenPercent().Answer(HttpMethod.Patch, NewShop, HttpStatusCode.BadRequest, $$$"""
+            {"type":"/problems/invalid-input","title":"Invalid input","status":400,
+             "errors":[{"type":"VALUE_NOT_OF_FLAG_TYPE","detail":"Use true or false.","source":{"location":"body","pointer":"{{{field}}}"}}]}
+            """, "application/problem+json");
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console);
+        var select = ReferenceOf(page.FindAll("select")[choice]);
+
+        page.FindAll("select")[choice].Change(choice == 0 ? "false" : "true");
+        page.Find("form").Submit();
+
+        page.WaitForAssertion(() => Assert.Equal("Use true or false.", MessageOf(page.Find($"#{errorId}"))));
+        var marked = page.FindAll("select")[choice];
+        Assert.Equal(["true", errorId], [marked.GetAttribute("aria-invalid"), marked.GetAttribute("aria-describedby")]);
+        Assert.Null(page.FindAll("select")[1 - choice].GetAttribute("aria-invalid"));
+        page.WaitForAssertion(() => AssertFocused(console, select));
+    }
+
     private static StubApi MarkupRead() =>
         new StubApi().Answer(HttpMethod.Get, ShopConfig, HttpStatusCode.OK,
             """{"key":"shop-config","type":"json","enabled":true,"onValue":"<script>x</script>","offValue":"<img src=x onerror=x>","rolloutBasisPoints":10000}""",

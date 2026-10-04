@@ -94,22 +94,26 @@ else
                 <div>
                     <label class="block">
                         <span class="text-sm font-medium text-slate-700">Value for included players</span>
-                        <select @bind="_edit.OnValueText" class="tf-field w-40">
+                        <select @ref="_includedChoice" @bind="_edit.OnValueText"
+                                aria-invalid="@(OnValueError is null ? null : "true")" aria-describedby="@(OnValueError is null ? null : "on-value-error")"
+                                class="tf-field w-40">
                             <option value="true">true</option>
                             <option value="false">false</option>
                         </select>
                     </label>
-                    <FieldError Id="on-value-error" Message="@_form.Fields.For(FieldErrors.OnValue)" />
+                    <FieldError Id="on-value-error" Message="@OnValueError" />
                 </div>
                 <div>
                     <label class="block">
                         <span class="text-sm font-medium text-slate-700">Value for everyone else</span>
-                        <select @bind="_edit.OffValueText" class="tf-field w-40">
+                        <select @ref="_othersChoice" @bind="_edit.OffValueText"
+                                aria-invalid="@(OffValueError is null ? null : "true")" aria-describedby="@(OffValueError is null ? null : "off-value-error")"
+                                class="tf-field w-40">
                             <option value="true">true</option>
                             <option value="false">false</option>
                         </select>
                     </label>
-                    <FieldError Id="off-value-error" Message="@_form.Fields.For(FieldErrors.OffValue)" />
+                    <FieldError Id="off-value-error" Message="@OffValueError" />
                 </div>
             }
         </fieldset>
@@ -172,6 +176,8 @@ else
     private bool _confirmingRemoval;
     private ElementReference _rollout;
     private JsonValuesInput? _values;
+    private ElementReference _includedChoice;
+    private ElementReference _othersChoice;
     private ElementReference _save;
 
     // Um campo (pelo ponteiro de FieldErrors) ou o SaveButton; nulo quando o foco fica onde está.
@@ -195,6 +201,10 @@ else
         $"organizations/{OrganizationId}/projects/{Uri.EscapeDataString(ProjectKey)}/environments/{Uri.EscapeDataString(EnvironmentKey)}";
 
     private string? RolloutError => _form.Fields.For(FieldErrors.Rollout);
+
+    private string? OnValueError => _form.Fields.For(FieldErrors.OnValue);
+
+    private string? OffValueError => _form.Fields.For(FieldErrors.OffValue);
 
     protected override async Task OnParametersSetAsync()
     {
@@ -267,6 +277,8 @@ else
         {
             SaveButton => _save.FocusAsync(),
             FieldErrors.Rollout => _rollout.FocusAsync(),
+            FieldErrors.OnValue when _values is null => _includedChoice.FocusAsync(),
+            FieldErrors.OffValue when _values is null => _othersChoice.FocusAsync(),
             _ => _values?.FocusAsync(target) ?? ValueTask.CompletedTask,
         });
     }
