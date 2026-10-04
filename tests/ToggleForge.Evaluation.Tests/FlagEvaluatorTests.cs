@@ -4,6 +4,8 @@ public sealed class FlagEvaluatorTests
 {
     private const long SnapshotVersion = 7;
 
+    private const string ShopConfigJson = """{"discount":0.2}""";
+
     private readonly FlagEvaluator _evaluator = new();
 
     [Fact]
@@ -132,6 +134,42 @@ public sealed class FlagEvaluatorTests
         Assert.Null(result.Bucket);
     }
 
+    [Fact]
+    public void EvaluateJson_hands_the_published_json_to_the_parser_with_the_snapshot_version()
+    {
+        var result = _evaluator.EvaluateJson(SnapshotWith(ShopConfig()), "shop-config", ReferencePlayer(), "game-default", json => json);
+
+        Assert.Equal((ShopConfigJson, EvaluationReason.Included, (long?)SnapshotVersion), (result.Value, result.Reason, result.SnapshotVersion));
+    }
+
+    [Fact]
+    public void EvaluateJson_without_a_snapshot_returns_the_default_without_calling_the_parser()
+    {
+        var calls = 0;
+
+        var result = _evaluator.EvaluateJson(null, "shop-config", ReferencePlayer(), "game-default", json => { calls++; return json; });
+
+        Assert.Equal(("game-default", EvaluationReason.SnapshotMissing, (long?)null), (result.Value, result.Reason, result.SnapshotVersion));
+        Assert.Equal(0, calls);
+    }
+
+    [Theory]
+    [InlineData("Shop Config", EvaluationReason.InvalidFlagKey)]
+    [InlineData("battle-pass", EvaluationReason.FlagNotFound)]
+    [InlineData("new-shop", EvaluationReason.TypeMismatch)]
+    public void EvaluateJson_falls_back_without_calling_the_parser_when_no_json_flag_answers(
+        string flagKey, EvaluationReason expectedReason)
+    {
+        var snapshot = SnapshotWith(ShopConfig(), Flag("new-shop", enabled: true, RolloutPercentage.All));
+        var calls = 0;
+
+        var result = _evaluator.EvaluateJson(snapshot, flagKey, ReferencePlayer(), "game-default", json => { calls++; return json; });
+
+        Assert.Equal(("game-default", expectedReason, (long?)SnapshotVersion), (result.Value, result.Reason, result.SnapshotVersion));
+        Assert.True(result.IsFallback);
+        Assert.Equal(0, calls);
+    }
+
     private static void AssertResult(
         EvaluationResult<bool> result, bool expectedValue, EvaluationReason expectedReason, long? expectedVersion)
     {
@@ -147,6 +185,10 @@ public sealed class FlagEvaluatorTests
             onValue: true,
             offValue: false,
             new PercentageRollout(percentage, NewShopFlag.Seed));
+
+    private static JsonFlag ShopConfig() =>
+        new(FlagKey.Parse("shop-config"), isEnabled: true, ShopConfigJson, offValue: "{}",
+            new PercentageRollout(RolloutPercentage.All, NewShopFlag.Seed));
 
     private static ConfigurationSnapshot SnapshotWith(params Flag[] flags) =>
         new(NewShopFlag.Project, NewShopFlag.Environment, SnapshotVersion, flags);

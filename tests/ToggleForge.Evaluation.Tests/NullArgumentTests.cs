@@ -76,6 +76,16 @@ public sealed class NullArgumentTests
     }
 
     [Fact]
+    public void FlagEvaluator_EvaluateJson_rejects_null_context_and_parser()
+    {
+        var snapshot = new ConfigurationSnapshot(Project, Environment, 1, []);
+        var player = EvaluationContext.ForPlayer(PlayerId.Parse("player"));
+
+        AssertNullRejected("context", () => new FlagEvaluator().EvaluateJson(snapshot, "shop-config", null!, "", json => json));
+        AssertNullRejected("parse", () => new FlagEvaluator().EvaluateJson<string>(snapshot, "shop-config", player, "", null!));
+    }
+
+    [Fact]
     public void BooleanFlag_rejects_null_key_and_targeting()
     {
         AssertNullRejected("key", () => new BooleanFlag(null!, true, true, false, Rollout));

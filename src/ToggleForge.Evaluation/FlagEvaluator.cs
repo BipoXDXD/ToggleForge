@@ -29,6 +29,35 @@ namespace ToggleForge.Evaluation
                 : Fallback(defaultValue, EvaluationReason.TypeMismatch, snapshot.Version);
         }
 
+        public EvaluationResult<T> EvaluateJson<T>(
+            ConfigurationSnapshot? snapshot, string? flagKey, EvaluationContext context, T defaultValue, Func<string, T> parse)
+        {
+            if (context is null)
+            {
+                throw new ArgumentNullException(nameof(context));
+            }
+
+            if (parse is null)
+            {
+                throw new ArgumentNullException(nameof(parse));
+            }
+
+            if (snapshot is null)
+            {
+                return Fallback(defaultValue, EvaluationReason.SnapshotMissing, snapshotVersion: null);
+            }
+
+            var flag = Find(snapshot, flagKey, out var missing);
+            if (flag is null)
+            {
+                return Fallback(defaultValue, missing, snapshot.Version);
+            }
+
+            return flag is JsonFlag json
+                ? json.Evaluate(IdentityOf(snapshot, json), context, defaultValue, parse, snapshot.Version)
+                : Fallback(defaultValue, EvaluationReason.TypeMismatch, snapshot.Version);
+        }
+
         /// <returns>Nula quando a chave é inválida ou não está no snapshot; <paramref name="missing"/> diz qual dos dois.</returns>
         private static Flag? Find(ConfigurationSnapshot snapshot, string? flagKey, out EvaluationReason missing)
         {
