@@ -152,7 +152,10 @@
     /// </summary>
     /// <param name="sentType">O tipo do pedido recusado: o 413 de uma flag JSON fala dos valores que foram enviados, e a
     /// chave publicada com outro tipo é marcada na chave.</param>
-    /// <remarks>O mesmo switch do <c>FlagEditor.ExplainAsync</c>, sem o 412 e o 404; fica repetido até uma terceira tela.</remarks>
+    /// <remarks>
+    /// O mesmo switch do <c>FlagEditor.ExplainAsync</c>, sem o 412 e o 404, e com o <c>flag-type-locked</c> na chave; fica
+    /// repetido até uma terceira tela.
+    /// </remarks>
     private void Explain(Problem problem, string sentType)
     {
         switch (problem.StatusCode)
