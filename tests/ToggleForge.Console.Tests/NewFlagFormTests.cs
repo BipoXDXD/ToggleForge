@@ -101,6 +101,26 @@ public sealed class NewFlagFormTests
             api.BodyOf(api.RequestsTo(HttpMethod.Post, Flags).Single()));
     }
 
+    // Escapar <, >, & e acentos multiplicaria os bytes do corpo e poderia passar dos 32 KiB com valores de 4 KiB.
+    [Fact]
+    public void Markup_and_accents_go_to_the_api_as_written()
+    {
+        var api = Editor(new StubApi().Answer(HttpMethod.Post, Flags, HttpStatusCode.Created, CreatedJson));
+        using var console = ConsoleRendering.Create(api);
+        var form = RenderForm(console);
+
+        form.Find("#flag-key").Change("shop-config");
+        form.Find("#flag-type-json").Change(true);
+        form.Find("#on-value").Input("\"<b>é & ü</b>\"");
+        form.Find("#off-value").Input("""{"tag":"<i>"}""");
+        form.Find("form").Submit();
+
+        form.WaitForAssertion(() => Assert.Single(api.RequestsTo(HttpMethod.Post, Flags)));
+        Assert.Equal(
+            """{"key":"shop-config","type":"json","enabled":true,"onValue":"<b>é & ü</b>","offValue":{"tag":"<i>"},"rolloutBasisPoints":0}""",
+            api.BodyOf(api.RequestsTo(HttpMethod.Post, Flags).Single()));
+    }
+
     [Fact]
     public void A_json_flag_can_be_created_with_null()
     {

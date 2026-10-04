@@ -266,6 +266,22 @@ public sealed class FlagEditorPageTests
         Assert.Equal("Nobody while the flag is disabled.", page.Find("#on-value-audience").TextContent);
     }
 
+    // Escapar <, >, & e acentos multiplicaria os bytes do corpo e poderia passar dos 32 KiB com valores de 4 KiB.
+    [Fact]
+    public void Markup_and_accents_go_to_the_api_as_written()
+    {
+        var api = ShopConfigRead().Answer(HttpMethod.Patch, ShopConfig, HttpStatusCode.OK, ShopConfigJson, eTag: "\"5\"");
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+
+        page.Find("#off-value").Input("\"<b>é & ü</b>\"");
+        page.Find("form").Submit();
+
+        page.WaitForAssertion(() => Assert.Single(api.RequestsTo(HttpMethod.Patch, ShopConfig)));
+        Assert.Equal("""{"offValue":"<b>é & ü</b>"}""", api.BodyOf(api.RequestsTo(HttpMethod.Patch, ShopConfig).Single()));
+    }
+
     [Fact]
     public void A_changed_json_value_is_sent_compact_with_the_etag_read()
     {

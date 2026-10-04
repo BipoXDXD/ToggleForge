@@ -25,6 +25,8 @@ public sealed class FlagValueTests
     [InlineData("{\"a\":[1,2]}")]
     [InlineData("null")]
     [InlineData("\"gold\"")]
+    [InlineData("\"<b>é & ü</b>\"")]
+    [InlineData("{\"tag\":\"<i>\"}")]
     public void A_value_goes_to_the_api_as_json_not_as_text(string json)
     {
         var body = JsonSerializer.Serialize(new ValueHolder(Values.Json(json)), JsonSerializerOptions.Web);
