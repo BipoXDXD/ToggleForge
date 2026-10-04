@@ -37,8 +37,19 @@ internal sealed class PatchFieldConverterFactory : JsonConverterFactory
         /// Um <c>null</c> no corpo falha aqui quando <typeparamref name="T"/> não o lê, e passa como valor quando lê
         /// (<see cref="JsonElement"/>); nesse caso a recusa fica com quem consome o campo.
         /// </summary>
-        public override PatchField<T> Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
-            new(IsPresent: true, JsonSerializer.Deserialize<T>(ref reader, options));
+        public override PatchField<T> Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            try
+            {
+                return new(IsPresent: true, JsonSerializer.Deserialize<T>(ref reader, options));
+            }
+            catch (JsonException exception)
+            {
+                // A leitura aninhada começa um caminho novo ("$.b"), que perderia o campo do patch. Sem Path, o
+                // serializador de fora preenche o caminho a partir do campo ("$.onValue"), como na criação.
+                throw new JsonException(exception.Message, exception);
+            }
+        }
 
         public override void Write(Utf8JsonWriter writer, PatchField<T> value, JsonSerializerOptions options) =>
             throw new NotSupportedException("Patch fields are only read.");

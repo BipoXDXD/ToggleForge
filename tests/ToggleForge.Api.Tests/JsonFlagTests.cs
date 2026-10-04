@@ -205,6 +205,29 @@ public sealed class JsonFlagTests(ApiFactory api)
         Assert.Equal("[1,2]", RawValue(await owner.GetFlagAsync(Project, "shop-config"), "onValue"));
     }
 
+    /// <summary>
+    /// A chave repetida e o aninhamento além do teto do leitor (64 níveis) são recusados pelo binding, como na criação,
+    /// e o erro aponta o campo do patch, nunca o corpo inteiro.
+    /// </summary>
+    [Theory]
+    [InlineData("onValue", """{"a":{"b":1,"b":2}}""")]
+    [InlineData("offValue", """{"a":{"b":1,"b":2}}""")]
+    [InlineData("onValue", "[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[1]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]")]
+    [InlineData("offValue", "[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[1]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]")]
+    public async Task A_value_the_binding_refuses_in_a_patch_points_at_its_field(string field, string value)
+    {
+        using var owner = await OwnerWithProjectAsync();
+        var created = await owner.CreateJsonFlagAsync(Project, "shop-config", """{"a":1}""", """{"a":0}""");
+        var before = await owner.GetFlagAsync(Project, "shop-config");
+
+        var response = await owner.UpdateFlagAsync(Project, "shop-config", created.Header("ETag"), $$"""{"{{field}}":{{value}}}""");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.Status);
+        Assert.Equal("INVALID_BODY", response.Json["errors"]![0]!["type"]!.GetValue<string>());
+        Assert.Equal([$"/{field}"], response.ErrorSources());
+        await AssertFlagIsUnchangedAsync(owner, "shop-config", before);
+    }
+
     [Theory]
     [InlineData("onValue")]
     [InlineData("offValue")]
