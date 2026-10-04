@@ -76,13 +76,12 @@ public sealed class NullArgumentTests
     }
 
     [Fact]
-    public void FlagEvaluator_EvaluateJson_rejects_null_context_and_parser()
+    public void FlagEvaluator_EvaluateJson_rejects_null_context_and_parser_even_without_a_snapshot()
     {
-        var snapshot = new ConfigurationSnapshot(Project, Environment, 1, []);
         var player = EvaluationContext.ForPlayer(PlayerId.Parse("player"));
 
-        AssertNullRejected("context", () => new FlagEvaluator().EvaluateJson(snapshot, "shop-config", null!, "", json => json));
-        AssertNullRejected("parse", () => new FlagEvaluator().EvaluateJson<string>(snapshot, "shop-config", player, "", null!));
+        AssertNullRejected("context", () => new FlagEvaluator().EvaluateJson(snapshot: null, "shop-config", null!, "", json => json));
+        AssertNullRejected("parse", () => new FlagEvaluator().EvaluateJson<string>(snapshot: null, "shop-config", player, "", null!));
     }
 
     [Fact]

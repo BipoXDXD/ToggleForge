@@ -143,6 +143,14 @@ public sealed class FlagEvaluatorTests
     }
 
     [Fact]
+    public void EvaluateJson_returns_what_the_parser_returns_not_the_raw_json()
+    {
+        var result = _evaluator.EvaluateJson(SnapshotWith(ShopConfig()), "shop-config", ReferencePlayer(), defaultValue: -1, json => json.Length);
+
+        Assert.Equal((16, EvaluationReason.Included), (result.Value, result.Reason));
+    }
+
+    [Fact]
     public void EvaluateJson_without_a_snapshot_returns_the_default_without_calling_the_parser()
     {
         var calls = 0;

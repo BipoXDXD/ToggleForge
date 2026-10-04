@@ -35,6 +35,16 @@ public sealed class JsonFlagTests
     }
 
     [Fact]
+    public void The_result_is_what_the_parser_returns_not_the_raw_json()
+    {
+        var flag = ShopConfig(enabled: false, RolloutPercentage.All);
+
+        var result = flag.Evaluate(NewShopFlag.Project, NewShopFlag.Environment, ReferencePlayer(), defaultValue: -1, json => json.Length);
+
+        Assert.Equal((14, EvaluationReason.Disabled), (result.Value, result.Reason));
+    }
+
+    [Fact]
     public void A_json_null_value_reaches_the_parser_like_any_other()
     {
         var flag = new JsonFlag(NewShopFlag.Key, isEnabled: true, onValue: "null", offValue: OffJson, Rollout(RolloutPercentage.All));

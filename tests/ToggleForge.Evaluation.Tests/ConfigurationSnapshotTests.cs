@@ -37,7 +37,9 @@ public sealed class ConfigurationSnapshotTests
         var config = new JsonFlag(
             FlagKey.Parse("new-shop"), true, "{}", "{}", new PercentageRollout(RolloutPercentage.All, NewShopFlag.Seed));
 
-        Assert.Throws<ArgumentException>(() => SnapshotWith(Flag("new-shop"), config));
+        var error = Assert.Throws<ArgumentException>(() => SnapshotWith(Flag("new-shop"), config));
+
+        Assert.Equal("flags", error.ParamName);
     }
 
     [Fact]
