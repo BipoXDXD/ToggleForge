@@ -81,7 +81,8 @@ public sealed class ConsoleHostingTests(ApiFactory api)
     /// Os arquivos do console são públicos e não podem ir ao banco conferir a sessão: um recarregamento são dezenas
     /// de requisições paralelas com o cookie, e cada conferência ocupa uma conexão do Postgres. O cookie revogado
     /// torna a conferência visível: quando ela roda, o handler apaga o cookie com um Set-Cookie. A rota da API com o
-    /// mesmo cookie prova que ele continua revogado, e que a conferência só deixou de rodar para os arquivos.
+    /// mesmo cookie é o controle positivo: ela confere, recusa e apaga o cookie, então a falta do Set-Cookie no
+    /// arquivo só pode significar que a conferência não rodou.
     /// </summary>
     [Theory]
     [InlineData("/_framework/blazor.webassembly.js")]
@@ -92,6 +93,7 @@ public sealed class ConsoleHostingTests(ApiFactory api)
     {
         using var member = await ConsoleClient.SignUpAsync(api);
         var revokedCookie = member.SessionCookieValue();
+        Assert.NotNull(revokedCookie);
         Assert.Equal(HttpStatusCode.NoContent, (await member.SignOutAsync()).Status);
         using var visitor = api.CreateAnonymousClient();
 
@@ -104,6 +106,7 @@ public sealed class ConsoleHostingTests(ApiFactory api)
         Assert.Equal(HttpStatusCode.OK, file.StatusCode);
         Assert.False(file.Headers.Contains("Set-Cookie"), $"GET {path} checked the session and cleared the cookie.");
         Assert.Equal(HttpStatusCode.Unauthorized, session.StatusCode);
+        Assert.StartsWith(ConsoleClient.SessionCookie + "=", Assert.Single(session.Headers.GetValues("Set-Cookie")), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -145,7 +148,7 @@ public sealed class ConsoleHostingTests(ApiFactory api)
         Assert.Equal(HttpStatusCode.OK, antiforgery.StatusCode);
     }
 
-    private static HttpRequestMessage WithSessionCookie(string path, string? cookie)
+    private static HttpRequestMessage WithSessionCookie(string path, string cookie)
     {
         var request = new HttpRequestMessage(HttpMethod.Get, path);
         request.Headers.Add("Cookie", $"{ConsoleClient.SessionCookie}={cookie}");
