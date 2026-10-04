@@ -38,7 +38,7 @@ public sealed class AccessibilityTests(ApiFactory api, Browser browser) : IClass
 
     private BrowserHost Host => _host ?? throw new InvalidOperationException("The host has not started.");
 
-    public static TheoryData<string> JourneyPages => ["sign-in", "projects", "draft", "publish", "history", "version", "simulator"];
+    public static TheoryData<string> JourneyPages => ["sign-in", "projects", "draft", "flag-editor", "publish", "history", "version", "simulator"];
 
     public static TheoryData<string> PagesReachedByClicking => ["draft", "publish", "history", "version", "simulator"];
 
@@ -55,12 +55,14 @@ public sealed class AccessibilityTests(ApiFactory api, Browser browser) : IClass
         using var owner = await ConsoleClient.SignUpAsync(api);
         await using var context = await browser.NewContextAsync(Host.Address);
         var page = await context.NewPageAsync();
+        var browserErrors = ConsolePages.CollectErrors(page);
 
         await PrepareJourneyDataAsync(owner);
         await OpenAsync(page, owner, journeyPage);
         var result = await page.RunAxe(PinnedRules());
 
         Assert.True(result.Violations.Length == 0, Describe(result.Violations));
+        Assert.Empty(browserErrors);
     }
 
     [Fact]
@@ -117,6 +119,7 @@ public sealed class AccessibilityTests(ApiFactory api, Browser browser) : IClass
         await PrepareJourneyDataAsync(owner);
         await using var context = await browser.NewContextAsync(Host.Address);
         var page = await context.NewPageAsync();
+        var browserErrors = ConsolePages.CollectErrors(page);
         await ConsolePages.OpenDraftAsync(page, owner);
         var address = page.Url;
         // Um clique no canto vazio do cabeçalho leva o ponto de partida do Tab ao topo do documento, sem recarregar:
@@ -132,6 +135,7 @@ public sealed class AccessibilityTests(ApiFactory api, Browser browser) : IClass
 
         await Expect(page.Locator("main#main")).ToBeFocusedAsync();
         Assert.Equal(address, page.Url);
+        Assert.Empty(browserErrors);
     }
 
     public async ValueTask DisposeAsync()
@@ -162,7 +166,7 @@ public sealed class AccessibilityTests(ApiFactory api, Browser browser) : IClass
         Assert.Equal(HttpStatusCode.Created, (await owner.CreateFlagAsync("space-race", "dark-mode")).Status);
     }
 
-    /// <summary>Abre a página pelo endereço, passando pelo login, e espera o conteúdo dela.</summary>
+    /// <summary>Abre a página pelo endereço (o editor de flag, pelo link do rascunho), passando pelo login, e espera o conteúdo dela.</summary>
     private static async Task OpenAsync(IPage page, ConsoleClient owner, string journeyPage)
     {
         if (journeyPage == "sign-in")
@@ -176,7 +180,7 @@ public sealed class AccessibilityTests(ApiFactory api, Browser browser) : IClass
         var (path, heading) = journeyPage switch
         {
             "projects" => ($"/organizations/{owner.OrganizationId}/projects", "Projects"),
-            "draft" => (draft, "Draft flags"),
+            "draft" or "flag-editor" => (draft, "Draft flags"),
             "publish" => ($"{draft}/publish", "Changes since version 2"),
             "history" => ($"{draft}/history", "History of Development (dev)"),
             "version" => ($"{draft}/history/1", "Roll back Development to version 1"),
@@ -191,6 +195,13 @@ public sealed class AccessibilityTests(ApiFactory api, Browser browser) : IClass
             await page.GetByLabel("Player ID").FillAsync("player-42");
             await page.GetByRole(AriaRole.Button, new() { Name = "Simulate" }).ClickAsync();
             await Expect(page.Locator("#simulation-results")).ToBeVisibleAsync();
+        }
+
+        if (journeyPage == "flag-editor")
+        {
+            await page.GetByRole(AriaRole.Link, new() { Name = "new-shop" }).ClickAsync();
+            // O h1 aparece antes de a flag carregar: esperar o formulário evita varrer a tela de carregamento.
+            await Expect(page.GetByLabel("Rollout (%)")).ToBeVisibleAsync();
         }
     }
 
