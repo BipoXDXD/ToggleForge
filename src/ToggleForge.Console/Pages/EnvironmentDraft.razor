@@ -111,45 +111,14 @@ else
 
     @if (Session.MembershipIn(OrganizationId) is { CanEditDrafts: true })
     {
-        <section class="mt-10 max-w-lg" aria-labelledby="new-flag">
-            <h2 id="new-flag" class="text-lg font-semibold">New flag</h2>
-            <form class="mt-4 space-y-4" @onsubmit="CreateFlagAsync" @onsubmit:preventDefault>
-                <label class="block">
-                    <span class="text-sm font-medium text-slate-700">Key</span>
-                    <input required maxlength="64" @bind="_flagKey"
-                           class="tf-field w-full font-mono" />
-                </label>
-                <label class="block">
-                    <span class="text-sm font-medium text-slate-700">Rollout (%)</span>
-                    <input type="number" required min="0" max="100" step="0.01" @bind="_rolloutPercent"
-                           class="tf-field w-40" />
-                </label>
-                <label class="flex items-center gap-2">
-                    <input type="checkbox" @bind="_enabled" class="h-4 w-4" />
-                    <span class="text-sm text-slate-700">Enabled</span>
-                </label>
-                <ProblemMessage Problem="_createProblem" />
-                <button type="submit" disabled="@_submitting"
-                        class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60">
-                    Add to draft
-                </button>
-            </form>
-        </section>
+        <NewFlagForm Address="@(new EnvironmentAddress(OrganizationId, ProjectKey, EnvironmentKey))" Created="ReloadDraftAsync" />
     }
 }
 
 @code {
-    private static readonly Problem _invalidRollout = new(
-        "/problems/invalid-rollout", "Invalid rollout", 400, "Enter a rollout between 0 and 100, with at most two decimals.");
-
     private Project? _project;
     private Draft? _draft;
     private Problem? _loadProblem;
-    private Problem? _createProblem;
-    private string _flagKey = string.Empty;
-    private decimal _rolloutPercent;
-    private bool _enabled = true;
-    private bool _submitting;
 
     [Parameter]
     public Guid OrganizationId { get; set; }
@@ -180,30 +149,6 @@ else
         {
             (_project, _draft) = (loadedProject.Value, loadedDraft.Value);
         }
-    }
-
-    private async Task CreateFlagAsync()
-    {
-        _createProblem = null;
-        if (!RolloutShare.TryToBasisPoints(_rolloutPercent, out var basisPoints))
-        {
-            _createProblem = _invalidRollout;
-            return;
-        }
-
-        _submitting = true;
-        // O console do tracer bullet só cria flags booleanas comuns: incluído recebe true, excluído recebe false.
-        var flag = await Api.CreateFlagAsync(
-            OrganizationId, ProjectKey, EnvironmentKey, new FlagCreation(_flagKey, FlagTypes.Boolean, _enabled, OnValue: FlagValue.True, OffValue: FlagValue.False, basisPoints), Leaving);
-        _submitting = false;
-        if (!flag.Succeeded)
-        {
-            _createProblem = flag.Problem;
-            return;
-        }
-
-        (_flagKey, _rolloutPercent, _enabled) = (string.Empty, 0, true);
-        await ReloadDraftAsync();
     }
 
     /// <summary>A lista de mudanças vem da API: comparar com a publicação é regra dela, não do console.</summary>

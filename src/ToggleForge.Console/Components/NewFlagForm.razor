@@ -1,0 +1,67 @@
+@* O formulário "New flag" do rascunho: monta o pedido, manda para a API e avisa quem o usa quando a flag nasce. *@
+@inherits ConsolePage
+@inject ConsoleApi Api
+
+<section class="mt-10 max-w-lg" aria-labelledby="new-flag">
+    <h2 id="new-flag" class="text-lg font-semibold">New flag</h2>
+    <form class="mt-4 space-y-4" @onsubmit="CreateFlagAsync" @onsubmit:preventDefault>
+        <label class="block">
+            <span class="text-sm font-medium text-slate-700">Key</span>
+            <input required maxlength="64" @bind="_newFlag.Key"
+                   class="tf-field w-full font-mono" />
+        </label>
+        <label class="block">
+            <span class="text-sm font-medium text-slate-700">Rollout (%)</span>
+            <input type="number" required min="0" max="100" step="0.01" @bind="_newFlag.RolloutPercent"
+                   class="tf-field w-40" />
+        </label>
+        <label class="flex items-center gap-2">
+            <input type="checkbox" @bind="_newFlag.Enabled" class="h-4 w-4" />
+            <span class="text-sm text-slate-700">Enabled</span>
+        </label>
+        <ProblemMessage Problem="_createProblem" />
+        <button type="submit" disabled="@_submitting"
+                class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60">
+            Add to draft
+        </button>
+    </form>
+</section>
+
+@code {
+    private static readonly Problem _invalidRollout = new(
+        "/problems/invalid-rollout", "Invalid rollout", 400, "Enter a rollout between 0 and 100, with at most two decimals.");
+
+    private NewFlag _newFlag = new();
+    private Problem? _createProblem;
+    private bool _submitting;
+
+    /// <summary>O ambiente cujo rascunho recebe a flag.</summary>
+    [Parameter, EditorRequired]
+    public EnvironmentAddress Address { get; set; } = new(Guid.Empty, string.Empty, string.Empty);
+
+    /// <summary>A flag entrou no rascunho; quem mostra o rascunho o relê.</summary>
+    [Parameter]
+    public EventCallback Created { get; set; }
+
+    private async Task CreateFlagAsync()
+    {
+        _createProblem = null;
+        if (!_newFlag.TryGetCreation(out var creation))
+        {
+            _createProblem = _invalidRollout;
+            return;
+        }
+
+        _submitting = true;
+        var flag = await Api.CreateFlagAsync(Address.OrganizationId, Address.ProjectKey, Address.EnvironmentKey, creation, Leaving);
+        _submitting = false;
+        if (!flag.Succeeded)
+        {
+            _createProblem = flag.Problem;
+            return;
+        }
+
+        _newFlag = new NewFlag();
+        await Created.InvokeAsync();
+    }
+}
