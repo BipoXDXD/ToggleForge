@@ -116,4 +116,75 @@ public sealed class SnapshotReaderTests
         Assert.True(snapshot.TryGetFlag(FlagKey.Parse("new-shop"), out var flag));
         Assert.Equal("2026-10-04T12:00:00Z", Assert.IsType<PercentageRollout>(flag.Targeting).Seed.Value);
     }
+
+    // Um tipo que nenhum SDK conhece hoje, com campos que uma flag booleana recusaria.
+    private const string NewerTypeFlag =
+        """{"key":"shop-color","type":"color","enabled":true,"onValue":"#ff0000","offValue":{"r":0},"seed":"s2"}""";
+
+    private const string BooleanFlagJson =
+        """{"key":"new-shop","enabled":true,"onValue":true,"offValue":false,"rolloutBasisPoints":10000,"seed":"s1"}""";
+
+    [Fact]
+    public void A_flag_of_an_unknown_type_is_skipped_and_the_rest_still_applies()
+    {
+        var snapshot = SnapshotReader.Read(Snapshots.Json(flags: $"[{NewerTypeFlag},{BooleanFlagJson}]"));
+
+        Assert.NotNull(snapshot);
+        Assert.True(snapshot.TryGetFlag(FlagKey.Parse("new-shop"), out _));
+        Assert.False(snapshot.TryGetFlag(FlagKey.Parse("shop-color"), out _));
+    }
+
+    [Fact]
+    public void A_flag_may_state_that_it_is_boolean()
+    {
+        var typed = BooleanFlagJson.Replace("\"enabled\"", "\"type\":\"boolean\",\"enabled\"", StringComparison.Ordinal);
+
+        var snapshot = SnapshotReader.Read(Snapshots.Json(flags: $"[{typed}]"));
+
+        Assert.NotNull(snapshot);
+        Assert.True(snapshot.TryGetFlag(FlagKey.Parse("new-shop"), out _));
+    }
+
+    [Fact]
+    public void A_type_is_matched_exactly_so_another_casing_is_an_unknown_type()
+    {
+        var shouting = BooleanFlagJson.Replace("\"enabled\"", "\"type\":\"Boolean\",\"enabled\"", StringComparison.Ordinal);
+
+        var snapshot = SnapshotReader.Read(Snapshots.Json(flags: $"[{shouting}]"));
+
+        Assert.NotNull(snapshot);
+        Assert.False(snapshot.TryGetFlag(FlagKey.Parse("new-shop"), out _));
+    }
+
+    [Theory]
+    [InlineData("null")]
+    [InlineData("7")]
+    [InlineData("true")]
+    [InlineData("[]")]
+    [InlineData("{}")]
+    public void A_type_that_is_not_text_refuses_the_snapshot(string type)
+    {
+        var flag = BooleanFlagJson.Replace("\"enabled\"", $"\"type\":{type},\"enabled\"", StringComparison.Ordinal);
+
+        Assert.Null(SnapshotReader.Read(Snapshots.Json(flags: $"[{flag}]")));
+    }
+
+    [Fact]
+    public void A_key_repeated_by_a_flag_of_an_unknown_type_refuses_the_snapshot()
+    {
+        var clash = NewerTypeFlag.Replace("shop-color", "new-shop", StringComparison.Ordinal);
+
+        Assert.Null(SnapshotReader.Read(Snapshots.Json(flags: $"[{clash},{BooleanFlagJson}]")));
+    }
+
+    [Theory]
+    [InlineData("\"key\":\"Shop Color\",")]
+    [InlineData("\"key\":7,")]
+    [InlineData("")]
+    public void A_flag_of_an_unknown_type_still_needs_a_valid_key(string key)
+    {
+        var flag = NewerTypeFlag.Replace("\"key\":\"shop-color\",", key, StringComparison.Ordinal);
+
+        Assert.Null(SnapshotReader.Read(Snapshots.Json(flags: $"[{flag},{BooleanFlagJson}]")));
+    }
 }
