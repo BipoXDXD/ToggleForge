@@ -20,6 +20,11 @@ internal static class ApiForwardedHeaders
             .Validate(
                 proxies => proxies.KnownNetworks.All(network => IPNetwork.TryParse(network, out _)),
                 $"{Section}:KnownNetworks must list networks in CIDR notation, such as 10.0.0.0/8.")
+            // Fora do desenvolvimento a API sempre está atrás do ingress: sem a rede dele, o rate limit juntaria
+            // todos os clientes no IP do proxy e o HSTS nunca sairia, porque o esquema repassado seria ignorado.
+            .Validate<IHostEnvironment>(
+                (proxies, environment) => environment.IsDevelopment() || proxies.KnownNetworks.Count > 0,
+                $"Set {Section}:KnownNetworks to the network of the ingress, such as 10.0.0.0/8.")
             .ValidateOnStart();
         services.AddOptions<ForwardedHeadersOptions>().Configure<IOptions<TrustedProxies>>((options, proxies) =>
         {

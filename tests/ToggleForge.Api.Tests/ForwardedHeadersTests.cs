@@ -76,6 +76,20 @@ public sealed class ForwardedHeadersTests(ApiFactory api)
         Assert.Contains("ForwardedHeaders:KnownNetworks", error.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Fora do desenvolvimento a API sempre roda atrás do ingress. Sem a rede dele declarada, todo cliente cairia na
+    /// partição do proxy no rate limit, e o HSTS nunca sairia, porque o esquema repassado seria ignorado.
+    /// </summary>
+    [Fact]
+    public async Task Outside_development_the_api_does_not_start_without_the_ingress_network()
+    {
+        await using var production = api.WithWebHostBuilder(builder => builder.UseEnvironment("Production"));
+
+        var error = Assert.Throws<OptionsValidationException>(() => production.CreateClient());
+
+        Assert.Contains("ForwardedHeaders:KnownNetworks", error.Message, StringComparison.Ordinal);
+    }
+
     private WebApplicationFactory<Program> Host(string? knownNetwork, int anonymousPerMinute = 1) =>
         api.WithWebHostBuilder(builder =>
         {
