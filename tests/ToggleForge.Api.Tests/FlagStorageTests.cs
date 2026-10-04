@@ -70,7 +70,7 @@ public sealed class FlagStorageTests(ApiFactory api)
     public async Task The_database_refuses_a_json_value_over_4_KiB(bool onValueIsLarge)
     {
         using var owner = await OwnerWithProjectAsync();
-        var large = JsonTextOf(bytes: 4_097);
+        var large = ConsoleClient.JsonTextOf(4_097);
 
         var error = await Assert.ThrowsAnyAsync<PostgresException>(() => api.ExecuteSqlAsync(
             InsertDraftFlag(owner, "config", "json", onValueIsLarge ? large : "null", onValueIsLarge ? "null" : large)));
@@ -83,7 +83,7 @@ public sealed class FlagStorageTests(ApiFactory api)
     {
         using var owner = await OwnerWithProjectAsync();
 
-        var value = JsonTextOf(bytes: 4_096);
+        var value = ConsoleClient.JsonTextOf(4_096);
 
         await api.ExecuteSqlAsync(InsertDraftFlag(owner, "config", "json", "null", value));
 
@@ -134,6 +134,9 @@ public sealed class FlagStorageTests(ApiFactory api)
             Assert.Equal(HttpStatusCode.InternalServerError, response.Status);
             Assert.Equal("/problems/unexpected", response.ProblemType);
             Assert.DoesNotContain(canary, response.Body, StringComparison.Ordinal);
+            // Sem o registro da referência, o DoesNotContain abaixo passaria mesmo sem log nenhum.
+            var reference = response.Json["instance"]!.GetValue<string>()["/unexpected-errors/".Length..];
+            Assert.Contains(api.Logs.Entries, entry => entry.Contains(reference, StringComparison.Ordinal));
         });
         Assert.DoesNotContain(api.Logs.Entries, entry => entry.Contains(canary, StringComparison.Ordinal));
     }
@@ -187,9 +190,6 @@ public sealed class FlagStorageTests(ApiFactory api)
         from authoring.environments environment join authoring.projects project on project.id = environment.project_id
         where flag.environment_id = environment.id and project.organization_id = '{owner.OrganizationId}' and flag.key = 'new-shop'
         """;
-
-    /// <summary>Uma string JSON com exatamente <paramref name="bytes"/> bytes, contando as aspas.</summary>
-    private static string JsonTextOf(int bytes) => "\"" + new string('x', bytes - 2) + "\"";
 
     private static string UpdatePublishedNewShop(ConsoleClient owner, string assignment) =>
         $"""
