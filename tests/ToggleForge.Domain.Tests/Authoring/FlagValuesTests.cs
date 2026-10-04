@@ -20,13 +20,7 @@ public sealed class FlagValuesTests
     {
         Assert.False(FlagValues.Of(FlagType.Boolean, JsonFlagValue.Parse(on), JsonFlagValue.Parse(off)).TryGetValue(out _, out var failure));
         Assert.Equal(onIsWrong ? AuthoringFailures.OnValueNotOfFlagType : AuthoringFailures.OffValueNotOfFlagType, failure);
-    }
-
-    [Fact]
-    public void A_value_of_the_wrong_type_is_an_invalid_value_with_the_same_code_on_either_side()
-    {
-        Assert.Equal((FailureKind.InvalidValue, "value-not-of-flag-type"), (AuthoringFailures.OnValueNotOfFlagType.Kind, AuthoringFailures.OnValueNotOfFlagType.Code));
-        Assert.Equal((FailureKind.InvalidValue, "value-not-of-flag-type"), (AuthoringFailures.OffValueNotOfFlagType.Kind, AuthoringFailures.OffValueNotOfFlagType.Code));
+        Assert.Equal((FailureKind.InvalidValue, "value-not-of-flag-type"), (failure.Kind, failure.Code));
     }
 
     [Fact]

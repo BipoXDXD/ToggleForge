@@ -29,8 +29,10 @@ public sealed class FlagEditingTests
         var changed = environment.ChangeFlag(_newShop, expectedRevision: 2, new FlagChange(IsEnabled: false));
 
         Assert.True(changed.TryGetValue(out var flag, out _));
+        Assert.Equal(3, environment.DraftRevision);
         Assert.Equal(3, flag.ChangedAtRevision);
         Assert.Equal(Flags.Settings(isEnabled: false), flag.Settings);
+        Assert.Equal(RolloutSeed.Parse("seed-new-shop"), flag.Seed);
     }
 
     [Theory]
