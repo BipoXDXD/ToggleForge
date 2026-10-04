@@ -23,8 +23,8 @@
 </div>
 @if (_gone is not null)
 {
-    <p class="mt-6 text-sm text-slate-600">@_gone</p>
-    <a href="@DraftPath" class="mt-4 inline-block text-sm font-medium text-indigo-700 hover:underline">Back to the draft</a>
+    <p role="status" class="mt-6 text-sm text-slate-600">@_gone</p>
+    <a href="@DraftPath" @ref="_backToDraft" class="mt-4 inline-block text-sm font-medium text-indigo-700 hover:underline">Back to the draft</a>
 }
 else if (_loadProblem is not null)
 {
@@ -156,8 +156,10 @@ else
 }
 
 @code {
-    // Alvo de foco que não é campo: o botão Save, onde o membro estava quando salvou.
+    // Alvos de foco que não são campo: o botão Save, onde o membro estava quando salvou, e a volta ao rascunho, a próxima
+    // ação quando a flag saiu dele e o formulário sumiu.
     private const string SaveButton = "save";
+    private const string BackToDraft = "back-to-draft";
 
     private static readonly Problem _nothingToSave = new(
         "/problems/nothing-to-save", "Nothing to save", 400, "Nothing to save: these are already the values in the draft.");
@@ -179,8 +181,9 @@ else
     private ElementReference _includedChoice;
     private ElementReference _othersChoice;
     private ElementReference _save;
+    private ElementReference _backToDraft;
 
-    // Um campo (pelo ponteiro de FieldErrors) ou o SaveButton; nulo quando o foco fica onde está.
+    // Um campo (pelo ponteiro de FieldErrors), o SaveButton ou o BackToDraft; nulo quando o foco fica onde está.
     private string? _focusAfterRender;
 
     [Parameter]
@@ -256,15 +259,12 @@ else
         }
 
         await ExplainAsync(saved.Problem);
-        if (_gone is null)
-        {
-            _focusAfterRender ??= SaveButton;
-        }
+        _focusAfterRender ??= SaveButton;
     }
 
     // Durante o envio, o formulário travado tira o foco de onde ele estava e o navegador o manda para o <body>. O foco
     // volta depois do render que destrava o formulário e marca os erros, para o leitor de tela anunciar o campo já
-    // inválido: no campo a corrigir ou, sem campo, no Save (WCAG 2.4.3).
+    // inválido: no campo a corrigir ou, sem campo, no Save; se a flag saiu do rascunho, na volta a ele (WCAG 2.4.3).
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (_focusAfterRender is not { } target)
@@ -276,6 +276,7 @@ else
         await (target switch
         {
             SaveButton => _save.FocusAsync(),
+            BackToDraft => _backToDraft.FocusAsync(),
             FieldErrors.Rollout => _rollout.FocusAsync(),
             FieldErrors.OnValue when _values is null => _includedChoice.FocusAsync(),
             FieldErrors.OffValue when _values is null => _othersChoice.FocusAsync(),
@@ -307,6 +308,7 @@ else
     /// <summary>
     /// 412: alguém mudou a flag depois da leitura, e nada foi gravado. Os valores atuais substituem o formulário,
     /// para o membro decidir de novo sobre eles, em vez de sobrescrever a mudança do outro às cegas.
+    /// 404: a flag saiu do rascunho; o formulário dá lugar à mensagem, e o foco vai para a volta ao rascunho.
     /// 400, 409 e 413: nada foi gravado, e o texto digitado fica no formulário para o membro corrigir.
     /// </summary>
     private async Task ExplainAsync(Problem problem)
@@ -327,7 +329,7 @@ else
 
                 break;
             case System.Net.HttpStatusCode.NotFound:
-                _gone = "This flag left the draft after you opened it.";
+                (_gone, _focusAfterRender) = ("This flag left the draft after you opened it.", BackToDraft);
                 break;
             case System.Net.HttpStatusCode.BadRequest:
                 var (fields, general) = FieldErrors.Split(problem);

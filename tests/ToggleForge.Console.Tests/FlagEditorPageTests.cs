@@ -1088,8 +1088,9 @@ public sealed class FlagEditorPageTests
         page.WaitForAssertion(() => AssertFocused(console, save));
     }
 
+    // O formulário some com a flag: o foco vai para a próxima ação, e a mensagem é anunciada (WCAG 2.4.3 e 4.1.3).
     [Fact]
-    public void A_flag_gone_from_the_draft_moves_no_focus()
+    public void A_flag_gone_from_the_draft_puts_the_focus_on_the_way_back()
     {
         var api = NewShopAtTenPercent().Answer(HttpMethod.Patch, NewShop, HttpStatusCode.NotFound,
             """{"type":"/problems/not-found","title":"Not found","status":404}""", "application/problem+json");
@@ -1100,8 +1101,22 @@ public sealed class FlagEditorPageTests
         page.Find("#rollout").Change("50");
         page.Find("form").Submit();
 
-        page.WaitForAssertion(() => Assert.Contains("This flag left the draft after you opened it.", page.Markup, StringComparison.Ordinal));
-        Assert.DoesNotContain(console.JSInterop.Invocations, invocation => invocation.Identifier.EndsWith(".focus", StringComparison.Ordinal));
+        AssertGoneWithTheFocusOnTheWayBack(console, page);
+    }
+
+    [Fact]
+    public void A_flag_gone_while_removing_puts_the_focus_on_the_way_back()
+    {
+        var api = NewShopAtTenPercent().Answer(HttpMethod.Delete, NewShop, HttpStatusCode.NotFound,
+            """{"type":"/problems/not-found","title":"Not found","status":404}""", "application/problem+json");
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console);
+
+        page.FindAll("button").Single(button => button.TextContent.Trim() == "Remove from draft").Click();
+        page.FindAll("button").Single(button => button.TextContent.Trim() == "Remove").Click();
+
+        AssertGoneWithTheFocusOnTheWayBack(console, page);
     }
 
     // Hoje o console só manda true ou false, mas o contrato tem value-not-of-flag-type: o erro fica ligado ao select.
@@ -1144,6 +1159,14 @@ public sealed class FlagEditorPageTests
 
     private static StubApi NewShopAtTenPercent() =>
         new StubApi().Answer(HttpMethod.Get, NewShop, HttpStatusCode.OK, AtTenPercent, eTag: "\"7\"");
+
+    private static void AssertGoneWithTheFocusOnTheWayBack(BunitContext console, IRenderedComponent<FlagEditor> page)
+    {
+        var message = page.WaitForElement("[role=status]");
+        Assert.Equal("This flag left the draft after you opened it.", message.TextContent);
+        var wayBack = page.FindAll("a").Single(link => link.TextContent == "Back to the draft");
+        page.WaitForAssertion(() => AssertFocused(console, ReferenceOf(wayBack)));
+    }
 
     private static FocusWitness WatchFocus(BunitContext console, Func<string?> read)
     {
