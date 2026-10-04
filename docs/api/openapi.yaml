@@ -1400,9 +1400,17 @@ components:
         enabled:
           type: boolean
         onValue:
-          $ref: '#/components/schemas/FlagValue'
+          description: Cannot be null; in a merge patch null would erase the value.
+          allOf:
+            - $ref: '#/components/schemas/FlagValue'
+            - not:
+                type: 'null'
         offValue:
-          $ref: '#/components/schemas/FlagValue'
+          description: Cannot be null; in a merge patch null would erase the value.
+          allOf:
+            - $ref: '#/components/schemas/FlagValue'
+            - not:
+                type: 'null'
         rolloutBasisPoints:
           $ref: '#/components/schemas/RolloutBasisPoints'
 
@@ -1423,6 +1431,16 @@ components:
           $ref: '#/components/schemas/FlagValue'
         rolloutBasisPoints:
           $ref: '#/components/schemas/RolloutBasisPoints'
+      if:
+        properties:
+          type:
+            const: boolean
+      then:
+        properties:
+          onValue:
+            type: boolean
+          offValue:
+            type: boolean
 
     DraftChange:
       type: object
