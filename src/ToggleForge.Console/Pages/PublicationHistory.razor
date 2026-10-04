@@ -1,0 +1,133 @@
+@page "/organizations/{OrganizationId:guid}/projects/{ProjectKey}/environments/{EnvironmentKey}/history"
+@inherits ConsolePage
+@inject ConsoleApi Api
+
+<PageTitle>History · @ProjectKey · @EnvironmentKey · ToggleForge</PageTitle>
+
+<nav class="text-sm text-slate-500" aria-label="Breadcrumb">
+    <a href="organizations/@OrganizationId/projects" class="hover:text-slate-700 hover:underline">Projects</a>
+    <span aria-hidden="true"> / </span>
+    <a href="@DraftPath" class="hover:text-slate-700 hover:underline">@ProjectKey · @EnvironmentKey</a>
+</nav>
+
+@if (_loadProblem is not null)
+{
+    <div class="mt-6"><ProblemMessage Problem="_loadProblem" /></div>
+}
+else if (_environment is null)
+{
+    <p class="mt-6 text-sm text-slate-500">Loading the history…</p>
+}
+else
+{
+    <h1 class="mt-2 text-2xl font-semibold tracking-tight">History of @_environment.Name (@EnvironmentKey)</h1>
+
+    @if (_publications.Count == 0)
+    {
+        <p class="mt-6 text-sm text-slate-600">Nothing published yet.</p>
+    }
+    else
+    {
+        <ul class="mt-6 divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white text-sm" aria-label="Publications">
+            @foreach (var publication in _publications)
+            {
+                <li class="px-4 py-3">
+                    <div class="flex items-center justify-between gap-4">
+                        <a href="@($"{HistoryPath}/{publication.Version}")" class="font-medium text-indigo-700 hover:underline">Version @publication.Version</a>
+                        <span class="text-xs text-slate-500">@PublicationText.When(publication.PublishedAt)</span>
+                    </div>
+                    <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-slate-600">
+                        @if (publication.Version == _environment.CurrentVersion)
+                        {
+                            <span class="rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-medium text-emerald-800">Live</span>
+                        }
+                        <span>@PublicationText.Origin(publication.Origin, publication.RestoredVersion)</span>
+                        <span>by @publication.PublishedBy.Email</span>
+                    </div>
+                    @if (publication.Summary is { } summary)
+                    {
+                        <p class="mt-1 text-slate-800">@summary</p>
+                    }
+                </li>
+            }
+        </ul>
+    }
+
+    <ProblemMessage Problem="_pageProblem" />
+    @if (_nextPageToken is not null)
+    {
+        <button type="button" disabled="@_loading" @onclick="LoadMoreAsync"
+                class="mt-4 rounded-md px-4 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50 disabled:opacity-60">
+            Load older publications
+        </button>
+    }
+}
+
+@code {
+    private readonly List<PublicationSummary> _publications = [];
+    private ProjectEnvironment? _environment;
+    private Problem? _loadProblem;
+    private Problem? _pageProblem;
+    private string? _nextPageToken;
+    private bool _loading;
+
+    [Parameter]
+    public Guid OrganizationId { get; set; }
+
+    [Parameter]
+    public string ProjectKey { get; set; } = string.Empty;
+
+    [Parameter]
+    public string EnvironmentKey { get; set; } = string.Empty;
+
+    private EnvironmentAddress Address => new(OrganizationId, ProjectKey, EnvironmentKey);
+
+    private string DraftPath =>
+        $"organizations/{OrganizationId}/projects/{Uri.EscapeDataString(ProjectKey)}/environments/{Uri.EscapeDataString(EnvironmentKey)}";
+
+    private string HistoryPath => $"{DraftPath}/history";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        (_environment, _loadProblem, _nextPageToken) = (null, null, null);
+        _publications.Clear();
+        var environment = Api.GetEnvironmentAsync(Address, Leaving);
+        var firstPage = Api.ListPublicationsAsync(Address, pageToken: null, Leaving);
+        var (loadedEnvironment, loadedPage) = (await environment, await firstPage);
+        if (!loadedEnvironment.Succeeded)
+        {
+            _loadProblem = loadedEnvironment.Problem;
+        }
+        else if (!loadedPage.Succeeded)
+        {
+            _loadProblem = loadedPage.Problem;
+        }
+        else
+        {
+            _environment = loadedEnvironment.Value;
+            Append(loadedPage.Value);
+        }
+    }
+
+    private async Task LoadMoreAsync()
+    {
+        _loading = true;
+        _pageProblem = null;
+        var page = await Api.ListPublicationsAsync(Address, _nextPageToken, Leaving);
+        _loading = false;
+        if (page.Succeeded)
+        {
+            Append(page.Value);
+        }
+        else
+        {
+            _pageProblem = page.Problem;
+        }
+    }
+
+    private void Append(PublicationPage page)
+    {
+        _publications.AddRange(page.Data);
+        _nextPageToken = page.Metadata.NextPageToken;
+    }
+}
