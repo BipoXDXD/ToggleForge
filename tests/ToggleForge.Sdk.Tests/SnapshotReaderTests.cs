@@ -219,6 +219,8 @@ public sealed class SnapshotReaderTests
     [InlineData("true")]
     [InlineData("null")]
     [InlineData("[]")]
+    [InlineData("\"a\\\"b\\\\c\\n\"")]
+    [InlineData("\"\\u0000\"")]
     public void Dates_integers_and_text_in_a_json_value_reach_the_game_as_written(string value) =>
         Assert.Equal(value, OnValueOf(Snapshots.JsonFlag(onValue: value)));
 
@@ -285,6 +287,18 @@ public sealed class SnapshotReaderTests
         var clash = Snapshots.JsonFlag().Replace("shop-config", "new-shop", StringComparison.Ordinal);
 
         Assert.Null(SnapshotReader.Read(Snapshots.Json(flags: $"[{BooleanFlagJson},{clash}]")));
+    }
+
+    [Fact]
+    public void A_disabled_json_flag_is_read_as_disabled()
+    {
+        var disabled = Snapshots.JsonFlag().Replace("\"enabled\":true", "\"enabled\":false", StringComparison.Ordinal);
+
+        var snapshot = SnapshotReader.Read(Snapshots.Json(flags: $"[{disabled}]"));
+
+        Assert.NotNull(snapshot);
+        Assert.True(snapshot.TryGetFlag(FlagKey.Parse("shop-config"), out var flag));
+        Assert.False(Assert.IsType<JsonFlag>(flag).IsEnabled);
     }
 
     [Fact]
