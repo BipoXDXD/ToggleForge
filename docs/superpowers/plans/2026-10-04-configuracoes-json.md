@@ -2263,8 +2263,9 @@ Cada teste cria a própria conta. Os testes, com o que cada um afirma:
    booleana → 400 `INVALID_BODY`, ETag e corpo da flag iguais.
 9. `A_json_flag_takes_a_new_value_through_a_patch`: PATCH `{"onValue":[1,2]}` com `If-Match` → 200, valor novo,
    ETag nova.
-10. `A_patch_with_null_sets_the_json_null_on_a_json_flag`: PATCH `{"offValue":null}` → 200, com `offValue` JSON
-    `null` no corpo.
+10. `A_patch_cannot_set_the_json_null_and_changes_nothing`: PATCH `{"offValue":null}` numa flag JSON → 400, ETag e
+    corpo iguais. No merge patch, `null` quer dizer apagar o campo, e nenhum campo de flag pode ser apagado; uma
+    flag JSON só recebe o JSON `null` na criação (decisão do coordenador, escrita no contrato).
 11. `A_published_json_flag_reaches_the_snapshot_as_json`: cria, publica, credencial e `GameClient` → o snapshot
     traz `type: "json"` e os valores como JSON (não string), e a flag booleana traz `type: "boolean"`.
 12. `The_simulation_returns_the_json_value_the_player_gets`: flag JSON com rollout 100% → `value` igual ao
@@ -2332,11 +2333,11 @@ internal sealed record FlagModificationRequest(
     PatchField<bool> Enabled, PatchField<JsonElement> OnValue, PatchField<JsonElement> OffValue, PatchField<int> RolloutBasisPoints)
 ```
 
-`JsonElement` não anulável distingue ausente (`ValueKind.Undefined`) de `null` (`ValueKind.Null`), que é um valor
-válido numa flag JSON. Confira que o `PatchFieldConverter` aceita `null` para `JsonElement`. O comentário atual
-diz que `null` falha porque `T` é struct não anulável; isso vale para `bool`, mas `JsonElement` lê `null` como
-`ValueKind.Null`. Se não aceitar, ajuste o conversor, cubra o caso com o teste 10 e mantenha `null` recusado
-para `bool` e `int`, o que `An_invalid_patch_is_rejected_and_changes_nothing` já cobre.
+Na criação, `JsonElement` não anulável distingue ausente (`ValueKind.Undefined`) de `null` (`ValueKind.Null`), que é
+um valor válido numa flag JSON. No PATCH, `null` continua recusado em todos os campos (semântica do merge patch):
+como `JsonElement` lê `null` como `ValueKind.Null` sem lançar, o endpoint precisa recusar `OnValue`/`OffValue`
+presentes com `ValueKind.Null` como 400 no campo (ou o conversor, se for mais simples), e o teste 10 prova isso.
+`An_invalid_patch_is_rejected_and_changes_nothing` já cobre `null` em `bool` e `int`.
 
 `Http/FlagInput.cs`, ao lado de `Rollout`:
 
