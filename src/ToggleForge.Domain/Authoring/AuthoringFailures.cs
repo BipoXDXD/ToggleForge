@@ -27,7 +27,7 @@ public static class AuthoringFailures
         new(FailureKind.InvalidValue, "value-not-of-flag-type", "The off value of a boolean flag must be true or false.");
 
     public static Failure JsonBudgetReached { get; } =
-        new(FailureKind.Conflict, "limit-reached", $"A draft can hold at most {ProjectEnvironment.MaxJsonBytes / 1024} KiB of json values.");
+        new(FailureKind.Conflict, "json-budget-reached", $"A draft can hold at most {ProjectEnvironment.MaxJsonBytes / 1024} KiB of json values.");
 
     public static Failure FlagNotFound { get; } =
         new(FailureKind.NotFound, "not-found", "The draft has no flag with this key.");

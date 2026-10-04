@@ -77,6 +77,15 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
     }
 
+    /// <summary>A primeira coluna da primeira linha de uma consulta direta, para afirmar o que ficou gravado.</summary>
+    public async Task<object?> QueryScalarAsync(string sql)
+    {
+        await using var connection = new NpgsqlConnection(_postgres.GetConnectionString());
+        await connection.OpenAsync(TestContext.Current.CancellationToken);
+        await using var command = new NpgsqlCommand(sql, connection);
+        return await command.ExecuteScalarAsync(TestContext.Current.CancellationToken);
+    }
+
     public override async ValueTask DisposeAsync()
     {
         await base.DisposeAsync();

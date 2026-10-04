@@ -23,6 +23,11 @@ public sealed class ConsoleClient : IDisposable
         _http = api.CreateDefaultClient(ApiFactory.BaseAddress, new CookieContainerHandler(Cookies));
     }
 
+    private ConsoleClient(BrowserHost host)
+    {
+        _http = host.CreateTlsClient(Cookies);
+    }
+
     public CookieContainer Cookies { get; } = new();
 
     /// <summary>Faz as próximas requisições virem deste IP; só vale num host com <see cref="ClientAddresses"/>.</summary>
@@ -60,6 +65,20 @@ public sealed class ConsoleClient : IDisposable
         client.MemberId = Guid.Parse(created.Json["member"]!["id"]!.GetValue<string>());
         client.OrganizationId = Guid.Parse(created.Json["organizations"]![0]!["organizationId"]!.GetValue<string>());
         client._antiforgeryToken = null;
+        return client;
+    }
+
+    /// <summary>Entra com a conta de <paramref name="account"/> na API servida pelo Kestrel do <paramref name="host"/>.</summary>
+    public static async Task<ConsoleClient> SignInAsync(BrowserHost host, ConsoleClient account)
+    {
+        ArgumentNullException.ThrowIfNull(host);
+        ArgumentNullException.ThrowIfNull(account);
+
+        var client = new ConsoleClient(host);
+        Assert.Equal(HttpStatusCode.OK, (await client.SignInAsync(account.Email, Password)).Status);
+        client.Email = account.Email;
+        client.MemberId = account.MemberId;
+        client.OrganizationId = account.OrganizationId;
         return client;
     }
 
@@ -108,6 +127,42 @@ public sealed class ConsoleClient : IDisposable
             HttpMethod.Post,
             $"{Paths.Environment(organizationId ?? OrganizationId, projectKey, environmentKey)}/draft/flags",
             new { key = flagKey, enabled = true, onValue = true, offValue = false, rolloutBasisPoints });
+
+    /// <summary>Flag <c>json</c> com os valores escritos como JSON cru, exatamente como chegam ao servidor.</summary>
+    public Task<ApiResponse> CreateJsonFlagAsync(
+        string projectKey,
+        string flagKey,
+        string onValueJson,
+        string offValueJson,
+        int rolloutBasisPoints = 10_000,
+        string environmentKey = "dev",
+        Guid? organizationId = null) =>
+        SendRawAsync(
+            "createFlag",
+            HttpMethod.Post,
+            $"{Paths.Environment(organizationId ?? OrganizationId, projectKey, environmentKey)}/draft/flags",
+            $$"""{"key":"{{flagKey}}","type":"json","enabled":true,"onValue":{{onValueJson}},"offValue":{{offValueJson}},"rolloutBasisPoints":{{rolloutBasisPoints}}}""");
+
+    /// <summary>
+    /// Cria flags <c>json</c> cujos valores somam exatamente <paramref name="bytes"/> bytes no teto do rascunho (ADR 0011):
+    /// flags de 8 KiB (dois valores de 4 KiB) e uma última com o resto.
+    /// </summary>
+    public async Task FillJsonBudgetAsync(string projectKey, int bytes, Guid? organizationId = null)
+    {
+        const int FullValue = 4_096;
+        for (var flag = 1; bytes > 0; flag++)
+        {
+            var onBytes = Math.Min(FullValue, bytes - 1);
+            var offBytes = Math.Min(FullValue, bytes - onBytes);
+            var created = await CreateJsonFlagAsync(
+                projectKey, $"fill-{flag}", JsonTextOf(onBytes), JsonTextOf(offBytes), organizationId: organizationId);
+            Assert.Equal(HttpStatusCode.Created, created.Status);
+            bytes -= onBytes + offBytes;
+        }
+    }
+
+    /// <summary>Um valor JSON com exatamente <paramref name="bytes"/> bytes: <c>0</c>, ou uma string contando as aspas.</summary>
+    public static string JsonTextOf(int bytes) => bytes == 1 ? "0" : "\"" + new string('x', bytes - 2) + "\"";
 
     public Task<ApiResponse> GetFlagAsync(string projectKey, string flagKey, Guid? organizationId = null) =>
         SendAsync("getFlag", HttpMethod.Get, FlagPath(projectKey, flagKey, organizationId));

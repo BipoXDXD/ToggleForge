@@ -32,6 +32,14 @@ internal static class Problems
             "Fix the listed problems and send the request again.",
             Errors: errors));
 
+    /// <param name="limitBytes">O teto da operação; nulo quando o servidor não o informa.</param>
+    public static JsonHttpResult<ProblemBody> PayloadTooLarge(long? limitBytes) =>
+        Json(new ProblemBody(
+            "/problems/payload-too-large",
+            "Payload too large",
+            StatusCodes.Status413PayloadTooLarge,
+            limitBytes is { } limit ? $"The body is over the limit of {limit} bytes." : "The body is over the limit of this operation."));
+
     public static JsonHttpResult<ProblemBody> Unauthorized(string detail) =>
         Json(new ProblemBody("/problems/unauthorized", "Unauthorized", StatusCodes.Status401Unauthorized, detail));
 

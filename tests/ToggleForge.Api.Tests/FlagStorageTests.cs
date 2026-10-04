@@ -35,6 +35,9 @@ public sealed class FlagStorageTests(ApiFactory api)
         using var owner = await OwnerWithProjectAsync();
 
         await api.ExecuteSqlAsync(InsertDraftFlag(owner, "config", "json", """{"a":1}""", "null"));
+
+        Assert.Equal("""{"a":1}""", await api.QueryScalarAsync(SelectDraftValue(owner, "config", "on_value")));
+        Assert.Equal("null", await api.QueryScalarAsync(SelectDraftValue(owner, "config", "off_value")));
     }
 
     [Fact]
@@ -78,7 +81,11 @@ public sealed class FlagStorageTests(ApiFactory api)
     {
         using var owner = await OwnerWithProjectAsync();
 
-        await api.ExecuteSqlAsync(InsertDraftFlag(owner, "config", "json", "null", JsonTextOf(bytes: 4_096)));
+        var value = JsonTextOf(bytes: 4_096);
+
+        await api.ExecuteSqlAsync(InsertDraftFlag(owner, "config", "json", "null", value));
+
+        Assert.Equal(value, await api.QueryScalarAsync(SelectDraftValue(owner, "config", "off_value")));
     }
 
     [Fact]
@@ -99,6 +106,36 @@ public sealed class FlagStorageTests(ApiFactory api)
         Assert.DoesNotContain(api.Logs.Entries, entry => entry.Contains(canary, StringComparison.Ordinal));
     }
 
+    /// <summary>STRIDE I1 no caminho da publicação: o snapshot do jogo e o histórico também leem o valor gravado.</summary>
+    [Fact]
+    public async Task A_corrupted_published_json_value_never_reaches_the_logs_or_the_response()
+    {
+        using var owner = await OwnerWithProjectAsync();
+        var secret = (await owner.CreateCredentialAsync("space-race")).Json["secret"]!.GetValue<string>();
+        var canary = $"CANARY-{Guid.NewGuid()}";
+        await api.ExecuteSqlAsync(
+            $"""
+            insert into authoring.publications (environment_id, version, published_at, published_by, origin)
+            select environment.id, 1, now(), '{owner.MemberId}', 'publication'
+            {DevEnvironmentOf(owner)};
+            insert into authoring.publication_flags (environment_id, version, key, is_enabled, type, on_value, off_value, rollout_basis_points, seed)
+            select environment.id, 1, 'config', true, 'json', {Literal($$"""{"k":"{{canary}}","k":1}""")}, 'null', 1000, 'seed-1'
+            {DevEnvironmentOf(owner)};
+            update authoring.environments set current_version = 1 where id = (select environment.id {DevEnvironmentOf(owner)});
+            """);
+
+        var snapshot = await GameClient.GetSnapshotAsync(api, secret);
+        var publication = await owner.GetPublicationAsync("space-race", "1");
+
+        Assert.All([snapshot, publication], response =>
+        {
+            Assert.Equal(HttpStatusCode.InternalServerError, response.Status);
+            Assert.Equal("/problems/unexpected", response.ProblemType);
+            Assert.DoesNotContain(canary, response.Body, StringComparison.Ordinal);
+        });
+        Assert.DoesNotContain(api.Logs.Entries, entry => entry.Contains(canary, StringComparison.Ordinal));
+    }
+
     private async Task<ConsoleClient> OwnerWithProjectAsync()
     {
         var owner = await ConsoleClient.SignUpAsync(api);
@@ -106,29 +143,17 @@ public sealed class FlagStorageTests(ApiFactory api)
         return owner;
     }
 
-    // A flag entra por SQL porque a resposta de createFlag só segue o contrato novo na Tarefa 9; o insert também
-    // prova que as constraints aceitam uma flag booleana válida.
     private async Task<ConsoleClient> OwnerWithNewShopAsync()
     {
         var owner = await OwnerWithProjectAsync();
-        await api.ExecuteSqlAsync(InsertDraftFlag(owner, "new-shop", "boolean", "true", "false"));
+        Assert.Equal(HttpStatusCode.Created, (await owner.CreateFlagAsync("space-race", "new-shop")).Status);
         return owner;
     }
 
-    // A publicação também entra por SQL: a resposta de publishDraft traz as flags, que só seguem o contrato novo na
-    // Tarefa 9.
     private async Task<ConsoleClient> OwnerWithPublishedNewShopAsync()
     {
-        var owner = await OwnerWithProjectAsync();
-        await api.ExecuteSqlAsync(
-            $"""
-            insert into authoring.publications (environment_id, version, published_at, published_by, origin)
-            select environment.id, 1, now(), gen_random_uuid(), 'publication'
-            {DevEnvironmentOf(owner)};
-            insert into authoring.publication_flags (environment_id, version, key, is_enabled, type, on_value, off_value, rollout_basis_points, seed)
-            select environment.id, 1, 'new-shop', true, 'boolean', 'true', 'false', 1000, 'seed-1'
-            {DevEnvironmentOf(owner)};
-            """);
+        var owner = await ConsoleClient.SignUpAsync(api);
+        await owner.PublishedProjectAsync("space-race");
         return owner;
     }
 
@@ -137,6 +162,14 @@ public sealed class FlagStorageTests(ApiFactory api)
         insert into authoring.draft_flags (environment_id, key, is_enabled, type, on_value, off_value, rollout, seed, changed_at_revision)
         select environment.id, {Literal(key)}, true, {Literal(type)}, {Literal(onValue)}, {Literal(offValue)}, 1000, 'seed-1', 2
         {DevEnvironmentOf(owner)}
+        """;
+
+    private static string SelectDraftValue(ConsoleClient owner, string key, string column) =>
+        $"""
+        select flag.{column}::text
+        from authoring.draft_flags flag join authoring.environments environment on environment.id = flag.environment_id
+        join authoring.projects project on project.id = environment.project_id
+        where project.organization_id = '{owner.OrganizationId}' and environment.key = 'dev' and flag.key = {Literal(key)}
         """;
 
     private static string DevEnvironmentOf(ConsoleClient owner) =>

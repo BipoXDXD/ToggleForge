@@ -5,8 +5,10 @@ namespace ToggleForge.Api.Http;
 
 /// <summary>
 /// Campo de um merge patch (RFC 7396): ausente mantém o valor atual. O conversor só roda quando a propriedade
-/// aparece no corpo, então o default da struct significa "ausente". <c>null</c> é recusado, porque nenhum campo
-/// do contrato pode ser apagado.
+/// aparece no corpo, então o default da struct significa "ausente". Nenhum campo do contrato pode ser apagado, então
+/// <c>null</c> é sempre recusado: o binding recusa nos tipos que não o leem (<c>bool</c>, <c>int</c>), mas um
+/// <see cref="System.Text.Json.JsonElement"/> o lê como <see cref="System.Text.Json.JsonValueKind.Null"/>, e quem
+/// recusa é o endpoint.
 /// </summary>
 [JsonConverter(typeof(PatchFieldConverterFactory))]
 internal readonly record struct PatchField<T>(bool IsPresent, T Value)
@@ -31,7 +33,10 @@ internal sealed class PatchFieldConverterFactory : JsonConverterFactory
     private sealed class Converter<T> : JsonConverter<PatchField<T>>
         where T : struct
     {
-        /// <summary><typeparamref name="T"/> é uma struct não anulável, então um <c>null</c> no corpo já falha aqui.</summary>
+        /// <summary>
+        /// Um <c>null</c> no corpo falha aqui quando <typeparamref name="T"/> não o lê, e passa como valor quando lê
+        /// (<see cref="JsonElement"/>); nesse caso a recusa fica com quem consome o campo.
+        /// </summary>
         public override PatchField<T> Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
             new(IsPresent: true, JsonSerializer.Deserialize<T>(ref reader, options));
 

@@ -1,4 +1,6 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
+using ToggleForge.Api.Http;
 using ToggleForge.Application.Access;
 using ToggleForge.Application.Authoring;
 using ToggleForge.Domain.Authoring;
@@ -34,11 +36,26 @@ internal sealed record ProjectResponse(string Key, string Name, IReadOnlyList<En
 
 internal sealed record ProjectListResponse(IReadOnlyList<ProjectResponse> Data);
 
-internal sealed record FlagResponse(string Key, bool Enabled, bool OnValue, bool OffValue, int RolloutBasisPoints)
+/// <summary>Um valor de flag como JSON na resposta, nunca como string: o texto compacto, com a ordem das chaves.</summary>
+internal static class FlagValueJson
+{
+    public static JsonElement Of(JsonFlagValue value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        return JsonElement.Parse(value.Text);
+    }
+}
+
+internal sealed record FlagResponse(string Key, string Type, bool Enabled, JsonElement OnValue, JsonElement OffValue, int RolloutBasisPoints)
 {
     public static FlagResponse Of(FlagKey key, FlagSettings settings) =>
-        // Temporário: só flags booleanas são criadas pela API até a Tarefa 9, que devolve os valores como JSON.
-        new(key.Value, settings.IsEnabled, ((BooleanValues)settings.Values).On, ((BooleanValues)settings.Values).Off, settings.Rollout.BasisPoints);
+        new(
+            key.Value,
+            FlagTypes.Name(settings.Type),
+            settings.IsEnabled,
+            FlagValueJson.Of(settings.Values.OnValue),
+            FlagValueJson.Of(settings.Values.OffValue),
+            settings.Rollout.BasisPoints);
 }
 
 internal sealed record DraftChangeResponse(string FlagKey, string Change);
@@ -122,7 +139,7 @@ internal sealed record CreatedCredentialResponse(
 }
 
 internal sealed record SnapshotFlagResponse(
-    string Key, bool Enabled, bool OnValue, bool OffValue, int RolloutBasisPoints, string Seed);
+    string Key, string Type, bool Enabled, JsonElement OnValue, JsonElement OffValue, int RolloutBasisPoints, string Seed);
 
 internal sealed record SnapshotResponse(
     string Algorithm, string ProjectKey, string EnvironmentKey, long Version, DateTimeOffset PublishedAt, IReadOnlyList<SnapshotFlagResponse> Flags)
@@ -136,10 +153,10 @@ internal sealed record SnapshotResponse(
             view.PublishedAt,
             view.Flags.Select(flag => new SnapshotFlagResponse(
                 flag.Key.Value,
+                FlagTypes.Name(flag.Settings.Type),
                 flag.Settings.IsEnabled,
-                // Temporário até a Tarefa 9, pelo mesmo motivo de FlagResponse.Of.
-                ((BooleanValues)flag.Settings.Values).On,
-                ((BooleanValues)flag.Settings.Values).Off,
+                FlagValueJson.Of(flag.Settings.Values.OnValue),
+                FlagValueJson.Of(flag.Settings.Values.OffValue),
                 flag.Settings.Rollout.BasisPoints,
                 flag.Seed.Value)).ToList());
 }
@@ -150,11 +167,11 @@ internal static class SimulationSources
     public const string Publication = "publication";
 }
 
-internal sealed record SimulationResultResponse(string FlagKey, bool Value, string Reason, int? Bucket)
+internal sealed record SimulationResultResponse(string FlagKey, string Type, JsonElement Value, string Reason, int? Bucket)
 {
+    /// <summary><see cref="SimulationResultView.Value"/> é o texto JSON de um valor da flag, já validado.</summary>
     public static SimulationResultResponse Of(SimulationResultView view) =>
-        // Temporário até a Tarefa 9: só flags booleanas chegam aqui, então o texto é sempre true ou false.
-        new(view.FlagKey.Value, bool.Parse(view.Value), ReasonOf(view.Reason), view.Bucket);
+        new(view.FlagKey.Value, FlagTypes.Name(view.Type), JsonElement.Parse(view.Value), ReasonOf(view.Reason), view.Bucket);
 
     /// <summary>A simulação sempre tem jogador e só avalia flags que existem: os outros motivos não ocorrem.</summary>
     private static string ReasonOf(EvaluationReason reason) =>

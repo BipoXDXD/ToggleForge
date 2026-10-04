@@ -1,4 +1,6 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
 using ToggleForge.Api.Authentication;
 using ToggleForge.Api.Contracts;
 using ToggleForge.Api.Http;
@@ -17,6 +19,7 @@ internal static class FlagEndpoints
     {
         environment.MapGet(FlagPath, GetAsync).WithName("getFlag");
         environment.MapPatch(FlagPath, ChangeAsync).WithName("updateFlag").Accepts<FlagModificationRequest>(MergePatch)
+            .WithMetadata(new RequestSizeLimitAttribute(FlagInput.BodyLimitBytes))
             .AddEndpointFilter<AntiforgeryFilter>();
         environment.MapDelete(FlagPath, RemoveAsync).WithName("deleteFlag").AddEndpointFilter<AntiforgeryFilter>();
     }
@@ -72,10 +75,12 @@ internal static class FlagEndpoints
             return errors.ToResult();
         }
 
+        // O tipo da flag só é conhecido no domínio, depois de conferir a organização e o papel: o 400 de um valor
+        // que não serve ao tipo nunca sai antes do 404 ou do 403.
         var changed = await drafts.ChangeFlagAsync(context.User.MemberId(), locator, key, expectedRevision.Value, change, cancellationToken);
         if (!changed.TryGetValue(out var flag, out var failure))
         {
-            return Problems.From(failure);
+            return FlagInput.TryReportValueNotOfFlagType(failure, errors) ? errors.ToResult() : Problems.From(failure);
         }
 
         context.Response.Headers.ETag = CacheControl.ETagOf(flag.Revision);
@@ -118,22 +123,29 @@ internal static class FlagEndpoints
         }
 
         var rollout = request.RolloutBasisPoints.IsPresent ? FlagInput.Rollout(request.RolloutBasisPoints.Value, errors) : null;
-        if (request.RolloutBasisPoints.IsPresent && rollout is null)
-        {
-            return null;
-        }
-
-        return new FlagChange(request.Enabled.OrNull, JsonOf(request.OnValue), JsonOf(request.OffValue), rollout);
+        var onValue = Value(request.OnValue, FlagInput.OnValuePointer, errors);
+        var offValue = Value(request.OffValue, FlagInput.OffValuePointer, errors);
+        return errors.Any ? null : new FlagChange(request.Enabled.OrNull, onValue, offValue, rollout);
     }
 
-    // Temporário até a Tarefa 9, que troca o PATCH para valores JSON.
-    private static JsonFlagValue? JsonOf(PatchField<bool> value)
+    /// <summary>
+    /// <c>null</c> chega como um <see cref="JsonElement"/> de tipo <see cref="JsonValueKind.Null"/>, sem erro no binding.
+    /// No merge patch ele apagaria o campo, e nenhum campo de flag pode ser apagado; o JSON <c>null</c> como valor só
+    /// entra na criação.
+    /// </summary>
+    private static JsonFlagValue? Value(PatchField<JsonElement> field, string pointer, InputErrors errors)
     {
-        if (!value.IsPresent)
+        if (!field.IsPresent)
         {
             return null;
         }
 
-        return value.Value ? JsonFlagValue.True : JsonFlagValue.False;
+        if (field.Value.ValueKind == JsonValueKind.Null)
+        {
+            errors.InBody(pointer, "A merge patch cannot clear a value; a json flag takes the JSON null only when it is created.");
+            return null;
+        }
+
+        return FlagInput.Value(field.Value, pointer, errors);
     }
 }

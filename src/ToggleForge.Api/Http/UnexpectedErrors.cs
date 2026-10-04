@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http.HttpResults;
 
@@ -35,9 +36,17 @@ internal static partial class UnexpectedErrors
         return errors.ToResult();
     }
 
-    /// <summary>"$.flags[0].key" → "/flags/0/key".</summary>
+    /// <summary>
+    /// "$.onValue.a['b']" → "/onValue". Os corpos da API são planos, então o membro de topo basta para achar o campo,
+    /// e o resto do caminho são chaves escolhidas pelo cliente dentro de um valor; elas não voltam refletidas no
+    /// ponteiro. Um membro de topo que não tem a forma de um campo do contrato (camelCase, até 64 caracteres) também
+    /// fica de fora: o ponteiro sai vazio.
+    /// </summary>
     private static string ToPointer(string jsonPath) =>
-        jsonPath.TrimStart('$').Replace("[", ".", StringComparison.Ordinal).Replace("]", string.Empty, StringComparison.Ordinal).Replace('.', '/');
+        TopMember().Match(jsonPath) is { Success: true } match ? "/" + match.Groups["name"].Value : string.Empty;
+
+    [GeneratedRegex(@"^\$\.(?<name>[a-z][A-Za-z0-9]{0,63})(?:$|[.\[])", RegexOptions.CultureInvariant)]
+    private static partial Regex TopMember();
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Unexpected error {Reference}")]
     private static partial void LogUnexpected(ILogger logger, string reference, Exception? exception);
