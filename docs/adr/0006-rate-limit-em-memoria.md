@@ -60,9 +60,12 @@ chaves das partições, em memória; nenhum deles vai para log.
 - Requisições recusadas na autenticação (401) não passam pelo limitador, porque ele roda depois dela.
   Uma enxurrada de credenciais inválidas custa uma busca por hash cada; o ingress da plataforma é a
   primeira barreira para isso.
-- **Antes do deploy:** atrás do ingress do Container Apps, o IP da conexão é o do proxy, e todos os
-  clientes cairiam na mesma partição. O deploy precisa configurar `ForwardedHeaders` confiando só no
-  proxy da plataforma. As chaves do Data Protection já estão resolvidas (ADR 0008).
+- Atrás do ingress do Container Apps, o IP da conexão é o do proxy, e todos os clientes cairiam na mesma
+  partição. `UseForwardedHeaders` roda antes de tudo e confia em `X-Forwarded-For` e `X-Forwarded-Proto`
+  só de proxies em `ForwardedHeaders:KnownNetworks` (CIDR), além do loopback; de qualquer outro remetente,
+  os headers são ignorados. O deploy declara a rede do ingress; sem ela, a API vê o IP do proxy, o que é
+  seguro mas junta os clientes. O esquema também é repassado, porque o TLS termina no ingress e o cookie
+  antiforgery só existe em HTTPS.
 - Um ataque distribuído com a credencial extraída não é barrado por credencial; a defesa é revogar a
   credencial e, se preciso, um teto por ambiente medido depois.
 - Os testes da API sobem com tetos altíssimos, porque todos vêm do mesmo "IP"; `RateLimitTests` usa
@@ -77,5 +80,10 @@ chaves das partições, em memória; nenhum deles vai para log.
   - o membro passa do teto mesmo trocando de IP, sem bloquear os colegas;
   - o jogo passa do teto, sem afetar outro IP com a mesma credencial nem outra credencial no mesmo IP;
   - um teto abaixo de 1 impede a partida.
+- `ForwardedHeadersTests`:
+  - atrás de um proxy confiável, cada cliente real tem o próprio teto;
+  - um remetente fora das redes declaradas, ou um host sem rede declarada, não escolhe o próprio IP;
+  - com o TLS terminado no proxy, o token antiforgery sai;
+  - uma rede que não é CIDR impede a partida.
 - `SessionTests` continua provando o bloqueio da conta em qualquer IP.
 - Toda resposta 429 é conferida contra o contrato, inclusive o header `Retry-After`.
