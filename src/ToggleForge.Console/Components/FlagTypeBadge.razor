@@ -6,5 +6,5 @@
     [Parameter, EditorRequired]
     public string Type { get; set; } = string.Empty;
 
-    private bool IsJson => Type == FlagTypes.Json;
+    private bool IsJson => FlagTypes.IsJson(Type);
 }

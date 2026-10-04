@@ -21,7 +21,8 @@ public sealed class FieldErrorsTests
         var (fields, rest) = FieldErrors.Split(Invalid(("/key", "Use lowercase letters."), ("/rolloutBasisPoints", "Use 0 to 10000.")));
 
         Assert.Equal("Use 0 to 10000.", fields.For(FieldErrors.Rollout));
-        Assert.Equal(["Use lowercase letters."], rest!.Messages);
+        Assert.NotNull(rest);
+        Assert.Equal(["Use lowercase letters."], rest.Messages);
     }
 
     [Fact]
@@ -30,7 +31,8 @@ public sealed class FieldErrorsTests
         var (fields, rest) = FieldErrors.Split(Invalid(("/onValueX", "Unknown field.")));
 
         Assert.True(fields.IsEmpty);
-        Assert.Equal(["Unknown field."], rest!.Messages);
+        Assert.NotNull(rest);
+        Assert.Equal(["Unknown field."], rest.Messages);
     }
 
     [Fact]

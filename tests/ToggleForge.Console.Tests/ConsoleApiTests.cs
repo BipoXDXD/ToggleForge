@@ -198,7 +198,8 @@ public sealed class ConsoleApiTests
             _shopConfig, "\"4\"", new FlagModification(OffValue: Values.Json("[[[[[[[[[1]]]]]]]]]")), TestContext.Current.CancellationToken);
 
         Assert.False(saved.Succeeded);
-        Assert.Equal("/offValue", Assert.Single(saved.Problem.Errors!).Source?.Pointer);
+        Assert.NotNull(saved.Problem.Errors);
+        Assert.Equal("/offValue", Assert.Single(saved.Problem.Errors).Source?.Pointer);
     }
 
     [Fact]

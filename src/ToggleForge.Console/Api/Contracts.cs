@@ -31,22 +31,24 @@ public sealed record DraftChange(string FlagKey, string Change);
 
 /// <summary>Os tipos de flag do contrato (<c>FlagType</c>). O tipo vem na criação e nunca muda (ADR 0011).</summary>
 /// <remarks>
-/// O console é servido pela API (ADR 0009) e está sempre na versão dela, então conhece todo tipo do contrato:
-/// o que não é JSON é booleano.
+/// A lista pode crescer. O console é servido pela API (ADR 0009), mas um tipo que ele não conhece não vira booleano:
+/// aparece com o texto cru e abre só para leitura (design spec, 2.2).
 /// </remarks>
 public static class FlagTypes
 {
     public const string Boolean = "boolean";
 
     public const string Json = "json";
+
+    public static bool IsJson(string type) => type == Json;
 }
 
-/// <param name="Type"><see cref="FlagTypes.Boolean"/> ou <see cref="FlagTypes.Json"/>.</param>
+/// <param name="Type"><see cref="FlagTypes.Boolean"/>, <see cref="FlagTypes.Json"/> ou um tipo que o console ainda não conhece.</param>
 /// <param name="OnValue">O valor de quem cai no rollout.</param>
 /// <param name="OffValue">O valor de quem fica fora e de todos quando a flag está desligada.</param>
 public sealed record Flag(string Key, string Type, bool Enabled, FlagValue OnValue, FlagValue OffValue, int RolloutBasisPoints)
 {
-    public bool IsJson => Type == FlagTypes.Json;
+    public bool IsJson => FlagTypes.IsJson(Type);
 }
 
 /// <summary>Um ambiente de um projeto da organização.</summary>
@@ -103,11 +105,12 @@ public sealed record SimulationRequest(string PlayerId, string Source, long? Ver
 /// <param name="Results">Um por flag, em ordem de chave.</param>
 public sealed record Simulation(long? Version, IReadOnlyList<SimulationResult> Results);
 
+/// <param name="Type">O tipo da flag simulada, como em <see cref="Flag.Type"/>.</param>
 /// <param name="Reason"><c>disabled</c>, <c>included</c> ou <c>excluded</c>; a lista pode crescer.</param>
 /// <param name="Bucket">O bucket do jogador (0 a 9999); nulo quando o resultado não dependeu dele.</param>
 public sealed record SimulationResult(string FlagKey, string Type, FlagValue Value, string Reason, int? Bucket)
 {
-    public bool IsJson => Type == FlagTypes.Json;
+    public bool IsJson => FlagTypes.IsJson(Type);
 }
 
 /// <summary>Merge patch: só os campos que mudaram vão para a API, e campo nulo nem é enviado.</summary>
