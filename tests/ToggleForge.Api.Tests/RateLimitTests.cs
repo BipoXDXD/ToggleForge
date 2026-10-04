@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Net;
 using Microsoft.AspNetCore.Hosting;
@@ -64,13 +65,19 @@ public sealed class RateLimitTests(ApiFactory api)
         using var neighbor = ConsoleClient.Anonymous(host);
         guesser.ComeFrom(Guesser);
         neighbor.ComeFrom(Neighbor);
-        await GetAntiforgeryTokenAsync(guesser);
+        var clock = Stopwatch.StartNew();
+        var first = await GetAntiforgeryTokenAsync(guesser);
 
         var blocked = await GetAntiforgeryTokenAsync(guesser);
         var allowed = await GetAntiforgeryTokenAsync(neighbor);
 
+        // Falhou uma vez sob carga sem dizer qual chamada. A mensagem traz as três respostas e o tempo, porque a
+        // janela de 1 minuto só renova se o guesser levar isso entre as duas chamadas.
+        var calls = string.Create(
+            CultureInfo.InvariantCulture,
+            $"first {Describe(first)}; blocked {Describe(blocked)}; allowed {Describe(allowed)}; {clock.ElapsedMilliseconds} ms in all");
+        Assert.True(blocked.Status == HttpStatusCode.TooManyRequests && allowed.Status == HttpStatusCode.OK, calls);
         AssertTooManyRequests(blocked);
-        Assert.Equal(HttpStatusCode.OK, allowed.Status);
     }
 
     /// <summary>Um cliente IPv6 costuma ter um /64 inteiro: trocar de endereço dentro dele não renova o limite.</summary>
@@ -201,6 +208,13 @@ public sealed class RateLimitTests(ApiFactory api)
 
     private static Task<ApiResponse> GetAntiforgeryTokenAsync(ConsoleClient client) =>
         client.SendAsync("getAntiforgeryToken", HttpMethod.Get, Paths.AntiforgeryToken);
+
+    // A resposta 200 traz o token antiforgery, então só o status entra na mensagem. As de erro (429 e 500) são
+    // Problem Details sem segredo, e o corpo mostra qual foi.
+    private static string Describe(ApiResponse response) =>
+        response.Status == HttpStatusCode.OK
+            ? "200"
+            : string.Create(CultureInfo.InvariantCulture, $"{(int)response.Status} {response.Body}");
 
     private static void AssertTooManyRequests(ApiResponse response)
     {
