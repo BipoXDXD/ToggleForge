@@ -5,7 +5,7 @@
 *@
 <fieldset aria-describedby="json-public" class="space-y-4">
     <legend class="sr-only">JSON values</legend>
-    <p id="json-public" role="note" class="flex gap-2 rounded-md border-l-2 border-amber-400 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+    <p id="json-public" class="flex gap-2 rounded-md border-l-2 border-amber-400 bg-amber-50 px-3 py-2 text-sm text-amber-900">
         <span aria-hidden="true">⚠</span>
         <span>Every player who has the game can read these values. Never put API keys, passwords or personal data in them.</span>
     </p>
@@ -17,10 +17,12 @@
                         Audience="@AudienceText.Others(RolloutPercent)" Placeholder="@OthersExample"
                         Text="@OffValueText" TextChanged="OffValueTextChanged" Error="@Errors.For(FieldErrors.OffValue)">
             <Actions>
-                <button type="button" @onclick="CopyOnValueAsync" class="text-xs font-medium text-indigo-700 hover:underline">Copy from included</button>
+                <button type="button" @onclick="CopyOnValueAsync" class="rounded text-xs font-medium text-indigo-700 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">Copy from included</button>
             </Actions>
         </JsonValueField>
     </div>
+    @* Sempre no DOM, vazia até o clique: uma região viva que nasce junto com o texto costuma ser ignorada. *@
+    <p class="sr-only" role="status">@_copyAnnouncement</p>
     @if (TooLarge)
     {
         <p role="alert" data-testid="values-too-large" class="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">@TooLargeToSend</p>
@@ -36,6 +38,7 @@
     private const string IncludedExample = """{ "discount": 0.2 }""";
     private const string OthersExample = """{ "discount": 0 }""";
 
+    private string _copyAnnouncement = string.Empty;
     private JsonValueField? _included;
     private JsonValueField? _others;
 
@@ -68,5 +71,9 @@
     /// <param name="field"><see cref="FieldErrors.OnValue"/> ou <see cref="FieldErrors.OffValue"/>.</param>
     public ValueTask FocusAsync(string field) => (field == FieldErrors.OnValue ? _included : _others)?.FocusAsync() ?? ValueTask.CompletedTask;
 
-    private Task CopyOnValueAsync() => OffValueTextChanged.InvokeAsync(OnValueText);
+    private Task CopyOnValueAsync()
+    {
+        _copyAnnouncement = "Value copied.";
+        return OffValueTextChanged.InvokeAsync(OnValueText);
+    }
 }

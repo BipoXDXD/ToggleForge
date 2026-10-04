@@ -47,7 +47,7 @@ else if (!CanEdit(_flag.Value))
     }
     @if (_flag.Value.Type != FlagTypes.Boolean)
     {
-        <p role="note" class="mt-6 flex max-w-4xl gap-2 rounded-md border-l-2 border-amber-400 bg-amber-50 px-3 py-2 text-sm text-amber-900" id="json-public">
+        <p class="mt-6 flex max-w-4xl gap-2 rounded-md border-l-2 border-amber-400 bg-amber-50 px-3 py-2 text-sm text-amber-900" id="json-public">
             <span aria-hidden="true">⚠</span>
             <span>Every player who has the game can read these values. Never put API keys, passwords or personal data in them.</span>
         </p>
@@ -74,20 +74,22 @@ else
             <label for="rollout" class="block text-sm font-medium text-slate-700">Rollout (%)</label>
             <input id="rollout" @ref="_rollout" type="number" required min="0" max="100" step="0.01" @bind="_edit.RolloutPercent"
                    aria-invalid="@(RolloutError is null ? null : "true")" aria-describedby="@(RolloutError is null ? null : "rollout-error")"
-                   class="@(RolloutError is null ? "border-slate-500 focus:border-indigo-500" : "border-red-500") mt-1 block w-40 rounded-md border px-3 py-2 text-sm focus:outline-none" />
+                   class="@(RolloutError is null ? "border-slate-500" : "border-red-600") mt-1 block w-40 rounded-md border bg-white px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600" />
             <FieldError Id="rollout-error" Message="@RolloutError" />
         </div>
         @if (_flag.Value.IsJson)
         {
+            <div class="pt-4">
             <JsonValuesInput @ref="_values" @bind-OnValueText="_edit.OnValueText" @bind-OffValueText="_edit.OffValueText"
                              RolloutPercent="_edit.RolloutPercent" Enabled="_edit.Enabled" Errors="_fieldErrors" TooLarge="_valuesTooLarge" />
+            </div>
         }
         else
         {
             <div>
                 <label class="block">
                     <span class="text-sm font-medium text-slate-700">Value for included players</span>
-                    <select @bind="_edit.OnValueText" class="mt-1 block w-40 rounded-md border border-slate-500 px-3 py-2 text-sm">
+                    <select @bind="_edit.OnValueText" class="mt-1 block w-40 rounded-md border border-slate-500 bg-white px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
                         <option value="true">true</option>
                         <option value="false">false</option>
                     </select>
@@ -97,7 +99,7 @@ else
             <div>
                 <label class="block">
                     <span class="text-sm font-medium text-slate-700">Value for everyone else</span>
-                    <select @bind="_edit.OffValueText" class="mt-1 block w-40 rounded-md border border-slate-500 px-3 py-2 text-sm">
+                    <select @bind="_edit.OffValueText" class="mt-1 block w-40 rounded-md border border-slate-500 bg-white px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
                         <option value="true">true</option>
                         <option value="false">false</option>
                     </select>

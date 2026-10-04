@@ -216,11 +216,11 @@ public sealed class FlagEditorPageTests
 
         var page = RenderEditor(console, "shop-config");
 
-        Assert.Equal(PublicValuesWarning, MessageOf(page.Find("#json-public[role=note]")));
+        Assert.Equal(PublicValuesWarning, MessageOf(page.Find("#json-public")));
     }
 
     [Fact]
-    public void The_values_point_to_the_warning_so_a_screen_reader_reads_it_first()
+    public void The_json_fieldset_is_described_by_the_public_values_warning()
     {
         var api = ShopConfigRead();
         ConsoleRendering.SignInAs(api, "editor");
@@ -228,7 +228,11 @@ public sealed class FlagEditorPageTests
 
         var page = RenderEditor(console, "shop-config");
 
-        Assert.Equal("json-public", page.Find("fieldset").GetAttribute("aria-describedby"));
+        var describedBy = page.Find("fieldset").GetAttribute("aria-describedby");
+        Assert.Equal("json-public", describedBy);
+        Assert.Contains("Never put API keys", page.Find($"#{describedBy}").TextContent, StringComparison.Ordinal);
+        Assert.Equal("JSON values", page.Find("fieldset > legend.sr-only").TextContent);
+        Assert.Empty(page.FindAll("[role=note]"));
     }
 
     [Fact]
@@ -240,7 +244,7 @@ public sealed class FlagEditorPageTests
 
         var page = RenderEditor(console);
 
-        Assert.Empty(page.FindAll("[role=note]"));
+        Assert.Empty(page.FindAll("#json-public"));
     }
 
     [Fact]
@@ -272,7 +276,7 @@ public sealed class FlagEditorPageTests
         page.Find("#on-value").Input("{ \"discount\": 0.5, \"items\": [\"sword\", \"shield\"] }");
         page.Find("form").Submit();
 
-        page.WaitForAssertion(() => Assert.Equal("Saved to the draft. Games get it with the next publication.", page.Find("[role=status]").TextContent));
+        page.WaitForAssertion(() => Assert.Equal("Saved to the draft. Games get it with the next publication.", page.Find("form > [role=status]").TextContent));
         var patch = Assert.Single(api.RequestsTo(HttpMethod.Patch, ShopConfig));
         Assert.Equal(["\"4\""], patch.Headers.GetValues("If-Match"));
         Assert.Equal("""{"onValue":{"discount":0.5,"items":["sword","shield"]}}""", api.BodyOf(patch));
@@ -311,6 +315,20 @@ public sealed class FlagEditorPageTests
         var area = page.Find("#on-value");
         Assert.Equal("true", area.GetAttribute("aria-invalid"));
         Assert.Equal("on-value-audience on-value-size on-value-syntax", area.GetAttribute("aria-describedby"));
+        Assert.Empty(page.FindAll("#on-value-syntax[role]"));
+    }
+
+    [Fact]
+    public void Typing_a_value_does_not_raise_an_alert()
+    {
+        var api = ShopConfigRead();
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+
+        page.Find("#on-value").Input("{");
+        page.Find("#off-value").Input(StringOfBytes(4_097));
+
         Assert.Empty(page.FindAll("[role=alert]"));
     }
 
@@ -458,6 +476,8 @@ public sealed class FlagEditorPageTests
         Assert.Equal("Nothing was saved: fix the fields marked below.", Assert.Single(page.FindAll("[role=alert]")).TextContent.Trim());
         Assert.Equal("[1]", TextOf(page.Find("#on-value")));
         Assert.Equal("true", page.Find("#on-value").GetAttribute("aria-invalid"));
+        Assert.Contains("on-value-error", page.Find("#on-value").GetAttribute("aria-describedby"), StringComparison.Ordinal);
+        Assert.Empty(page.FindAll("#on-value-error[role]"));
         AssertFocused(console, area);
     }
 
@@ -557,6 +577,20 @@ public sealed class FlagEditorPageTests
         page.FindAll("button").Single(button => button.TextContent.Trim() == "Copy from included").Click();
 
         Assert.Equal(IndentedOnValue, TextOf(page.Find("#off-value")));
+    }
+
+    [Fact]
+    public void Copying_announces_through_a_status_that_was_already_there()
+    {
+        var api = ShopConfigRead();
+        ConsoleRendering.SignInAs(api, "editor");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderEditor(console, "shop-config");
+        Assert.Equal(string.Empty, page.Find("fieldset [role=status].sr-only").TextContent);
+
+        page.FindAll("button").Single(button => button.TextContent.Trim() == "Copy from included").Click();
+
+        Assert.Equal("Value copied.", page.Find("fieldset [role=status].sr-only").TextContent);
     }
 
     [Fact]

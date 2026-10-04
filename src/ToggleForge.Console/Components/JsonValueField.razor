@@ -15,7 +15,7 @@
         <div class="flex gap-3">
             @Actions
             <button type="button" data-testid="@($"{Id}-format")" disabled="@(analysis is not JsonAnalysis.Valid)" @onclick="FormatAsync"
-                    class="text-xs font-medium text-indigo-700 hover:underline disabled:cursor-not-allowed disabled:text-slate-400 disabled:no-underline">
+                    class="rounded text-xs font-medium text-indigo-700 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:text-slate-400 disabled:no-underline">
                 Format
             </button>
         </div>
@@ -24,7 +24,7 @@
     <textarea @ref="_area" id="@Id" rows="8" wrap="off" spellcheck="false" autocomplete="off" autocapitalize="off"
               placeholder="@Placeholder" value="@Text" @oninput="ChangeAsync"
               aria-invalid="@(invalid ? "true" : null)" aria-describedby="@DescribedBy(showsSyntax, error is not null)"
-              class="@(invalid ? "border-red-500 focus:ring-red-600" : "border-slate-500 focus:border-indigo-500 focus:ring-indigo-500") mt-2 block w-full resize-y rounded-md border bg-white px-3 py-2 font-mono text-[13px] leading-5 text-slate-800 focus:outline-none focus:ring-1"></textarea>
+              class="@(invalid ? "border-red-600" : "border-slate-500") mt-2 block w-full resize-y rounded-md border bg-white px-3 py-2 font-mono text-[13px] leading-5 text-slate-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"></textarea>
 
     @switch (analysis)
     {
@@ -67,7 +67,7 @@
             {
                 case JsonAnalysis.Invalid { Position: { } position }:
                     <p data-testid="syntax-summary"><strong class="font-semibold">Not valid JSON</strong> at line @position.Line, column @position.Column.</p>
-                    <pre class="mt-1 overflow-x-auto font-mono text-xs leading-5 text-red-900">@Excerpt(position)</pre>
+                    <pre class="mt-1 overflow-x-auto font-mono text-xs leading-5 text-red-900"><span class="text-red-400">@Gutter(position.Line.ToString(System.Globalization.CultureInfo.InvariantCulture))</span>@position.LineText@("\n")<span class="text-red-400">@Gutter(string.Empty.PadLeft(position.Line.ToString(System.Globalization.CultureInfo.InvariantCulture).Length))</span>@position.Caret</pre>
                     <p class="mt-1 text-xs">Check for a missing comma or quote just before this point.</p>
                     break;
                 case JsonAnalysis.Invalid:
@@ -148,12 +148,8 @@
         _ => string.Empty,
     };
 
-    // A linha com o número e um ^ sob a coluna, como um compilador mostraria.
-    private static string Excerpt(SyntaxPosition position)
-    {
-        var number = position.Line.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        return $"{number} │ {position.LineText}\n{new string(' ', number.Length)} │ {position.Caret}";
-    }
+    // A linha com o número e um ^ sob a coluna, como um compilador mostraria; a margem é mais clara, como no design.
+    private static string Gutter(string number) => $"{number} │ ";
 
     private static (string Bar, string Text) MeterStyle(MeterLevel level) => level switch
     {
