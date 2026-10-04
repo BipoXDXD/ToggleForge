@@ -110,6 +110,68 @@ public sealed class ConsoleJourneyTests(ApiFactory api, Browser browser) : IClas
         Assert.True(browserErrors.Count == 0, string.Join(" | ", browserErrors));
     }
 
+    /// <summary>A jornada da ADR 0011 pelo console: uma configuração JSON criada, publicada, simulada, alterada e revertida.</summary>
+    [Fact]
+    public async Task A_member_creates_publishes_simulates_and_rolls_back_a_json_flag_from_the_console()
+    {
+        const string playerId = "player-42";
+        const string indentedAtTwentyPercent = "{\n  \"discount\": 0.2,\n  \"featuredItems\": [\n    \"sword\"\n  ]\n}";
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        Assert.Equal(HttpStatusCode.Created, (await owner.CreateProjectAsync("space-race")).Status);
+        await using var context = await browser.NewContextAsync(Host.Address);
+        var page = await context.NewPageAsync();
+        var browserErrors = ConsolePages.CollectErrors(page);
+
+        await ConsolePages.OpenDraftAsync(page, owner);
+        await page.GetByLabel("Key").FillAsync("shop-config");
+        await page.GetByRole(AriaRole.Radio, new() { Name = "JSON" }).CheckAsync();
+        await Expect(page.Locator("#json-public")).ToContainTextAsync("Every player who has the game can read these values.");
+        await page.GetByLabel("Rollout (%)").FillAsync("100");
+        await page.GetByLabel("Value for included players").FillAsync("{\"discount\": 0.2, \"featuredItems\": [\"sword\"]}");
+        await page.GetByLabel("Value for everyone else").FillAsync("{\"discount\": 0}");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Add to draft" }).ClickAsync();
+
+        var row = page.GetByRole(AriaRole.Row).Filter(new() { HasText = "shop-config" });
+        await Expect(row.GetByTestId("flag-type")).ToHaveTextAsync("JSON");
+        await Expect(row).ToContainTextAsync("Included");
+        await Expect(row.Locator("code").First).ToHaveAttributeAsync("title", "{\"discount\":0.2,\"featuredItems\":[\"sword\"]}");
+        await PublishAsync(page, "Shop config at 20% off");
+        await Expect(page.GetByRole(AriaRole.Status)).ToContainTextAsync("Version 1 is live in Development.");
+
+        await page.GetByRole(AriaRole.Link, new() { Name = "Back to the draft" }).ClickAsync();
+        await page.GetByRole(AriaRole.Link, new() { Name = "shop-config" }).ClickAsync();
+        await Expect(page.GetByLabel("Value for included players")).ToHaveValueAsync(indentedAtTwentyPercent);
+        await page.GetByLabel("Value for included players").FillAsync("{\"discount\": 0.5, \"featuredItems\": [\"sword\"]}");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Save" }).ClickAsync();
+        // O editor JSON tem outra região de status, vazia, que anuncia a cópia de valor.
+        await Expect(page.GetByRole(AriaRole.Status).Filter(new() { HasText = "Saved to the draft" })).ToBeVisibleAsync();
+        await ReturnToDraftAsync(page);
+        await PublishAsync(page, "Shop config at 50% off");
+        await Expect(page.GetByRole(AriaRole.Status)).ToContainTextAsync("Version 2 is live in Development.");
+
+        await page.GetByRole(AriaRole.Link, new() { Name = "Back to the draft" }).ClickAsync();
+        await SimulateAsync(page, playerId, publishedVersion: true);
+        await Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Version 2", Exact = true })).ToBeVisibleAsync();
+        await ExpectSimulatedValueAsync(page, "\"discount\": 0.5");
+
+        await ReturnToDraftAsync(page);
+        await page.GetByRole(AriaRole.Link, new() { Name = "History" }).ClickAsync();
+        await page.GetByRole(AriaRole.Link, new() { Name = "Version 1" }).ClickAsync();
+        await Expect(page.GetByRole(AriaRole.Row).Filter(new() { HasText = "shop-config" }).GetByTestId("flag-type")).ToHaveTextAsync("JSON");
+        await page.GetByLabel("Type dev to confirm").FillAsync("dev");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Roll back to version 1" }).ClickAsync();
+        await Expect(page.GetByRole(AriaRole.Status)).ToContainTextAsync("Version 3 is live in Development with the content of version 1.");
+        await ReturnToDraftAsync(page);
+        await SimulateAsync(page, playerId, publishedVersion: true);
+
+        await Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Version 3", Exact = true })).ToBeVisibleAsync();
+        await ExpectSimulatedValueAsync(page, "\"discount\": 0.2");
+        Assert.Equal(
+            "{\"discount\":0.2,\"featuredItems\":[\"sword\"]}",
+            (await owner.GetFlagAsync("space-race", "shop-config")).Json["onValue"]!.ToJsonString());
+        Assert.True(browserErrors.Count == 0, string.Join(" | ", browserErrors));
+    }
+
     [Fact]
     public async Task A_visitor_without_session_signs_in_and_returns_to_the_page_asked_for()
     {
@@ -320,6 +382,15 @@ public sealed class ConsoleJourneyTests(ApiFactory api, Browser browser) : IClas
         await page.GetByLabel("Summary (optional)").FillAsync(summary);
         await page.GetByLabel("Type dev to confirm").FillAsync("dev");
         await page.GetByRole(AriaRole.Button, new() { Name = "Publish 1 change to dev" }).ClickAsync();
+    }
+
+    /// <summary>O valor JSON do simulador começa recolhido; aberto, mostra o texto indentado.</summary>
+    private static async Task ExpectSimulatedValueAsync(IPage page, string expected)
+    {
+        var row = page.GetByRole(AriaRole.Row).Filter(new() { HasText = "shop-config" });
+        await Expect(row.Locator("pre")).ToBeHiddenAsync();
+        await row.Locator("summary").ClickAsync();
+        await Expect(row.Locator("pre")).ToContainTextAsync(expected);
     }
 
     private static async Task ReturnToDraftAsync(IPage page)
