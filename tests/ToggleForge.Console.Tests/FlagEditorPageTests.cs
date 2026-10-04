@@ -158,6 +158,18 @@ public sealed class FlagEditorPageTests
         Assert.Empty(page.FindAll("form"));
     }
 
+    [Fact]
+    public void The_breadcrumb_ends_at_the_flag()
+    {
+        var api = NewShopAtTenPercent();
+        ConsoleRendering.SignInAs(api, "viewer");
+        using var console = ConsoleRendering.Create(api);
+
+        var page = RenderEditor(console);
+
+        Assert.Equal("new-shop", AccessibleNames.CurrentBreadcrumb(page));
+    }
+
     private static StubApi NewShopAtTenPercent() =>
         new StubApi().Answer(HttpMethod.Get, NewShop, HttpStatusCode.OK, AtTenPercent, eTag: "\"7\"");
 

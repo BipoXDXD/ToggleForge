@@ -8,6 +8,8 @@
     <a href="organizations/@OrganizationId/projects" class="hover:text-slate-700 hover:underline">Projects</a>
     <span aria-hidden="true"> / </span>
     <a href="@DraftPath" class="hover:text-slate-700 hover:underline">@ProjectKey · @EnvironmentKey</a>
+    <span aria-hidden="true"> / </span>
+    <span aria-current="page" class="text-slate-700">Simulator</span>
 </nav>
 
 <h1 class="mt-2 text-2xl font-semibold tracking-tight">Simulate a player in @EnvironmentText.Title(_environment, EnvironmentKey)</h1>
@@ -81,7 +83,7 @@ else
             else
             {
                 <div class="mt-3 overflow-hidden rounded-lg border border-slate-200 bg-white">
-                    <table class="w-full text-left text-sm">
+                    <table aria-labelledby="simulation-results" class="w-full text-left text-sm">
                         <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                             <tr>
                                 <th scope="col" class="px-4 py-2">Flag</th>

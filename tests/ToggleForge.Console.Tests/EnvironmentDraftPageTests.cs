@@ -113,6 +113,20 @@ public sealed class EnvironmentDraftPageTests
         Assert.Empty(page.FindAll("[role=tab], [role=tablist], [aria-selected]"));
     }
 
+    [Fact]
+    public void The_flags_table_is_named_and_the_breadcrumb_ends_at_the_project()
+    {
+        var api = DraftWithOneFlag();
+        ConsoleRendering.SignInAs(api, "viewer");
+        using var console = ConsoleRendering.Create(api);
+
+        var page = RenderDraft(console);
+
+        page.WaitForElement("table");
+        Assert.Equal("Draft flags", AccessibleNames.TableName(page));
+        Assert.Equal("Space Race", AccessibleNames.CurrentBreadcrumb(page));
+    }
+
     private static string DraftStatus(IRenderedComponent<EnvironmentDraft> page) =>
         System.Text.RegularExpressions.Regex.Replace(page.Find("[data-testid=draft-status]").TextContent, @"\s+", " ").Trim();
 
