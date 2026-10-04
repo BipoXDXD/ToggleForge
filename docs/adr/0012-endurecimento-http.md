@@ -71,9 +71,9 @@ domínios que a API não controla e são difíceis de desfazer.
 
 **Teto global de 32 KiB por corpo** (`KestrelServerLimits.MaxRequestBodySize`). Acima dele, o binding do corpo
 para e responde 413, em Problem Details pelas status code pages. O contrato declara `413` (`PayloadTooLarge`)
-em toda operação com corpo: `createAccount`, `signIn`, `createProject`, `createEnvironment`, `simulatePlayer`,
-`publishDraft`, `rollBack` e `createCredential`; `createFlag` e `updateFlag` ganham o mesmo 413 na Fatia 4
-(ADR 0011). Os demais limites do Kestrel
+em toda operação que recebe corpo: `createAccount`, `signIn`, `createProject`, `createEnvironment`, `createFlag`,
+`updateFlag`, `simulatePlayer`, `publishDraft`, `rollBack` e `createCredential`. Um teste de contrato exige o 413
+em toda operação com corpo, então uma operação nova não escapa. Os demais limites do Kestrel
 ficam no padrão, que o Learn considera adequado: 32 KB de headers, 100 headers, 30 s para recebê-los e
 240 B/s mínimos no corpo.
 
@@ -115,8 +115,8 @@ O ingress recusa HTTP (`allowInsecure: false`).
   `In_development_no_response_pins_https`, `Behind_the_ingress_that_ended_tls_the_response_pins_https`,
   `An_untrusted_sender_claiming_https_gets_no_pin` e `An_unexpected_error_still_pins_https`.
 - `KestrelHardeningTests`: `No_response_names_the_server_software`, `A_body_of_exactly_32_KiB_is_read` e
-  `A_body_over_32_KiB_is_refused_before_anything_is_created`. Os dois últimos também conferem as respostas contra
-  o contrato.
+  `A_body_over_32_KiB_is_refused_before_anything_is_created`, que também conferem as respostas contra o contrato,
+  e `Every_operation_that_takes_a_body_declares_413`.
 - `ForwardedHeadersTests.Outside_development_the_api_does_not_start_without_the_ingress_network`, além dos testes
   da ADR 0006.
 - `CrossOriginTests`: `Another_site_cannot_read_an_api_response`, `Another_site_gets_no_preflight_approval_for_a_mutation`,

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
+using Microsoft.AspNetCore.Http;
 using ToggleForge.Api.Tests.Support;
 
 namespace ToggleForge.Api.Tests;
@@ -72,6 +73,17 @@ public sealed class KestrelHardeningTests(ApiFactory api) : IAsyncLifetime
         Assert.Equal(HttpStatusCode.RequestEntityTooLarge, oversized.StatusCode);
         ApiContract.Verify("createAccount", oversized, await oversized.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
         Assert.Equal(HttpStatusCode.Created, retry.StatusCode);
+    }
+
+    /// <summary>O teto vale para o servidor inteiro, então toda operação com corpo pode responder 413 e precisa dizê-lo.</summary>
+    [Fact]
+    public void Every_operation_that_takes_a_body_declares_413()
+    {
+        var withBody = ApiContract.OperationsTakingABody();
+
+        Assert.NotEmpty(withBody);
+        Assert.All(withBody, operationId => Assert.True(
+            ApiContract.Declares(operationId, StatusCodes.Status413PayloadTooLarge), $"{operationId} does not declare 413."));
     }
 
     /// <param name="bodyBytes">Tamanho exato do corpo, completado com espaços depois do JSON; null manda o JSON compacto.</param>
