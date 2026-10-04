@@ -22,8 +22,8 @@ internal static class ApiPipeline
         });
         app.UseStatusCodePages(context => EmptyErrorAsProblem(context.HttpContext));
         // Explícito porque os arquivos do console saem em curto-circuito aqui (ApiConsole): pulam tudo o que vem
-        // abaixo, inclusive a autenticação. O que também precisa valer para eles fica acima desta linha: hoje os
-        // cabeçalhos encaminhados e o tratamento de erro; os cabeçalhos de segurança, quando chegarem.
+        // abaixo, inclusive a autenticação. O que também precisa valer para eles fica acima desta linha: os
+        // cabeçalhos encaminhados, os cabeçalhos de segurança e o tratamento de erro.
         app.UseRouting();
         app.UseAuthentication();
         app.UseAuthorization();
