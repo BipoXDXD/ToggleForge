@@ -35,7 +35,33 @@ public sealed class JsonEvaluationTests
 
         var result = client.EvaluateJson("shop-config", _player, Fallback, _parser.Parse);
 
-        Assert.Equal(("""{"discount":0}""", EvaluationReason.Disabled), (result.Value, result.Reason));
+        Assert.Equal(
+            ("""{"discount":0}""", EvaluationReason.Disabled, (long?)1, false),
+            (result.Value, result.Reason, result.SnapshotVersion, result.IsFallback));
+    }
+
+    [Fact]
+    public async Task A_partial_json_rollout_carries_the_bucket_of_the_player()
+    {
+        var client = await SyncedAsync(HalfRolloutOfShopConfig());
+
+        var result = client.EvaluateJson("shop-config", _player, Fallback, _parser.Parse);
+
+        // O bucket de player-42 em space-race/dev/shop-config/s2, calculado pelo oráculo em tools/rollout-vectors.
+        Assert.Equal(
+            (ShopConfig, EvaluationReason.Included, (int?)3348, false),
+            (result.Value, result.Reason, result.Bucket, result.IsFallback));
+    }
+
+    [Fact]
+    public async Task Without_a_player_id_a_partial_json_rollout_gives_the_default_without_calling_the_parser()
+    {
+        var client = await SyncedAsync(HalfRolloutOfShopConfig());
+
+        var result = client.EvaluateJson("shop-config", EvaluationContext.Anonymous, Fallback, _parser.Parse);
+
+        Assert.Equal((Fallback, EvaluationReason.MissingPlayerId, true), (result.Value, result.Reason, result.IsFallback));
+        Assert.Empty(_parser.Received);
     }
 
     [Fact]
@@ -57,7 +83,9 @@ public sealed class JsonEvaluationTests
 
         var result = client.EvaluateJson("shop-config", _player, Fallback, _parser.Parse);
 
-        Assert.Equal((Fallback, EvaluationReason.SnapshotMissing, SnapshotSource.None), (result.Value, result.Reason, result.Source));
+        Assert.Equal(
+            (Fallback, EvaluationReason.SnapshotMissing, SnapshotSource.None, (long?)null, true),
+            (result.Value, result.Reason, result.Source, result.SnapshotVersion, result.IsFallback));
         Assert.Empty(_parser.Received);
     }
 
@@ -90,6 +118,9 @@ public sealed class JsonEvaluationTests
 
         Assert.Throws<ArgumentNullException>(() => client.EvaluateJson<string>("shop-config", _player, Fallback, parse: null!));
     }
+
+    private static string HalfRolloutOfShopConfig() =>
+        Snapshots.Json(flags: $"[{Snapshots.JsonFlag().Replace("\"rolloutBasisPoints\":10000", "\"rolloutBasisPoints\":5000", StringComparison.Ordinal)}]");
 
     private ToggleForgeClient Client(ISnapshotTransport transport) => new(transport, timeProvider: _time);
 
