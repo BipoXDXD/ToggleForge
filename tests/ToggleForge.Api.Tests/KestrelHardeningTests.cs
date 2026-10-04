@@ -53,6 +53,7 @@ public sealed class KestrelHardeningTests(ApiFactory api) : IAsyncLifetime
         using var response = await CreateAccountAsync(BodyLimitBytes);
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        ApiContract.Verify("createAccount", response, await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -69,7 +70,7 @@ public sealed class KestrelHardeningTests(ApiFactory api) : IAsyncLifetime
         using var retry = await CreateAccountAsync(bodyBytes: null, email);
 
         Assert.Equal(HttpStatusCode.RequestEntityTooLarge, oversized.StatusCode);
-        Assert.Equal("application/problem+json", oversized.Content.Headers.ContentType?.MediaType);
+        ApiContract.Verify("createAccount", oversized, await oversized.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
         Assert.Equal(HttpStatusCode.Created, retry.StatusCode);
     }
 
