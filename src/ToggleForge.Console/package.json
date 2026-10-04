@@ -1,0 +1,15 @@
+{
+  "name": "toggleforge-console",
+  "private": true,
+  "description": "Builds the console stylesheet with Tailwind CSS.",
+  "scripts": {
+    "build:css": "tailwindcss --input Styles/app.css --output wwwroot/css/app.css --minify"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "4.3.3",
+    "tailwindcss": "4.3.3"
+  },
+  "allowScripts": {
+    "@parcel/watcher": false
+  }
+}

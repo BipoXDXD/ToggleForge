@@ -29,6 +29,13 @@ jobs:
         with:
           global-json-file: global.json
 
+      # O build do console gera o CSS com o Tailwind do npm (ADR 0003).
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: src/ToggleForge.Console/package-lock.json
+
       - name: Restore
         run: dotnet restore ToggleForge.slnx
 
@@ -37,6 +44,10 @@ jobs:
 
       - name: Build
         run: dotnet build ToggleForge.slnx --configuration Release --no-restore
+
+      # A jornada do console dirige um Chromium pelo Playwright; o runner Linux precisa das bibliotecas dele.
+      - name: Instalar o Chromium do Playwright
+        run: pwsh tests/ToggleForge.Api.Tests/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
 
       # global.json seleciona o Microsoft.Testing.Platform; nesse modo a solução vai em --solution.
       - name: Testes

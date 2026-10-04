@@ -74,7 +74,10 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         await _postgres.DisposeAsync();
     }
 
-    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    protected override void ConfigureWebHost(IWebHostBuilder builder) => ConfigureTestHost(builder);
+
+    /// <summary>A configuração de teste, compartilhada com o <see cref="BrowserHost"/>: mesmo banco, chaves e falsos.</summary>
+    internal void ConfigureTestHost(IWebHostBuilder builder)
     {
         builder.UseSetting("ConnectionStrings:ToggleForge", _postgres.GetConnectionString());
         // Todo teste vem do mesmo "IP" e cria contas: os tetos reais ficam para RateLimitTests.

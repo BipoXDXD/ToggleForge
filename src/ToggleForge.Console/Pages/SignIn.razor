@@ -1,0 +1,69 @@
+@page "/sign-in"
+@layout PublicLayout
+@inherits ConsolePage
+@inject ConsoleApi Api
+@inject SessionState Session
+@inject NavigationManager Navigation
+
+<PageTitle>Sign in · ToggleForge</PageTitle>
+
+<div class="w-full max-w-sm">
+    <h1 class="text-2xl font-semibold tracking-tight">Sign in to ToggleForge</h1>
+
+    <form class="mt-8 space-y-5" @onsubmit="SignInAsync" @onsubmit:preventDefault>
+        <label class="block">
+            <span class="text-sm font-medium text-slate-700">Email</span>
+            <input type="email" required autocomplete="username" @bind="_email"
+                   class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none" />
+        </label>
+        <label class="block">
+            <span class="text-sm font-medium text-slate-700">Password</span>
+            <input type="password" required autocomplete="current-password" @bind="_password"
+                   class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none" />
+        </label>
+
+        @if (_failure is not null)
+        {
+            <div role="alert" class="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">@_failure</div>
+        }
+
+        <button type="submit" disabled="@_submitting"
+                class="w-full rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60">
+            Sign in
+        </button>
+    </form>
+</div>
+
+@code {
+    private string _email = string.Empty;
+    private string _password = string.Empty;
+    private string? _failure;
+    private bool _submitting;
+
+    [SupplyParameterFromQuery]
+    public string? ReturnUrl { get; set; }
+
+    private async Task SignInAsync()
+    {
+        _submitting = true;
+        _failure = null;
+        var session = await Api.SignInAsync(new Credentials(_email, _password), Leaving);
+        _submitting = false;
+        if (!session.Succeeded)
+        {
+            _failure = FailureMessage(session.Problem);
+            return;
+        }
+
+        Session.Start(session.Value);
+        Navigation.NavigateTo(SignInRedirect.SafeReturnUri(ReturnUrl, new Uri(Navigation.BaseUri)).AbsoluteUri);
+    }
+
+    // A API responde igual para e-mail inexistente e senha errada (ADR 0004); a mensagem também não distingue.
+    private static string FailureMessage(Problem problem) => problem.StatusCode switch
+    {
+        System.Net.HttpStatusCode.Unauthorized => "The email or the password is wrong.",
+        System.Net.HttpStatusCode.TooManyRequests => "Too many attempts. Wait a few minutes and try again.",
+        _ => string.Join(" ", problem.Messages),
+    };
+}

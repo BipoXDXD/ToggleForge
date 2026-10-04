@@ -79,9 +79,19 @@ várias vezes por dia.
   token de `/api/v1/antiforgery-token` em `X-XSRF-TOKEN`. Um 401 em qualquer chamada leva ao login. A
   interface esconde o que o papel não permite, mas quem nega é a API.
 - **Rotas:** a API serve os arquivos do console e devolve a página dele para qualquer rota fora de `/api` e
-  `/sdk`. Rota desconhecida dentro delas continua 404 em Problem Details. O jeito de servir os arquivos
-  (Blazor Web App com um projeto de cliente, ou WebAssembly standalone com fallback para `index.html`) é
-  decidido no tracer bullet do console, pelo que deixar a API sem conhecer componentes.
+  `/sdk`. Rota desconhecida dentro delas continua com o comportamento da API: 401 para anônimo (negado por
+  padrão) e 404 em Problem Details para quem tem sessão.
+- **Hospedagem (decidida no tracer bullet):** o console é um Blazor WebAssembly standalone, referenciado pela
+  API só para receber os arquivos. A API serve os arquivos com `MapStaticAssets` e a página com
+  `MapFallbackToFile`, restrito a GET e HEAD por uma constraint de rota que exclui `/api` e `/sdk`. A
+  alternativa, um Blazor Web App com projeto de cliente, poria o `App.razor` e o pipeline de componentes
+  dentro da API.
+- **Arquivos do console são públicos e ficam fora do rate limit.** Eles não carregam dado nenhum, e um
+  carregamento do runtime são dezenas de arquivos, o que esgotaria o teto anônimo (ADR 0006) antes do login.
+  Inundar esses arquivos fica a cargo do ingress, como já acontece com as credenciais inválidas.
+- **CSP em toda resposta do console**, não só na página: o `index.html` também é servido como arquivo
+  estático em `/index.html`. O `index.html` não tem script nem estilo inline, e o build não gera import map
+  (`OverrideHtmlAssetPlaceholders` desligado). Por isso a política fica fixa, sem hash por build.
 
 ## Consequências
 
@@ -93,16 +103,26 @@ várias vezes por dia.
   usa trimming e compressão.
 - A pendência da ADR 0004 (rever a sessão caso o console rodasse em Interactive Server) deixa de existir:
   o console roda no navegador e usa o cookie como qualquer cliente.
-- Testes do console: componentes com bUnit, sem API; jornadas com Playwright contra a API real com
-  Postgres, como o `ToggleForge.md` previa.
-- Fica pendente da ADR 0003: integração do Tailwind (CLI standalone ou npm) no build e no CI.
+- Testes do console: componentes e cliente com bUnit, contra uma API em stub; jornadas com Playwright contra
+  a API real com Postgres, num Kestrel em HTTPS, porque o cookie `__Host-` só existe em HTTPS.
+- O `blazor.webassembly.js` sai sem fingerprint e é revalidado por `ETag` a cada carregamento; os demais
+  arquivos do runtime têm fingerprint.
 
 ## Compliance
 
-- Teste de arquitetura: `ToggleForge.Console` não referencia nenhum projeto de `src/`.
-- Testes da API:
-  - uma rota do console (por exemplo `/projects`) devolve a página do console;
-  - rota desconhecida em `/api` ou `/sdk` continua 404 em Problem Details, nunca a página;
-  - a página do console sai com `Content-Security-Policy` que só permite script da própria origem (com
-    `wasm-unsafe-eval`, que o runtime exige).
-- Jornada Playwright: login, criar flag, publicar e ver no histórico, tudo pela interface.
+- `ArchitectureTests`: `ToggleForge.Console` não referencia nenhum projeto de `src/`.
+- `ConsoleHostingTests`:
+  - qualquer rota fora da API devolve a página do console, inclusive `/apis` e `/sdks/...`;
+  - rota desconhecida em `/api` ou `/sdk`, em qualquer caixa, continua 404 em Problem Details;
+  - a página sai com `Content-Security-Policy` que só permite script da própria origem (com
+    `wasm-unsafe-eval`, que o runtime exige), também em `/index.html`;
+  - os arquivos do console saem para anônimos, e carregá-los não gasta o teto anônimo;
+  - a página só responde a leituras.
+- `DefaultDenyTests`: as varreduras de autenticação e antiforgery valem para toda rota da API, e fora dela
+  nenhuma rota aceita outro método além de GET e HEAD.
+- `ConsoleJourneyTests` (Playwright): login, criar projeto e criar flag pela interface; volta à página pedida
+  depois do login; senha errada. Erro de script, violação da CSP ou arquivo do console que não carrega
+  reprova a jornada. Publicação e histórico entram no Marco 3 junto com as telas deles.
+- `ToggleForge.Console.Tests` (bUnit): token antiforgery uma vez por sessão, 401 encerra a sessão, chave da
+  URL escapada no path, problema da API mostrado ao membro, e redirecionamento do login só para dentro do
+  console.

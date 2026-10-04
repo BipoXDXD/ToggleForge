@@ -1,6 +1,6 @@
 # 0003 — Console em Blazor com Tailwind CSS
 
-- **Status:** Aceita; o render mode foi decidido na ADR 0009, e a integração do Tailwind fica para o Marco 3
+- **Status:** Aceita; o render mode está na ADR 0009, e a integração do Tailwind, abaixo
 - **Data:** 2026-10-03
 
 ## Contexto
@@ -19,13 +19,22 @@ O console será um **Blazor Web App** estilizado com **Tailwind CSS**.
 
 ## Consequências
 
-Pendências para o Marco 3, que serão decididas lá:
-
-- Render mode (Interactive Server, WebAssembly ou Auto) e como ele afeta autenticação e latência.
-- Integração do Tailwind: CLI standalone (sem Node) ou via npm, e como o CSS é gerado no build e no CI.
+- O render mode é WebAssembly, servido pela API na mesma origem (ADR 0009).
 - O console consome a API por HTTP, como o `ToggleForge.md` já previa; não acessa o banco direto.
+- **Tailwind pelo npm, no build** (escolha do usuário, no início do Marco 3). Alternativas:
+  - **npm, rodando no build:** versão travada no `package-lock.json` e atualizada pelo Dependabot, como o
+    `tools/api-lint`; o CSS é gerado a cada build e nunca vai para o repositório. Contra: compilar o
+    console exige Node.
+  - **npm, CSS commitado e conferido no CI:** o `dotnet build` dispensa Node. Contra: um arquivo derivado
+    no repositório, e o risco de esquecer de regenerar.
+  - **CLI standalone:** sem Node. Contra: o binário de cada plataforma é baixado e conferido por script
+    nosso, e o Dependabot não o atualiza.
+
+  O `tailwindcss` e o `@tailwindcss/cli` ficam no `package.json` de `src/ToggleForge.Console`. Um target do
+  MSBuild roda `npm ci` quando o `node_modules` falta e gera `wwwroot/css/app.css` antes de o build
+  recolher os arquivos estáticos. Esse arquivo fica no `.gitignore`.
 
 ## Compliance
 
-Esta ADR é revisada no início do Marco 3; as pendências acima viram uma ADR nova ou uma atualização
-desta.
+- O build de Release no CI gera o CSS do zero, com Node instalado no job.
+- O Dependabot acompanha o `package.json` do console.

@@ -1,0 +1,25 @@
+@* Mostra o problema que a API devolveu, com as mensagens escritas para quem usa o console. *@
+
+@if (Problem is not null)
+{
+    <div role="alert" class="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+        @if (Problem.Messages is [var only])
+        {
+            <p>@only</p>
+        }
+        else
+        {
+            <ul class="list-inside list-disc space-y-1">
+                @foreach (var message in Problem.Messages)
+                {
+                    <li>@message</li>
+                }
+            </ul>
+        }
+    </div>
+}
+
+@code {
+    [Parameter]
+    public Problem? Problem { get; set; }
+}

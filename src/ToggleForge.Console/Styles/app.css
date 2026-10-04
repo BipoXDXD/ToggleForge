@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900 antialiased;
+  }
+}
+
+/* Visível só até o runtime .NET subir e o Blazor trocar o conteúdo de #app. */
+.boot-screen {
+  @apply flex min-h-screen items-center justify-center text-sm text-slate-500;
+}
+
+#blazor-error-ui {
+  @apply fixed inset-x-0 bottom-0 hidden bg-red-700 px-4 py-3 text-sm text-white;
+}

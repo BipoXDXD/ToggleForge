@@ -49,6 +49,17 @@ public sealed class ArchitectureTests
             .Should().NotDependOnAny(Types().That().ResideInNamespaceMatching($@"^ToggleForge\.Infrastructure\.{other}(\..+)?$"))
             .Because("cada módulo é dono das próprias tabelas e do próprio DbContext"));
 
+    [Fact]
+    public void The_console_references_no_project_of_the_server()
+    {
+        var references = typeof(Console.App).Assembly.GetReferencedAssemblies()
+            .Select(reference => reference.Name)
+            .Where(name => name?.StartsWith("ToggleForge.", StringComparison.Ordinal) == true);
+
+        // O console roda no navegador e fala com a API só por HTTP (ADR 0009): domínio e casos de uso ficam no servidor.
+        Assert.Empty(references);
+    }
+
     private static GivenTypesConjunction Module(params string[] modules) =>
         Types().That().ResideInNamespaceMatching($@"{Layers}\.({string.Join('|', modules)})(\..+)?$");
 
