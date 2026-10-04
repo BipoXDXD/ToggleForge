@@ -1,6 +1,7 @@
 using System.Net;
 using Bunit;
 using ToggleForge.Console.Pages;
+using static ToggleForge.Console.Tests.FormAssertions;
 
 namespace ToggleForge.Console.Tests;
 
@@ -18,11 +19,12 @@ public sealed class EnvironmentDraftPageTests
         var page = RenderDraft(console);
         page.WaitForElement("form");
 
-        page.Find("input[maxlength='64']").Change("new-shop");
-        page.Find("input[type=number]").Change("12.345");
+        page.Find("#flag-key").Change("new-shop");
+        page.Find("#rollout").Change("12.345");
         page.Find("form").Submit();
 
-        Assert.Equal("Enter a rollout between 0 and 100, with at most two decimals.", page.Find("[role=alert]").TextContent.Trim());
+        Assert.Equal("Nothing was saved: fix the fields marked below.", page.Find("[role=alert]").TextContent.Trim());
+        Assert.Equal("Enter a rollout between 0 and 100, with at most two decimals.", MessageOf(page.Find("#rollout-error")));
         Assert.Empty(api.RequestsTo(HttpMethod.Post, Draft + "/flags"));
     }
 
