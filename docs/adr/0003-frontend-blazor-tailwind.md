@@ -1,6 +1,6 @@
 # 0003 — Console em Blazor com Tailwind CSS
 
-- **Status:** Aceita (os detalhes de implementação ficam para o Marco 3)
+- **Status:** Aceita; o render mode foi decidido na ADR 0009, e a integração do Tailwind fica para o Marco 3
 - **Data:** 2026-10-03
 
 ## Contexto
