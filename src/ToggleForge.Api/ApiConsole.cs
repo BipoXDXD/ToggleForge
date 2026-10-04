@@ -6,7 +6,9 @@ namespace ToggleForge.Api;
 /// <summary>
 /// Serve o console Blazor WebAssembly na mesma origem da API (ADR 0009). Os arquivos são públicos e ficam
 /// fora do rate limit: não carregam dado nenhum, e um carregamento do runtime são dezenas de arquivos, o que
-/// esgotaria o teto anônimo de quem ainda não entrou.
+/// esgotaria o teto anônimo de quem ainda não entrou. Pelo mesmo motivo saem em curto-circuito, logo depois do
+/// roteamento, sem autenticação: com a sessão aberta, cada arquivo conferiria o security stamp no banco, e um
+/// recarregamento esgotava as conexões do Postgres.
 /// </summary>
 internal static class ApiConsole
 {
@@ -29,10 +31,11 @@ internal static class ApiConsole
     public static WebApplication MapToggleForgeConsole(this WebApplication app)
     {
         // A página também é um arquivo estático (/index.html): os headers vão em toda resposta do console, não só no fallback.
-        app.MapStaticAssets().AllowAnonymous().DisableRateLimiting().Add(WithDocumentPolicies);
+        app.MapStaticAssets().AllowAnonymous().DisableRateLimiting().ShortCircuit().Add(WithDocumentPolicies);
         app.MapFallbackToFile($"{{*path:nonfile:{ConsoleRoute}}}", "index.html")
             .AllowAnonymous()
             .DisableRateLimiting()
+            .ShortCircuit()
             .Add(WithDocumentPolicies);
         return app;
     }
