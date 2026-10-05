@@ -511,6 +511,7 @@ public sealed class NewFlagFormTests
 
         form.WaitForElement("[role=alert]");
         Assert.Equal("A draft can have at most 200 flags.", form.Find("[role=alert]").TextContent.Trim());
+        AssertKeepsWhatWasTyped(form, "shop-config", "1", "0");
     }
 
     [Fact]
@@ -555,7 +556,15 @@ public sealed class NewFlagFormTests
         form.WaitForAssertion(() => Assert.Equal(expected, MessageOf(form.Find("#flag-key-error"))));
         Assert.Equal("true", form.Find("#flag-key").GetAttribute("aria-invalid"));
         Assert.Equal(FixMarkedFields, Assert.Single(form.FindAll("[role=alert]")).TextContent.Trim());
-        Assert.Equal("shop-config", form.Find("#flag-key").GetAttribute("value"));
+        if (sendJson)
+        {
+            AssertKeepsWhatWasTyped(form, "shop-config", "1", "0");
+        }
+        else
+        {
+            Assert.Equal("shop-config", form.Find("#flag-key").GetAttribute("value"));
+        }
+
         form.WaitForAssertion(() => AssertFocused(console, key));
     }
 
