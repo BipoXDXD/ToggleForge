@@ -1,9 +1,14 @@
-@* A coluna "Values" das tabelas de flags: o que recebe quem cai no rollout e o que recebem os outros. *@
+@*
+    A coluna "Values" das tabelas de flags: o que recebe quem cai no rollout e o que recebem os outros. O piso de 18rem
+    cabe a prévia de 40 caracteres em text-sm (≈ 270 px): sem ele, a coluna encolhe a zero num celular e o valor
+    transborda da célula. A tabela já rola por dentro da região dela (WCAG 1.4.10 aceita rolagem nas duas direções
+    numa tabela de dados).
+*@
 <dl class="grid grid-cols-[auto_1fr] gap-x-2">
     <dt class="text-xs leading-5 text-slate-500">Included</dt>
-    <dd class="min-w-0">@Show(OnValue)</dd>
+    <dd class="min-w-72">@Show(OnValue)</dd>
     <dt class="text-xs leading-5 text-slate-500">Others</dt>
-    <dd class="min-w-0">@Show(OffValue)</dd>
+    <dd class="min-w-72">@Show(OffValue)</dd>
 </dl>
 
 @code {

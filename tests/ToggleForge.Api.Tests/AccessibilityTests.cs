@@ -130,6 +130,37 @@ public sealed class AccessibilityTests(ApiFactory api, Browser browser) : IClass
         Assert.True(scrollWidth <= clientWidth, $"{journeyPage}: scrollWidth {scrollWidth} > clientWidth {clientWidth}");
     }
 
+    /// <summary>
+    /// Num celular, a tabela rola por dentro da região dela, e a coluna dos valores mantém a largura do que mostra: a
+    /// prévia não transborda da célula, e o bloco aberto fica legível em vez de encolher a zero.
+    /// </summary>
+    [Theory]
+    [InlineData("draft")]
+    [InlineData("version")]
+    [InlineData("simulator")]
+    public async Task The_values_of_a_json_flag_keep_their_width_on_a_phone(string journeyPage)
+    {
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        await using var context = await browser.NewContextAsync(Host.Address);
+        var page = await context.NewPageAsync();
+        await page.SetViewportSizeAsync(PhoneWidth, PhoneHeight);
+        var row = page.GetByRole(AriaRole.Row).Filter(new() { HasText = "shop-config" });
+
+        await PrepareJourneyDataAsync(owner);
+        await OpenAsync(page, owner, journeyPage);
+        if (journeyPage is not "draft")
+        {
+            await OpenTheValueOfShopConfigAsync(page);
+        }
+
+        var overflowing = await row.EvaluateAsync<string[]>("""
+            row => [...row.querySelectorAll('dd, details, pre')]
+              .filter(box => box.clientWidth === 0 || box.scrollWidth > box.clientWidth && getComputedStyle(box).overflowX === 'visible')
+              .map(box => box.tagName.toLowerCase() + ' ' + box.clientWidth + '/' + box.scrollWidth)
+            """);
+        Assert.Empty(overflowing);
+    }
+
     [Fact]
     public async Task The_skip_link_is_the_first_stop_and_moves_focus_to_the_main_content_without_navigating()
     {
