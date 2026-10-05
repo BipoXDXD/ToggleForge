@@ -99,13 +99,13 @@ definem como `true`; o Dockerfile do Marco 6 precisa conferir a imagem base.
 **CORS continua desligado:** o console está na mesma origem, e nenhum site alheio lê resposta da API, nem com
 o cookie do membro. Liberar uma origem passa a exigir uma ADR.
 
-**HTTPS sem redirect:** o Learn desaconselha redirect em API, porque o cliente já mandou o segredo em claro.
-O ingress recusa HTTP (`allowInsecure: false`).
+**HTTPS sem redirect na API:** o Learn desaconselha redirect em API, porque o cliente já mandou o segredo em claro.
+O redirect de HTTP para HTTPS fica no ingress (`allowInsecure: false`), não na API.
 
 ## Consequências
 
-- O 413 em Problem Details sai hoje com `type: about:blank`. A Fatia 4 o troca por
-  `/problems/payload-too-large` no ponto que monta o Problem Details das status code pages.
+- O 413 em Problem Details sai com `type: /problems/payload-too-large`, montado nas status code pages (PR #46).
+  Antes dela, saía com `about:blank`.
 - Todo ambiente fora de Development precisa declarar `ForwardedHeaders:KnownNetworks`, inclusive os testes
   que sobem em Production.
 - **Checklist do Marco 6 (deploy):** depois do primeiro deploy estável em HTTPS, subir
