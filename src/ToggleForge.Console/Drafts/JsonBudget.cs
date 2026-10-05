@@ -13,7 +13,7 @@ public static class JsonBudget
 {
     public const int MaxKibibytes = 128;
 
-    public const int MaxBytes = MaxKibibytes * BytesPerKibibyte;
+    private const int MaxBytes = MaxKibibytes * BytesPerKibibyte;
 
     private const int BytesPerKibibyte = 1024;
 

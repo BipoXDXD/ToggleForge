@@ -49,8 +49,6 @@ public sealed record FlagValue
 
     public bool IsNull => Text == "null";
 
-    public static FlagValue Of(bool value) => value ? True : False;
-
     /// <summary>
     /// Confere só a sintaxe: um valor JSON, sem comentário nem vírgula sobrando. Tamanho, profundidade, chave repetida
     /// e número fora do <see cref="double"/> são regra da API.

@@ -134,8 +134,8 @@ public sealed class FlagValueTests
     [Fact]
     public void Booleans_are_the_json_literals()
     {
-        Assert.Equal("true", FlagValue.Of(true).Text);
-        Assert.Equal("false", FlagValue.Of(false).Text);
+        Assert.Equal("true", FlagValue.True.Text);
+        Assert.Equal("false", FlagValue.False.Text);
     }
 }
 

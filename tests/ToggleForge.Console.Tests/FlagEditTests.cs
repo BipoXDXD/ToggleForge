@@ -222,5 +222,10 @@ public sealed class FlagEditTests
         Assert.Null(changes.OffValue);
     }
 
-    private static FlagValue? ValueOf(bool? value) => value is { } sent ? FlagValue.Of(sent) : null;
+    private static FlagValue? ValueOf(bool? value) => value switch
+    {
+        true => FlagValue.True,
+        false => FlagValue.False,
+        null => null,
+    };
 }
