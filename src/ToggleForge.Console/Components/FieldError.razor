@@ -1,0 +1,16 @@
+@*
+    A mensagem de um campo, logo abaixo dele. Não é role="alert": o campo a aponta por aria-describedby, e o resumo
+    do formulário é que avisa o leitor de tela ao salvar (design spec, 3).
+*@
+@if (Message is not null)
+{
+    <p id="@Id" class="mt-1 text-sm text-red-700"><span aria-hidden="true">⚠ </span>@Message</p>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public string Id { get; set; } = string.Empty;
+
+    [Parameter]
+    public string? Message { get; set; }
+}

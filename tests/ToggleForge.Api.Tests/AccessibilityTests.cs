@@ -14,10 +14,10 @@ namespace ToggleForge.Api.Tests;
 public sealed class AccessibilityTests(ApiFactory api, Browser browser) : IClassFixture<Browser>, IAsyncLifetime
 {
     /// <summary>
-    /// As regras que o console já cumpre, fixadas com zero violação. Ainda não é a varredura WCAG 2.1 AA inteira:
-    /// o contraste (o botão âmbar "Check the result", as bordas dos campos) e os erros ligados aos campos chegam
-    /// com a fatia de configurações JSON do console e com um PR de acessibilidade seguinte, e só então as tags
-    /// <c>wcag2a</c>/<c>wcag2aa</c>/<c>wcag21aa</c> entram aqui no lugar da lista.
+    /// As regras que o console já cumpre, fixadas com zero violação. Ainda não é a varredura WCAG 2.1 AA inteira: as
+    /// tags <c>wcag2a</c>/<c>wcag2aa</c>/<c>wcag21aa</c> entram no lugar da lista com o PR de acessibilidade seguinte.
+    /// O contraste é provado pelo <see cref="ConsoleContrastTests"/>, que mede no navegador o texto e a borda de
+    /// controle (WCAG 1.4.11), que o axe não mede.
     /// </summary>
     private static readonly IReadOnlyList<string> _pinnedRules =
     [
@@ -33,12 +33,18 @@ public sealed class AccessibilityTests(ApiFactory api, Browser browser) : IClass
 
     private const int PhoneWidth = 320;
     private const int PhoneHeight = 800;
-
     private BrowserHost? _host;
 
     private BrowserHost Host => _host ?? throw new InvalidOperationException("The host has not started.");
 
-    public static TheoryData<string> JourneyPages => ["sign-in", "projects", "draft", "flag-editor", "publish", "history", "version", "simulator"];
+    /// <summary>
+    /// As páginas da jornada. O <c>draft-json</c> é o rascunho com JSON escolhido no formulário de flag nova e uma linha
+    /// longa no valor: as áreas de texto não quebram linha (<c>wrap="off"</c>) e precisam rolar por dentro, sem empurrar a
+    /// página. O <c>flag-editor-json</c> é o editor de uma flag JSON salva; na versão e no simulador, o axe varre com o
+    /// bloco do valor dela aberto.
+    /// </summary>
+    public static TheoryData<string> JourneyPages =>
+        ["sign-in", "projects", "draft", "draft-json", "flag-editor", "flag-editor-json", "publish", "history", "version", "simulator"];
 
     public static TheoryData<string> PagesReachedByClicking => ["draft", "publish", "history", "version", "simulator"];
 
@@ -57,8 +63,13 @@ public sealed class AccessibilityTests(ApiFactory api, Browser browser) : IClass
         var page = await context.NewPageAsync();
         var browserErrors = ConsolePages.CollectErrors(page);
 
-        await PrepareJourneyDataAsync(owner);
-        await OpenAsync(page, owner, journeyPage);
+        await ConsoleJourneyPages.PrepareAsync(owner);
+        await ConsoleJourneyPages.OpenAsync(page, owner, journeyPage);
+        if (journeyPage is "version" or "simulator")
+        {
+            await ConsoleJourneyPages.OpenTheValueOfShopConfigAsync(page);
+        }
+
         var result = await page.RunAxe(PinnedRules());
 
         Assert.True(result.Violations.Length == 0, Describe(result.Violations));
@@ -85,7 +96,7 @@ public sealed class AccessibilityTests(ApiFactory api, Browser browser) : IClass
     public async Task Navigating_from_the_projects_moves_focus_to_the_page_heading(string journeyPage)
     {
         using var owner = await ConsoleClient.SignUpAsync(api);
-        await PrepareJourneyDataAsync(owner);
+        await ConsoleJourneyPages.PrepareAsync(owner);
         await using var context = await browser.NewContextAsync(Host.Address);
         var page = await context.NewPageAsync();
 
@@ -104,19 +115,50 @@ public sealed class AccessibilityTests(ApiFactory api, Browser browser) : IClass
         var page = await context.NewPageAsync();
         await page.SetViewportSizeAsync(PhoneWidth, PhoneHeight);
 
-        await PrepareJourneyDataAsync(owner);
-        await OpenAsync(page, owner, journeyPage);
+        await ConsoleJourneyPages.PrepareAsync(owner);
+        await ConsoleJourneyPages.OpenAsync(page, owner, journeyPage);
         var widths = await page.EvaluateAsync<int[]>("() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]");
         var (scrollWidth, clientWidth) = (widths[0], widths[1]);
 
         Assert.True(scrollWidth <= clientWidth, $"{journeyPage}: scrollWidth {scrollWidth} > clientWidth {clientWidth}");
     }
 
+    /// <summary>
+    /// Num celular, a tabela rola por dentro da região dela, e a coluna dos valores mantém a largura do que mostra: a
+    /// prévia não transborda da célula, e o bloco aberto fica legível em vez de encolher a zero.
+    /// </summary>
+    [Theory]
+    [InlineData("draft")]
+    [InlineData("version")]
+    [InlineData("simulator")]
+    public async Task The_values_of_a_json_flag_keep_their_width_on_a_phone(string journeyPage)
+    {
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        await using var context = await browser.NewContextAsync(Host.Address);
+        var page = await context.NewPageAsync();
+        await page.SetViewportSizeAsync(PhoneWidth, PhoneHeight);
+        var row = page.GetByRole(AriaRole.Row).Filter(new() { HasText = "shop-config" });
+
+        await ConsoleJourneyPages.PrepareAsync(owner);
+        await ConsoleJourneyPages.OpenAsync(page, owner, journeyPage);
+        if (journeyPage is not "draft")
+        {
+            await ConsoleJourneyPages.OpenTheValueOfShopConfigAsync(page);
+        }
+
+        var overflowing = await row.EvaluateAsync<string[]>("""
+            row => [...row.querySelectorAll('dd, details, pre')]
+              .filter(box => box.clientWidth === 0 || box.scrollWidth > box.clientWidth && getComputedStyle(box).overflowX === 'visible')
+              .map(box => box.tagName.toLowerCase() + ' ' + box.clientWidth + '/' + box.scrollWidth)
+            """);
+        Assert.Empty(overflowing);
+    }
+
     [Fact]
     public async Task The_skip_link_is_the_first_stop_and_moves_focus_to_the_main_content_without_navigating()
     {
         using var owner = await ConsoleClient.SignUpAsync(api);
-        await PrepareJourneyDataAsync(owner);
+        await ConsoleJourneyPages.PrepareAsync(owner);
         await using var context = await browser.NewContextAsync(Host.Address);
         var page = await context.NewPageAsync();
         var browserErrors = ConsolePages.CollectErrors(page);
@@ -152,58 +194,6 @@ public sealed class AccessibilityTests(ApiFactory api, Browser browser) : IClass
         string.Join(
             Environment.NewLine,
             violations.SelectMany(violation => violation.Nodes.Select(node => $"{violation.Id}: {node.Target} {node.Html}")));
-
-    /// <summary>
-    /// Duas publicações em <c>dev</c> (a versão 1 deixa de estar no ar e ganha o formulário de rollback) e uma flag
-    /// nova no rascunho, para a página de publicar ter o que revisar.
-    /// </summary>
-    private static async Task PrepareJourneyDataAsync(ConsoleClient owner)
-    {
-        await owner.PublishedProjectAsync("space-race");
-        var read = await owner.GetFlagAsync("space-race", "new-shop");
-        var widened = await owner.UpdateFlagAsync("space-race", "new-shop", read.Header("ETag"), """{"rolloutBasisPoints":5000}""");
-        Assert.Equal(HttpStatusCode.Created, (await owner.PublishAsync("space-race", ConsoleClient.Revision(widened), ConsoleClient.NewIdempotencyKey())).Status);
-        Assert.Equal(HttpStatusCode.Created, (await owner.CreateFlagAsync("space-race", "dark-mode")).Status);
-    }
-
-    /// <summary>Abre a página pelo endereço (o editor de flag, pelo link do rascunho), passando pelo login, e espera o conteúdo dela.</summary>
-    private static async Task OpenAsync(IPage page, ConsoleClient owner, string journeyPage)
-    {
-        if (journeyPage == "sign-in")
-        {
-            await page.GotoAsync("/sign-in");
-            await Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Sign in to ToggleForge" })).ToBeVisibleAsync();
-            return;
-        }
-
-        var draft = $"/organizations/{owner.OrganizationId}/projects/space-race/environments/dev";
-        var (path, heading) = journeyPage switch
-        {
-            "projects" => ($"/organizations/{owner.OrganizationId}/projects", "Projects"),
-            "draft" or "flag-editor" => (draft, "Draft flags"),
-            "publish" => ($"{draft}/publish", "Changes since version 2"),
-            "history" => ($"{draft}/history", "History of Development (dev)"),
-            "version" => ($"{draft}/history/1", "Roll back Development to version 1"),
-            "simulator" => ($"{draft}/simulator", "Simulate a player in Development (dev)"),
-            _ => throw new ArgumentOutOfRangeException(nameof(journeyPage), journeyPage, "Unknown journey page."),
-        };
-        await page.GotoAsync(path);
-        await ConsolePages.SignInAsync(page, owner.Email, ConsoleClient.Password);
-        await Expect(page.GetByRole(AriaRole.Heading, new() { Name = heading })).ToBeVisibleAsync();
-        if (journeyPage == "simulator")
-        {
-            await page.GetByLabel("Player ID").FillAsync("player-42");
-            await page.GetByRole(AriaRole.Button, new() { Name = "Simulate" }).ClickAsync();
-            await Expect(page.Locator("#simulation-results")).ToBeVisibleAsync();
-        }
-
-        if (journeyPage == "flag-editor")
-        {
-            await page.GetByRole(AriaRole.Link, new() { Name = "new-shop" }).ClickAsync();
-            // O h1 aparece antes de a flag carregar: esperar o formulário evita varrer a tela de carregamento.
-            await Expect(page.GetByLabel("Rollout (%)")).ToBeVisibleAsync();
-        }
-    }
 
     /// <summary>Chega à página pelos links do console, como quem navega, e não pelo endereço.</summary>
     private static async Task ClickThroughToAsync(IPage page, ConsoleClient owner, string journeyPage)

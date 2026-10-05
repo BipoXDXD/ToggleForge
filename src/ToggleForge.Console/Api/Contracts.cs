@@ -29,9 +29,27 @@ public sealed record Draft(long Revision, long? BasedOnVersion, IReadOnlyList<Fl
 /// <param name="Change"><c>added</c>, <c>modified</c> ou <c>removed</c>.</param>
 public sealed record DraftChange(string FlagKey, string Change);
 
+/// <summary>Os tipos de flag do contrato (<c>FlagType</c>). O tipo vem na criação e nunca muda (ADR 0011).</summary>
+/// <remarks>
+/// A lista pode crescer. O console é servido pela API (ADR 0009), mas um tipo que ele não conhece não vira booleano:
+/// aparece com o texto cru e abre só para leitura (design spec, 2.2).
+/// </remarks>
+public static class FlagTypes
+{
+    public const string Boolean = "boolean";
+
+    public const string Json = "json";
+
+    public static bool IsJson(string type) => type == Json;
+}
+
+/// <param name="Type"><see cref="FlagTypes.Boolean"/>, <see cref="FlagTypes.Json"/> ou um tipo que o console ainda não conhece.</param>
 /// <param name="OnValue">O valor de quem cai no rollout.</param>
 /// <param name="OffValue">O valor de quem fica fora e de todos quando a flag está desligada.</param>
-public sealed record Flag(string Key, bool Enabled, bool OnValue, bool OffValue, int RolloutBasisPoints);
+public sealed record Flag(string Key, string Type, bool Enabled, FlagValue OnValue, FlagValue OffValue, int RolloutBasisPoints)
+{
+    public bool IsJson => FlagTypes.IsJson(Type);
+}
 
 /// <summary>Um ambiente de um projeto da organização.</summary>
 public sealed record EnvironmentAddress(Guid OrganizationId, string ProjectKey, string EnvironmentKey);
@@ -43,7 +61,8 @@ public sealed record Credentials(string Email, string Password);
 
 public sealed record ProjectCreation(string Key, string Name);
 
-public sealed record FlagCreation(string Key, bool Enabled, bool OnValue, bool OffValue, int RolloutBasisPoints);
+/// <param name="Type">Sempre enviado, embora opcional no contrato: o console não depende do padrão da API.</param>
+public sealed record FlagCreation(string Key, string Type, bool Enabled, FlagValue OnValue, FlagValue OffValue, int RolloutBasisPoints);
 
 /// <param name="DraftRevision">A revisão que o membro revisou; se o rascunho mudou depois, a API recusa.</param>
 /// <param name="Summary">Opcional; a API recusa texto vazio, então ausente vai como nulo e fica fora do JSON.</param>
@@ -86,12 +105,18 @@ public sealed record SimulationRequest(string PlayerId, string Source, long? Ver
 /// <param name="Results">Um por flag, em ordem de chave.</param>
 public sealed record Simulation(long? Version, IReadOnlyList<SimulationResult> Results);
 
+/// <param name="Type">O tipo da flag simulada, como em <see cref="Flag.Type"/>.</param>
 /// <param name="Reason"><c>disabled</c>, <c>included</c> ou <c>excluded</c>; a lista pode crescer.</param>
 /// <param name="Bucket">O bucket do jogador (0 a 9999); nulo quando o resultado não dependeu dele.</param>
-public sealed record SimulationResult(string FlagKey, bool Value, string Reason, int? Bucket);
+public sealed record SimulationResult(string FlagKey, string Type, FlagValue Value, string Reason, int? Bucket)
+{
+    public bool IsJson => FlagTypes.IsJson(Type);
+}
 
 /// <summary>Merge patch: só os campos que mudaram vão para a API, e campo nulo nem é enviado.</summary>
-public sealed record FlagModification(bool? Enabled = null, bool? OnValue = null, bool? OffValue = null, int? RolloutBasisPoints = null)
+/// <remarks>O JSON null de um valor é <see cref="FlagValue.Null"/>, não a referência nula; a API o recusa aqui.</remarks>
+public sealed record FlagModification(
+    bool? Enabled = null, FlagValue? OnValue = null, FlagValue? OffValue = null, int? RolloutBasisPoints = null)
 {
     // Não vai no corpo: a API recusa campo que não conhece (proteção contra mass assignment).
     [JsonIgnore]

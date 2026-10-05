@@ -1,6 +1,7 @@
 using System.Net;
 using Bunit;
 using ToggleForge.Console.Pages;
+using static ToggleForge.Console.Tests.FormAssertions;
 
 namespace ToggleForge.Console.Tests;
 
@@ -18,11 +19,12 @@ public sealed class EnvironmentDraftPageTests
         var page = RenderDraft(console);
         page.WaitForElement("form");
 
-        page.Find("input[maxlength='64']").Change("new-shop");
-        page.Find("input[type=number]").Change("12.345");
+        page.Find("#flag-key").Change("new-shop");
+        page.Find("#rollout").Change("12.345");
         page.Find("form").Submit();
 
-        Assert.Equal("Enter a rollout between 0 and 100, with at most two decimals.", page.Find("[role=alert]").TextContent.Trim());
+        Assert.Equal("Nothing was saved: fix the fields marked below.", page.Find("[role=alert]").TextContent.Trim());
+        Assert.Equal("Enter a rollout between 0 and 100, with at most two decimals.", MessageOf(page.Find("#rollout-error")));
         Assert.Empty(api.RequestsTo(HttpMethod.Post, Draft + "/flags"));
     }
 
@@ -32,11 +34,11 @@ public sealed class EnvironmentDraftPageTests
         var api = DraftWithOneFlag()
             .ThenAnswer(HttpMethod.Get, Draft, HttpStatusCode.OK, """
                 {"revision":3,"basedOnVersion":null,"changes":[{"flagKey":"dark-mode","change":"added"},{"flagKey":"new-shop","change":"added"}],
-                 "flags":[{"key":"dark-mode","enabled":false,"onValue":true,"offValue":false,"rolloutBasisPoints":0},
-                          {"key":"new-shop","enabled":true,"onValue":true,"offValue":false,"rolloutBasisPoints":1250}]}
+                 "flags":[{"key":"dark-mode","type":"boolean","enabled":false,"onValue":true,"offValue":false,"rolloutBasisPoints":0},
+                          {"key":"new-shop","type":"boolean","enabled":true,"onValue":true,"offValue":false,"rolloutBasisPoints":1250}]}
                 """)
             .Answer(HttpMethod.Post, Draft + "/flags", HttpStatusCode.Created,
-                """{"key":"new-shop","enabled":true,"onValue":true,"offValue":false,"rolloutBasisPoints":1250}""");
+                """{"key":"new-shop","type":"boolean","enabled":true,"onValue":true,"offValue":false,"rolloutBasisPoints":1250}""");
         ConsoleRendering.SignInAs(api, "owner");
         using var console = ConsoleRendering.Create(api);
         var page = RenderDraft(console);
@@ -47,7 +49,9 @@ public sealed class EnvironmentDraftPageTests
         page.Find("form").Submit();
 
         page.WaitForAssertion(() => Assert.Equal(2, page.FindAll("tbody tr").Count));
-        Assert.Equal(["new-shop", "Enabled", "12.5%"], page.FindAll("tbody tr")[1].QuerySelectorAll("td").Select(cell => cell.TextContent));
+        var created = page.FindAll("tbody tr")[1];
+        Assert.Equal(["new-shop", "boolean", "Enabled", "12.5%"], FlagTable.Row(created));
+        Assert.Equal(["true", "false"], created.QuerySelectorAll("code").Select(value => value.TextContent));
         Assert.Equal("Never published. 2 unpublished changes.", DraftStatus(page));
     }
 
@@ -127,6 +131,135 @@ public sealed class EnvironmentDraftPageTests
         Assert.Equal("Space Race", AccessibleNames.CurrentBreadcrumb(page));
     }
 
+    [Fact]
+    public void Each_flag_shows_its_type_and_a_preview_of_its_values()
+    {
+        var api = DraftWith("""
+            [{"key":"dark-mode","type":"boolean","enabled":false,"onValue":true,"offValue":false,"rolloutBasisPoints":0},
+             {"key":"shop-config","type":"json","enabled":true,"onValue":{"discount":0.2,"featuredItems":["sword","shield"]},"offValue":{"discount":0},"rolloutBasisPoints":10000}]
+            """);
+        ConsoleRendering.SignInAs(api, "viewer");
+        using var console = ConsoleRendering.Create(api);
+
+        var page = RenderDraft(console);
+
+        page.WaitForAssertion(() => Assert.Equal(2, page.FindAll("tbody tr").Count));
+        Assert.Equal(["dark-mode", "boolean", "Disabled", "0%"], FlagTable.Row(page.FindAll("tbody tr")[0]));
+        var json = page.FindAll("tbody tr")[1];
+        Assert.Equal(["shop-config", "JSON", "Enabled", "100%"], FlagTable.Row(json));
+        Assert.Equal(["Included", "Others"], json.QuerySelectorAll("dt").Select(label => label.TextContent));
+        Assert.Equal(["{\"discount\":0.2,\"featuredItems\":[\"sword…", "{\"discount\":0}"], json.QuerySelectorAll("dd code").Select(value => value.TextContent));
+        Assert.Equal("""{"discount":0.2,"featuredItems":["sword","shield"]}""", json.QuerySelector("dd code")?.GetAttribute("title"));
+    }
+
+    [Fact]
+    public void A_json_value_with_markup_is_shown_as_text()
+    {
+        var api = DraftWith("""
+            [{"key":"shop-config","type":"json","enabled":true,"onValue":"<script>x</script>","offValue":"<img src=x onerror=x>","rolloutBasisPoints":10000}]
+            """);
+        ConsoleRendering.SignInAs(api, "viewer");
+        using var console = ConsoleRendering.Create(api);
+
+        var page = RenderDraft(console);
+
+        page.WaitForAssertion(() => Assert.Single(page.FindAll("tbody tr")));
+        Assert.Empty(page.FindAll("script"));
+        Assert.Empty(page.FindAll("img"));
+        Assert.Equal(["\"<script>x</script>\"", "\"<img src=x onerror=x>\""], page.FindAll("tbody code").Select(value => value.TextContent));
+    }
+
+    [Fact]
+    public void The_draft_shows_how_much_of_the_json_budget_its_values_take()
+    {
+        // 51 + 14 bytes de valores JSON; a booleana não conta.
+        var api = DraftWith("""
+            [{"key":"dark-mode","type":"boolean","enabled":false,"onValue":true,"offValue":false,"rolloutBasisPoints":0},
+             {"key":"shop-config","type":"json","enabled":true,"onValue":{"discount":0.2,"featuredItems":["sword","shield"]},"offValue":{"discount":0},"rolloutBasisPoints":10000}]
+            """);
+        ConsoleRendering.SignInAs(api, "viewer");
+        using var console = ConsoleRendering.Create(api);
+
+        var page = RenderDraft(console);
+
+        page.WaitForAssertion(() => Assert.Equal("JSON values: < 0.1 of 128 KiB", JsonBudgetText(page)));
+    }
+
+    // Um texto de n letras entre aspas tem n + 2 bytes, mais 1 do offValue 0: 102 bytes ficam abaixo de 0,1 KiB, 103 não.
+    [Theory]
+    [InlineData(99, "JSON values: < 0.1 of 128 KiB")]
+    [InlineData(100, "JSON values: 0.1 of 128 KiB")]
+    public void A_tenth_of_a_kibibyte_is_where_the_budget_shows_a_number(int letters, string shown)
+    {
+        var api = DraftWith($$"""
+            [{"key":"greeting","type":"json","enabled":true,"onValue":"{{new string('a', letters)}}","offValue":0,"rolloutBasisPoints":10000}]
+            """);
+        ConsoleRendering.SignInAs(api, "viewer");
+        using var console = ConsoleRendering.Create(api);
+
+        var page = RenderDraft(console);
+
+        page.WaitForAssertion(() => Assert.Equal(shown, JsonBudgetText(page)));
+    }
+
+    [Fact]
+    public void A_draft_near_the_json_budget_says_so_in_words()
+    {
+        // 98.303 letras entre aspas dão 98.305 bytes, mais 4 do null: acima dos 75% (98.304 bytes) dos 128 KiB.
+        var api = DraftWith($$"""
+            [{"key":"catalog","type":"json","enabled":true,"onValue":"{{new string('a', 98_303)}}","offValue":null,"rolloutBasisPoints":10000}]
+            """);
+        ConsoleRendering.SignInAs(api, "viewer");
+        using var console = ConsoleRendering.Create(api);
+
+        var page = RenderDraft(console);
+
+        page.WaitForAssertion(() => Assert.Equal("⚠ JSON values: 96.0 of 128 KiB. Near the 128 KiB limit.", JsonBudgetText(page)));
+    }
+
+    [Fact]
+    public void A_draft_without_json_flags_hides_the_json_budget()
+    {
+        var api = DraftWithOneFlag();
+        ConsoleRendering.SignInAs(api, "viewer");
+        using var console = ConsoleRendering.Create(api);
+
+        var page = RenderDraft(console);
+
+        page.WaitForAssertion(() => Assert.Single(page.FindAll("tbody tr")));
+        Assert.Empty(page.FindAll("[data-testid=json-budget]"));
+    }
+
+    [Fact]
+    public void The_flags_table_scrolls_inside_a_named_region_instead_of_clipping()
+    {
+        var api = DraftWithOneFlag();
+        ConsoleRendering.SignInAs(api, "viewer");
+        using var console = ConsoleRendering.Create(api);
+
+        var page = RenderDraft(console);
+
+        page.WaitForAssertion(() => Assert.Single(page.FindAll("tbody tr")));
+        var region = page.Find("table").ParentElement;
+        Assert.NotNull(region);
+        Assert.Equal(["region", "0", "draft-flags"], [region.GetAttribute("role"), region.GetAttribute("tabindex"), region.GetAttribute("aria-labelledby")]);
+        Assert.Contains("overflow-x-auto", region.ClassList);
+        Assert.DoesNotContain("overflow-hidden", region.ClassList);
+        Assert.Equal("draft-flags", page.Find("table").GetAttribute("aria-labelledby"));
+    }
+
+    private static string JsonBudgetText(IRenderedComponent<EnvironmentDraft> page) =>
+        System.Text.RegularExpressions.Regex.Replace(page.Find("[data-testid=json-budget]").TextContent, @"\s+", " ").Trim();
+
+    private static StubApi DraftWith(string flagsJson) => new StubApi()
+        .Answer(HttpMethod.Get, Project, HttpStatusCode.OK, """
+            {"key":"space-race","name":"Space Race","environments":[
+              {"key":"dev","name":"Development","currentVersion":null,"draftRevision":2,"hasUnpublishedChanges":true}]}
+            """)
+        .Answer(HttpMethod.Get, Draft, HttpStatusCode.OK, $$"""
+            {"revision":2,"basedOnVersion":null,"changes":[],"flags":{{flagsJson}}}
+            """);
+
     private static string DraftStatus(IRenderedComponent<EnvironmentDraft> page) =>
         System.Text.RegularExpressions.Regex.Replace(page.Find("[data-testid=draft-status]").TextContent, @"\s+", " ").Trim();
 
@@ -137,7 +270,7 @@ public sealed class EnvironmentDraftPageTests
             """)
         .Answer(HttpMethod.Get, Draft, HttpStatusCode.OK, """
             {"revision":2,"basedOnVersion":null,"changes":[{"flagKey":"dark-mode","change":"added"}],
-             "flags":[{"key":"dark-mode","enabled":false,"onValue":true,"offValue":false,"rolloutBasisPoints":0}]}
+             "flags":[{"key":"dark-mode","type":"boolean","enabled":false,"onValue":true,"offValue":false,"rolloutBasisPoints":0}]}
             """);
 
     private static IRenderedComponent<EnvironmentDraft> RenderDraft(BunitContext console) =>

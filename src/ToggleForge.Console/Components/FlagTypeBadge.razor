@@ -1,0 +1,10 @@
+@* O tipo da flag, igual em toda tabela e no editor; a palavra diz o tipo, a cor só reforça. *@
+<span data-testid="flag-type"
+      class="@(IsJson ? "bg-indigo-50 text-indigo-700 ring-indigo-200" : "bg-slate-100 text-slate-600 ring-slate-200") inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium ring-1 ring-inset">@(IsJson ? "JSON" : Type)</span>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Type { get; set; } = string.Empty;
+
+    private bool IsJson => FlagTypes.IsJson(Type);
+}

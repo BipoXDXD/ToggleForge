@@ -37,7 +37,7 @@ public sealed class PublishDraftPageTests
         Assert.Equal("Changes since version 3", page.Find("#changes").TextContent.Trim());
         Assert.Equal(
             ["new-shop added", "dark-mode modified"],
-            page.FindAll("[aria-label=Changes] li").Select(change => string.Join(" ", change.QuerySelectorAll("span").Select(part => part.TextContent))));
+            page.FindAll("[aria-label=Changes] li").Select(change => string.Join(" ", change.Children.Select(part => part.TextContent.Trim()))));
     }
 
     [Fact]
@@ -97,6 +97,27 @@ public sealed class PublishDraftPageTests
         Assert.True(PublishButton(page).HasAttribute("disabled"));
     }
 
+    // Uma chave já publicada guarda o tipo (ADR 0011): o texto da API diz qual chave e qual tipo, e reenviar daria a
+    // mesma recusa, então a tentativa acaba aqui e o rascunho não é relido.
+    [Fact]
+    public void A_key_published_with_another_type_refuses_the_publication_with_the_api_detail()
+    {
+        const string Detail = "The key 'new-shop' was already published in this environment as a boolean flag, and a published key keeps its type.";
+        var api = TwoChangesSinceVersionThree().Answer(HttpMethod.Post, Publications, HttpStatusCode.Conflict,
+            $$"""{"type":"/problems/flag-type-locked","title":"Flag type locked","status":409,"detail":"{{Detail}}"}""",
+            "application/problem+json");
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderPublish(console);
+
+        Publish(page);
+
+        page.WaitForAssertion(() => Assert.Equal(Detail, page.Find("[role=alert]").TextContent.Trim()));
+        Assert.Equal("Publish 2 changes to prod", PublishButton(page).TextContent.Trim());
+        Assert.False(page.Find("input[maxlength='280']").HasAttribute("disabled"));
+        Assert.Single(api.RequestsTo(HttpMethod.Get, Draft));
+        Assert.Single(api.RequestsTo(HttpMethod.Post, Publications));
+    }
+
     [Fact]
     public void A_viewer_is_told_that_only_owners_and_editors_publish()
     {
@@ -118,6 +139,44 @@ public sealed class PublishDraftPageTests
         var page = RenderPublish(console);
 
         Assert.Equal("Publish", AccessibleNames.CurrentBreadcrumb(page));
+    }
+
+    [Fact]
+    public void A_json_flag_change_shows_the_json_badge()
+    {
+        using var console = ConsoleRendering.Create(ChangesOf("shop-config", "json"));
+
+        var page = RenderPublish(console);
+
+        page.WaitForAssertion(() => Assert.Equal("JSON", page.Find("[aria-label=Changes] li [data-testid=flag-type]").TextContent));
+    }
+
+    [Fact]
+    public void A_boolean_flag_change_shows_the_boolean_badge()
+    {
+        using var console = ConsoleRendering.Create(ChangesOf("new-shop", "boolean"));
+
+        var page = RenderPublish(console);
+
+        page.WaitForAssertion(() => Assert.Equal("boolean", page.Find("[aria-label=Changes] li [data-testid=flag-type]").TextContent));
+    }
+
+    /// <summary>Um rascunho com uma flag adicionada do tipo dado.</summary>
+    private static StubApi ChangesOf(string flagKey, string type)
+    {
+        var value = type == "json" ? """{"discount":0.2}""" : "true";
+        var api = new StubApi()
+            .Answer(HttpMethod.Get, Project, HttpStatusCode.OK, """
+                {"key":"space-race","name":"Space Race","environments":[
+                  {"key":"prod","name":"Production","currentVersion":3,"draftRevision":9,"hasUnpublishedChanges":true}]}
+                """)
+            .Answer(HttpMethod.Get, Draft, HttpStatusCode.OK, $$"""
+                {"revision":9,"basedOnVersion":3,
+                 "flags":[{"key":"{{flagKey}}","type":"{{type}}","enabled":true,"onValue":{{value}},"offValue":{{value}},"rolloutBasisPoints":0}],
+                 "changes":[{"flagKey":"{{flagKey}}","change":"added"}]}
+                """);
+        ConsoleRendering.SignInAs(api, "editor");
+        return api;
     }
 
     private static StubApi TwoChangesSinceVersionThree()

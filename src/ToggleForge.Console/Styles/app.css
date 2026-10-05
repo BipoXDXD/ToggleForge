@@ -4,6 +4,18 @@
   body {
     @apply bg-slate-50 text-slate-900 antialiased;
   }
+
+  /* Um foco visível igual para tudo que recebe o teclado (WCAG 2.4.7); 6,15:1 sobre o fundo. */
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-indigo-600;
+  }
+}
+
+@layer components {
+  /* Inputs, selects e textareas: borda de 4,77:1 contra o fundo (WCAG 1.4.11), vermelha quando o campo é inválido. */
+  .tf-field {
+    @apply mt-1 block rounded-md border border-slate-500 bg-white px-3 py-2 text-sm disabled:bg-slate-100 aria-[invalid=true]:border-red-600;
+  }
 }
 
 /* Visível só até o runtime .NET subir e o Blazor trocar o conteúdo de #app. */

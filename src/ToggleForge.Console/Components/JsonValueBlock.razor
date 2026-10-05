@@ -1,0 +1,91 @@
+@*
+    Um valor JSON que não cabe numa célula: fechado, mostra a prévia; aberto, o valor indentado e o botão de copiar.
+    Sempre texto, nunca markup: o valor é do usuário (canvas, T6).
+*@
+@inject IJSRuntime JS
+
+<details class="group" open="@Open">
+    <summary class="cursor-pointer list-none rounded [&::-webkit-details-marker]:hidden">
+        <span class="inline-block text-slate-500 transition-transform group-open:rotate-90" aria-hidden="true">▶</span>
+        <ValuePreview Value="Value" TextSize="text-sm" />
+    </summary>
+    <div class="mt-2 rounded-md border border-slate-200 bg-slate-50">
+        <div class="flex items-start justify-between gap-2">
+            @*
+                Um valor longo rola dentro do bloco, e o tabindex deixa o teclado chegar nele para rolar (WCAG 2.1.1). É
+                group, não region: numa tabela há um bloco por linha, e cada region seria um landmark com o mesmo nome.
+            *@
+            <pre role="group" tabindex="0" aria-label="Value, indented"
+                 class="max-h-80 overflow-auto px-3 py-2 font-mono text-[13px] leading-5 text-slate-800">@_indented</pre>
+            <button type="button" @onclick="CopyAsync"
+                    class="m-2 shrink-0 rounded border border-slate-500 bg-white px-2 py-0.5 text-xs font-medium text-slate-700 hover:bg-slate-100">
+                @(_copy == CopyState.Copied ? "Copied" : "Copy")
+            </button>
+        </div>
+        <p role="status" class="@(_copy == CopyState.Failed ? "px-3 pb-2 text-xs text-red-700" : "sr-only")">@CopyMessage</p>
+    </div>
+</details>
+
+@code {
+    private enum CopyState
+    {
+        NotCopied,
+        Copied,
+        Failed,
+    }
+
+    // O último valor mostrado: o pai redesenha com o mesmo valor (a cada tecla no formulário, por exemplo), e só um
+    // valor novo apaga o resultado da cópia.
+    private FlagValue? _shown;
+    private string _indented = string.Empty;
+    private CopyState _copy;
+    private bool _copiedAgain;
+
+    [Parameter, EditorRequired]
+    public FlagValue Value { get; set; } = FlagValue.Null;
+
+    /// <summary>
+    /// Verdadeiro para começar aberto, como na leitura de uma flag, onde o valor é o assunto da página; falso (o padrão)
+    /// numa tabela, onde ele é um detalhe da linha.
+    /// </summary>
+    [Parameter]
+    public bool Open { get; set; }
+
+    private string CopyMessage => _copy switch
+    {
+        // Um texto igual ao anterior não muda a região viva e não seria lido de novo; o espaço inseparável no fim
+        // alterna e não aparece.
+        CopyState.Copied => _copiedAgain ? "Value copied.\u00A0" : "Value copied.",
+        CopyState.Failed => "Copy failed. Select the text and copy it by hand.",
+        _ => string.Empty,
+    };
+
+    protected override void OnParametersSet()
+    {
+        if (Equals(Value, _shown))
+        {
+            return;
+        }
+
+        _shown = Value;
+        _indented = Value.Indented();
+        _copy = CopyState.NotCopied;
+    }
+
+    // Copia o que está na tela, o texto indentado. A API do navegador entra pelo IJSRuntime, sem arquivo JS próprio:
+    // a CSP do console só aceita scripts da mesma origem, e chamar uma função que o navegador já tem não muda isso.
+    private async Task CopyAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", _indented);
+            _copiedAgain = _copy == CopyState.Copied && !_copiedAgain;
+            _copy = CopyState.Copied;
+        }
+        catch (JSException)
+        {
+            // O navegador recusa sem permissão ou fora de contexto seguro; o membro ainda pode selecionar o texto.
+            _copy = CopyState.Failed;
+        }
+    }
+}

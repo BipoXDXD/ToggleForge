@@ -51,7 +51,13 @@ else
                 @foreach (var change in _draft.Changes)
                 {
                     <li class="flex justify-between px-4 py-2">
-                        <span class="font-mono">@change.FlagKey</span>
+                        <span class="flex items-center gap-2">
+                            <span class="font-mono">@change.FlagKey</span>
+                            @if (TypeOf(change) is { } type)
+                            {
+                                <FlagTypeBadge Type="@type" />
+                            }
+                        </span>
                         <span class="text-slate-500">@change.Change</span>
                     </li>
                 }
@@ -62,12 +68,12 @@ else
             <label class="block">
                 <span class="text-sm font-medium text-slate-700">Summary (optional)</span>
                 <input maxlength="280" @bind="_summary" disabled="@(_attempt is not null)"
-                       class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none disabled:bg-slate-100" />
+                       class="tf-field w-full" />
             </label>
             <label class="block">
                 <span class="text-sm font-medium text-slate-700">Type @EnvironmentKey to confirm</span>
                 <input autocomplete="off" spellcheck="false" @bind="_confirmation" @bind:event="oninput"
-                       class="mt-1 block w-40 rounded-md border border-slate-300 px-3 py-2 font-mono text-sm focus:border-indigo-500 focus:outline-none" />
+                       class="tf-field w-40 font-mono" />
             </label>
 
             <ProblemMessage Problem="_problem" />
@@ -82,7 +88,7 @@ else
             else
             {
                 <button type="submit" disabled="@_busy"
-                        class="rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-500 disabled:opacity-60">
+                        class="rounded-md bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-800 disabled:opacity-60">
                     Check the result
                 </button>
             }
@@ -123,6 +129,9 @@ else
     private EnvironmentAddress Address => new(OrganizationId, ProjectKey, EnvironmentKey);
 
     private bool Confirmed => string.Equals(_confirmation, EnvironmentKey, StringComparison.Ordinal);
+
+    // Uma flag removida não está mais no rascunho, e o tipo dela só viria da publicação base; fica sem selo.
+    private string? TypeOf(DraftChange change) => _draft?.Flags.FirstOrDefault(flag => flag.Key == change.FlagKey)?.Type;
 
     private string ChangeCount => _draft?.Changes.Count == 1 ? "1 change" : $"{_draft?.Changes.Count} changes";
 

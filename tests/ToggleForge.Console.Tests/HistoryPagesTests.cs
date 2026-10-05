@@ -173,6 +173,73 @@ public sealed class HistoryPagesTests
         Assert.Equal("Version 1", AccessibleNames.CurrentBreadcrumb(page));
     }
 
+    [Fact]
+    public void A_version_shows_the_type_and_a_preview_of_each_flag()
+    {
+        var api = LiveAtVersion(3, pendingChanges: false).Answer(HttpMethod.Get, Publications + "/3", HttpStatusCode.OK, VersionWith(3, """
+            [{"key":"dark-mode","type":"boolean","enabled":false,"onValue":true,"offValue":false,"rolloutBasisPoints":0},
+             {"key":"shop-config","type":"json","enabled":true,"onValue":{"discount":0.2,"featuredItems":["sword","shield"]},"offValue":null,"rolloutBasisPoints":10000}]
+            """));
+        using var console = ConsoleRendering.Create(api);
+
+        var page = RenderVersion(console, 3);
+
+        Assert.Equal(["dark-mode", "boolean", "Disabled", "0%"], FlagTable.Row(page.FindAll("tbody tr")[0]));
+        Assert.Equal(["true", "false"], page.FindAll("tbody tr")[0].QuerySelectorAll("dd code").Select(value => value.TextContent));
+        var json = page.FindAll("tbody tr")[1];
+        Assert.Equal(["shop-config", "JSON", "Enabled", "100%"], FlagTable.Row(json));
+        Assert.Equal(["Included", "Others"], json.QuerySelectorAll("dt").Select(label => label.TextContent));
+        Assert.Equal(["{\"discount\":0.2,\"featuredItems\":[\"sword…", "null"], json.QuerySelectorAll("dd code").Select(value => value.TextContent));
+        Assert.Equal("""{"discount":0.2,"featuredItems":["sword","shield"]}""", json.QuerySelector("dd code")?.GetAttribute("title"));
+        Assert.Empty(page.FindAll("tbody a"));
+    }
+
+    [Fact]
+    public void A_json_value_with_markup_is_shown_as_text_in_a_version()
+    {
+        var api = LiveAtVersion(3, pendingChanges: false).Answer(HttpMethod.Get, Publications + "/3", HttpStatusCode.OK, VersionWith(3, """
+            [{"key":"shop-config","type":"json","enabled":true,"onValue":"<script>x</script>","offValue":"<img src=x onerror=x>","rolloutBasisPoints":10000}]
+            """));
+        using var console = ConsoleRendering.Create(api);
+
+        var page = RenderVersion(console, 3);
+
+        Assert.Empty(page.FindAll("script"));
+        Assert.Empty(page.FindAll("img"));
+        Assert.Equal(["\"<script>x</script>\"", "\"<img src=x onerror=x>\""], page.FindAll("tbody code").Select(value => value.TextContent));
+    }
+
+    [Fact]
+    public void The_publication_detail_shows_the_whole_json_value_in_a_disclosure()
+    {
+        var api = LiveAtVersion(3, pendingChanges: false).Answer(HttpMethod.Get, Publications + "/3", HttpStatusCode.OK, VersionWith(3, """
+            [{"key":"shop-config","type":"json","enabled":true,"onValue":{"discount":0.2,"featuredItems":["sword","shield"]},"offValue":{"discount":0},"rolloutBasisPoints":10000}]
+            """));
+        using var console = ConsoleRendering.Create(api);
+
+        var page = RenderVersion(console, 3);
+
+        var disclosure = Assert.Single(page.FindAll("tbody details"));
+        Assert.Equal("{\n  \"discount\": 0.2,\n  \"featuredItems\": [\n    \"sword\",\n    \"shield\"\n  ]\n}", disclosure.QuerySelector("pre")?.TextContent);
+        Assert.Equal("{\"discount\":0}", page.FindAll("tbody dd")[1].TextContent.Trim());
+    }
+
+    [Fact]
+    public void The_version_table_scrolls_inside_a_named_region_instead_of_clipping()
+    {
+        var api = LiveAtVersion(3, pendingChanges: false).Answer(HttpMethod.Get, Publications + "/3", HttpStatusCode.OK, VersionJson(3));
+        using var console = ConsoleRendering.Create(api);
+
+        var page = RenderVersion(console, 3);
+
+        var region = page.Find("table").ParentElement;
+        Assert.NotNull(region);
+        Assert.Equal(["region", "0", "Flags in version 3"], [region.GetAttribute("role"), region.GetAttribute("tabindex"), region.GetAttribute("aria-label")]);
+        Assert.Contains("overflow-x-auto", region.ClassList);
+        Assert.DoesNotContain("overflow-hidden", region.ClassList);
+        Assert.Equal("Flags in version 3", page.Find("table").GetAttribute("aria-label"));
+    }
+
     private static StubApi LiveAtVersion(long version, bool pendingChanges)
     {
         var api = new StubApi().Answer(HttpMethod.Get, Environment, HttpStatusCode.OK, EnvironmentJson(version, pendingChanges));
@@ -188,7 +255,12 @@ public sealed class HistoryPagesTests
 
     private static string VersionJson(long version) => $$$"""
         {"version":{{{version}}},"publishedAt":"2026-10-01T12:00:00Z","publishedBy":{{{Member}}},"origin":"publication","restoredVersion":null,
-         "flags":[{"key":"new-shop","enabled":true,"onValue":true,"offValue":false,"rolloutBasisPoints":1000}]}
+         "flags":[{"key":"new-shop","type":"boolean","enabled":true,"onValue":true,"offValue":false,"rolloutBasisPoints":1000}]}
+        """;
+
+    private static string VersionWith(long version, string flagsJson) => $$$"""
+        {"version":{{{version}}},"publishedAt":"2026-10-01T12:00:00Z","publishedBy":{{{Member}}},"origin":"publication","restoredVersion":null,
+         "flags":{{{flagsJson}}}}
         """;
 
     private static IRenderedComponent<PublicationDetail> RenderVersionOne(BunitContext console) => RenderVersion(console, 1);

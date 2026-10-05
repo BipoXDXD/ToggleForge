@@ -14,12 +14,12 @@
         <label class="block">
             <span class="text-sm font-medium text-slate-700">Email</span>
             <input type="email" required autocomplete="username" @bind="_email"
-                   class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none" />
+                   class="tf-field w-full" />
         </label>
         <label class="block">
             <span class="text-sm font-medium text-slate-700">Password</span>
             <input type="password" required autocomplete="current-password" @bind="_password"
-                   class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none" />
+                   class="tf-field w-full" />
         </label>
 
         @if (_failure is not null)

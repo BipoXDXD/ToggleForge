@@ -2,6 +2,7 @@ using System.Net;
 using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.JSInterop;
 using ToggleForge.Console.Pages;
 
 namespace ToggleForge.Console.Tests;
@@ -18,9 +19,9 @@ public sealed class SimulatorPageTests
     {
         var api = LiveAtVersion(3).Answer(HttpMethod.Post, Simulations, HttpStatusCode.OK, """
             {"source":"draft","version":null,"results":[
-              {"flagKey":"beta-map","value":false,"reason":"excluded","bucket":7310},
-              {"flagKey":"new-shop","value":true,"reason":"included","bucket":412},
-              {"flagKey":"old-ui","value":false,"reason":"disabled","bucket":null}]}
+              {"flagKey":"beta-map","type":"boolean","value":false,"reason":"excluded","bucket":7310},
+              {"flagKey":"new-shop","type":"boolean","value":true,"reason":"included","bucket":412},
+              {"flagKey":"old-ui","type":"boolean","value":false,"reason":"disabled","bucket":null}]}
             """);
         using var console = ConsoleRendering.Create(api);
         var page = RenderSimulator(console);
@@ -36,7 +37,7 @@ public sealed class SimulatorPageTests
                 ["new-shop", "true", "Bucket 412 is inside the rollout."],
                 ["old-ui", "false", "Disabled: everyone gets the off value."],
             ],
-            page.FindAll("tbody tr").Select(row => row.QuerySelectorAll("td").Select(cell => cell.TextContent).ToArray()));
+            page.FindAll("tbody tr").Select(ResultRow));
         Assert.Equal($$"""{"playerId":"{{PlayerId}}","source":"draft"}""", api.BodyOf(Assert.Single(api.RequestsTo(HttpMethod.Post, Simulations))));
     }
 
@@ -44,7 +45,7 @@ public sealed class SimulatorPageTests
     public void A_published_version_is_simulated_starting_from_the_live_one()
     {
         var api = LiveAtVersion(3).Answer(HttpMethod.Post, Simulations, HttpStatusCode.OK,
-            """{"source":"publication","version":3,"results":[{"flagKey":"new-shop","value":true,"reason":"included","bucket":null}]}""");
+            """{"source":"publication","version":3,"results":[{"flagKey":"new-shop","type":"boolean","value":true,"reason":"included","bucket":null}]}""");
         using var console = ConsoleRendering.Create(api);
         var page = RenderSimulator(console);
 
@@ -151,7 +152,7 @@ public sealed class SimulatorPageTests
     public void A_refused_simulation_replaces_the_previous_results_with_the_reason()
     {
         var api = LiveAtVersion(3).Answer(HttpMethod.Post, Simulations, HttpStatusCode.OK,
-            """{"source":"draft","version":null,"results":[{"flagKey":"new-shop","value":true,"reason":"included","bucket":412}]}""");
+            """{"source":"draft","version":null,"results":[{"flagKey":"new-shop","type":"boolean","value":true,"reason":"included","bucket":412}]}""");
         using var console = ConsoleRendering.Create(api);
         var page = RenderSimulator(console);
         page.Find("input[autocomplete=off]").Change(PlayerId);
@@ -314,6 +315,209 @@ public sealed class SimulatorPageTests
         Assert.Equal("Simulate a player in prod", page.Find("h1").TextContent);
         release();
         page.WaitForAssertion(() => Assert.Equal("Simulate a player in Production (prod)", page.Find("h1").TextContent));
+    }
+
+    [Fact]
+    public void Each_result_shows_the_type_of_its_flag()
+    {
+        var api = LiveAtVersion(3).Answer(HttpMethod.Post, Simulations, HttpStatusCode.OK, """
+            {"source":"draft","version":null,"results":[
+              {"flagKey":"new-shop","type":"boolean","value":true,"reason":"included","bucket":412},
+              {"flagKey":"max-party-size","type":"json","value":4,"reason":"excluded","bucket":7309}]}
+            """);
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderSimulator(console);
+
+        Simulate(page);
+
+        page.WaitForAssertion(() => Assert.Equal(2, page.FindAll("tbody tr").Count));
+        Assert.Equal(["boolean", "JSON"], page.FindAll("tbody [data-testid=flag-type]").Select(type => type.TextContent));
+    }
+
+    [Fact]
+    public void A_json_result_shows_its_value_indented_in_a_collapsed_block()
+    {
+        var api = LiveAtVersion(3).Answer(HttpMethod.Post, Simulations, HttpStatusCode.OK, """
+            {"source":"draft","version":null,"results":[
+              {"flagKey":"new-shop","type":"boolean","value":true,"reason":"included","bucket":412},
+              {"flagKey":"shop-config","type":"json","value":{"discount":0.2,"items":["sword"]},"reason":"included","bucket":null}]}
+            """);
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderSimulator(console);
+
+        Simulate(page);
+
+        page.WaitForAssertion(() => Assert.Equal(2, page.FindAll("tbody tr").Count));
+        Assert.Equal("true", page.FindAll("tbody tr")[0].QuerySelectorAll("td")[1].TextContent);
+        Assert.Empty(page.FindAll("tbody tr")[0].QuerySelectorAll("details"));
+        var block = page.FindAll("tbody tr")[1].QuerySelector("td:nth-child(2) details");
+        Assert.NotNull(block);
+        Assert.False(block.HasAttribute("open"));
+        Assert.Equal("{\"discount\":0.2,\"items\":[\"sword\"]}", block.QuerySelector("summary code")?.TextContent);
+        Assert.Equal("{\n  \"discount\": 0.2,\n  \"items\": [\n    \"sword\"\n  ]\n}", block.QuerySelector("pre")?.TextContent);
+    }
+
+    [Fact]
+    public void A_json_scalar_that_fits_the_preview_shows_inline()
+    {
+        // 38 letras e as aspas: 40 caracteres, o tamanho da prévia.
+        var text = $"\"{new string('a', 38)}\"";
+        var api = LiveAtVersion(3).Answer(HttpMethod.Post, Simulations, HttpStatusCode.OK, SingleJsonResult(text));
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderSimulator(console);
+
+        Simulate(page);
+
+        page.WaitForAssertion(() => Assert.Single(page.FindAll("tbody tr")));
+        Assert.Equal(text, page.Find("tbody td:nth-child(2)").TextContent);
+        Assert.Empty(page.FindAll("tbody details"));
+    }
+
+    [Fact]
+    public void A_json_scalar_longer_than_the_preview_is_collapsed()
+    {
+        // 39 letras e as aspas: 41 caracteres, um além da prévia.
+        var text = $"\"{new string('a', 39)}\"";
+        var api = LiveAtVersion(3).Answer(HttpMethod.Post, Simulations, HttpStatusCode.OK, SingleJsonResult(text));
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderSimulator(console);
+
+        Simulate(page);
+
+        page.WaitForAssertion(() => Assert.Single(page.FindAll("tbody tr")));
+        Assert.Equal(text, page.Find("tbody details pre").TextContent);
+    }
+
+    [Fact]
+    public void A_json_value_with_markup_is_shown_as_text_in_the_simulation()
+    {
+        var api = LiveAtVersion(3).Answer(HttpMethod.Post, Simulations, HttpStatusCode.OK, """
+            {"source":"draft","version":null,"results":[
+              {"flagKey":"event-banner","type":"json","value":"<script>x</script>","reason":"included","bucket":null},
+              {"flagKey":"shop-config","type":"json","value":{"banner":"<img src=x onerror=x>"},"reason":"included","bucket":null}]}
+            """);
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderSimulator(console);
+
+        Simulate(page);
+
+        page.WaitForAssertion(() => Assert.Equal(2, page.FindAll("tbody tr").Count));
+        Assert.Empty(page.FindAll("script"));
+        Assert.Empty(page.FindAll("img"));
+        Assert.Equal("\"<script>x</script>\"", page.FindAll("tbody tr")[0].QuerySelectorAll("td")[1].TextContent);
+        Assert.Equal("{\n  \"banner\": \"<img src=x onerror=x>\"\n}", page.Find("tbody pre").TextContent);
+    }
+
+    [Fact]
+    public void Copy_puts_the_indented_value_on_the_clipboard()
+    {
+        var api = LiveAtVersion(3).Answer(HttpMethod.Post, Simulations, HttpStatusCode.OK, ShopConfigResult);
+        using var console = ConsoleRendering.Create(api);
+        var clipboard = console.JSInterop.SetupVoid("navigator.clipboard.writeText", "{\n  \"discount\": 0.2\n}");
+        clipboard.SetVoidResult();
+        var page = RenderSimulator(console);
+        Simulate(page);
+        page.WaitForAssertion(() => Assert.Single(page.FindAll("tbody details")));
+
+        page.Find("tbody details button").Click();
+
+        page.WaitForAssertion(() => Assert.Equal("Copied", page.Find("tbody details button").TextContent.Trim()));
+        Assert.Equal("Value copied.", page.Find("tbody details [role=status]").TextContent.Trim());
+        Assert.Single(clipboard.Invocations);
+    }
+
+    [Fact]
+    public void Copying_again_changes_the_status_so_it_is_announced_again()
+    {
+        var api = LiveAtVersion(3).Answer(HttpMethod.Post, Simulations, HttpStatusCode.OK, ShopConfigResult);
+        using var console = ConsoleRendering.Create(api);
+        console.JSInterop.SetupVoid("navigator.clipboard.writeText", _ => true).SetVoidResult();
+        var page = RenderSimulator(console);
+        Simulate(page);
+        page.WaitForAssertion(() => Assert.Single(page.FindAll("tbody details")));
+
+        page.Find("tbody details button").Click();
+        page.WaitForAssertion(() => Assert.Equal("Copied", page.Find("tbody details button").TextContent.Trim()));
+        var first = page.Find("tbody details [role=status]").TextContent;
+        page.Find("tbody details button").Click();
+        page.WaitForAssertion(() => Assert.NotEqual(first, page.Find("tbody details [role=status]").TextContent));
+
+        Assert.Equal("Value copied.", page.Find("tbody details [role=status]").TextContent.Trim());
+    }
+
+    [Fact]
+    public void A_copy_the_browser_refuses_asks_to_copy_by_hand()
+    {
+        var api = LiveAtVersion(3).Answer(HttpMethod.Post, Simulations, HttpStatusCode.OK, ShopConfigResult);
+        using var console = ConsoleRendering.Create(api);
+        console.JSInterop.SetupVoid("navigator.clipboard.writeText", _ => true).SetException(new JSException("Write permission denied."));
+        var page = RenderSimulator(console);
+        Simulate(page);
+        page.WaitForAssertion(() => Assert.Single(page.FindAll("tbody details")));
+
+        page.Find("tbody details button").Click();
+
+        page.WaitForAssertion(() => Assert.Equal(
+            "Copy failed. Select the text and copy it by hand.", page.Find("tbody details [role=status]").TextContent.Trim()));
+        Assert.Equal("Copy", page.Find("tbody details button").TextContent.Trim());
+    }
+
+    [Fact]
+    public void A_failed_copy_stays_explained_while_the_member_types_another_player()
+    {
+        var api = LiveAtVersion(3).Answer(HttpMethod.Post, Simulations, HttpStatusCode.OK, ShopConfigResult);
+        using var console = ConsoleRendering.Create(api);
+        console.JSInterop.SetupVoid("navigator.clipboard.writeText", _ => true).SetException(new JSException("Write permission denied."));
+        var page = RenderSimulator(console);
+        Simulate(page);
+        page.WaitForAssertion(() => Assert.Single(page.FindAll("tbody details")));
+        page.Find("tbody details button").Click();
+        page.WaitForAssertion(() => Assert.NotEmpty(page.Find("tbody details [role=status]").TextContent.Trim()));
+
+        page.Find("input[autocomplete=off]").Change("player-2");
+
+        Assert.Equal("Copy failed. Select the text and copy it by hand.", page.Find("tbody details [role=status]").TextContent.Trim());
+    }
+
+    [Fact]
+    public void The_results_table_scrolls_inside_a_named_region_instead_of_clipping()
+    {
+        var api = LiveAtVersion(3).Answer(HttpMethod.Post, Simulations, HttpStatusCode.OK, ShopConfigResult);
+        using var console = ConsoleRendering.Create(api);
+        var page = RenderSimulator(console);
+
+        Simulate(page);
+
+        page.WaitForAssertion(() => Assert.Single(page.FindAll("tbody tr")));
+        var region = page.Find("table").ParentElement;
+        Assert.NotNull(region);
+        Assert.Equal(["region", "0", "simulation-results"], [region.GetAttribute("role"), region.GetAttribute("tabindex"), region.GetAttribute("aria-labelledby")]);
+        Assert.Contains("overflow-x-auto", region.ClassList);
+        Assert.DoesNotContain("overflow-hidden", region.ClassList);
+        Assert.Equal("simulation-results", page.Find("table").GetAttribute("aria-labelledby"));
+    }
+
+    private const string ShopConfigResult = """
+        {"source":"draft","version":null,"results":[
+          {"flagKey":"shop-config","type":"json","value":{"discount":0.2},"reason":"included","bucket":null}]}
+        """;
+
+    private static string SingleJsonResult(string value) => $$"""
+        {"source":"draft","version":null,"results":[
+          {"flagKey":"banner","type":"json","value":{{value}},"reason":"included","bucket":null}]}
+        """;
+
+    private static void Simulate(IRenderedComponent<Simulator> page)
+    {
+        page.Find("input[autocomplete=off]").Change(PlayerId);
+        page.Find("form").Submit();
+    }
+
+    /// <summary>Chave, valor e motivo de uma linha do resultado; o selo do tipo fica de fora.</summary>
+    private static string[] ResultRow(AngleSharp.Dom.IElement row)
+    {
+        var cells = row.QuerySelectorAll("td");
+        return [cells[0].QuerySelector("[data-testid=flag-key]")?.TextContent ?? string.Empty, cells[1].TextContent, cells[2].TextContent];
     }
 
     private static StubApi LiveAtVersion(long version)

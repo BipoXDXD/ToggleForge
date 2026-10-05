@@ -94,7 +94,7 @@ public sealed class ConsoleJourneyTests(ApiFactory api, Browser browser) : IClas
         await page.GetByRole(AriaRole.Link, new() { Name = "Back to the draft" }).ClickAsync();
         await SimulateAsync(page, playerId, publishedVersion: true);
         await Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Version 2", Exact = true })).ToBeVisibleAsync();
-        await Expect(ResultCells(page)).ToHaveTextAsync(["new-shop", "true", "The rollout includes everyone."]);
+        await Expect(ResultCells(page)).ToHaveTextAsync(["new-shop boolean", "true", "The rollout includes everyone."]);
 
         await ReturnToDraftAsync(page);
         await page.GetByRole(AriaRole.Link, new() { Name = "History" }).ClickAsync();
@@ -108,6 +108,192 @@ public sealed class ConsoleJourneyTests(ApiFactory api, Browser browser) : IClas
         await Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Version 3", Exact = true })).ToBeVisibleAsync();
         await Expect(ResultCells(page)).ToHaveTextAsync(atTenPercent.ToArray());
         Assert.True(browserErrors.Count == 0, string.Join(" | ", browserErrors));
+    }
+
+    /// <summary>A jornada da ADR 0011 pelo console: uma configuração JSON criada, publicada, simulada, alterada e revertida.</summary>
+    [Fact]
+    public async Task A_member_creates_publishes_simulates_and_rolls_back_a_json_flag_from_the_console()
+    {
+        const string playerId = "player-42";
+        const string indentedAtTwentyPercent = "{\n  \"discount\": 0.2,\n  \"featuredItems\": [\n    \"sword\"\n  ]\n}";
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        Assert.Equal(HttpStatusCode.Created, (await owner.CreateProjectAsync("space-race")).Status);
+        await using var context = await browser.NewContextAsync(Host.Address);
+        var page = await context.NewPageAsync();
+        var browserErrors = ConsolePages.CollectErrors(page);
+
+        await ConsolePages.OpenDraftAsync(page, owner);
+        await page.GetByLabel("Key").FillAsync("shop-config");
+        await page.GetByRole(AriaRole.Radio, new() { Name = "JSON" }).CheckAsync();
+        await Expect(page.Locator("#json-public")).ToContainTextAsync("Every player who has the game can read these values.");
+        await page.GetByLabel("Rollout (%)").FillAsync("100");
+        await page.GetByLabel("Value for included players").FillAsync("{\"discount\": 0.2, \"featuredItems\": [\"sword\"]}");
+        await page.GetByLabel("Value for everyone else").FillAsync("{\"discount\": 0}");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Add to draft" }).ClickAsync();
+
+        var row = page.GetByRole(AriaRole.Row).Filter(new() { HasText = "shop-config" });
+        await Expect(row.GetByTestId("flag-type")).ToHaveTextAsync("JSON");
+        await Expect(row).ToContainTextAsync("Included");
+        await Expect(row.Locator("code").First).ToHaveAttributeAsync("title", "{\"discount\":0.2,\"featuredItems\":[\"sword\"]}");
+        await PublishAsync(page, "Shop config at 20% off");
+        await Expect(page.GetByRole(AriaRole.Status)).ToContainTextAsync("Version 1 is live in Development.");
+
+        await page.GetByRole(AriaRole.Link, new() { Name = "Back to the draft" }).ClickAsync();
+        await page.GetByRole(AriaRole.Link, new() { Name = "shop-config" }).ClickAsync();
+        await Expect(page.GetByLabel("Value for included players")).ToHaveValueAsync(indentedAtTwentyPercent);
+        await page.GetByLabel("Value for included players").FillAsync("{\"discount\": 0.5, \"featuredItems\": [\"sword\"]}");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Save" }).ClickAsync();
+        // O editor JSON tem outra região de status, vazia, que anuncia a cópia de valor.
+        await Expect(page.GetByRole(AriaRole.Status).Filter(new() { HasText = "Saved to the draft" })).ToBeVisibleAsync();
+        await ReturnToDraftAsync(page);
+        await PublishAsync(page, "Shop config at 50% off");
+        await Expect(page.GetByRole(AriaRole.Status)).ToContainTextAsync("Version 2 is live in Development.");
+
+        await page.GetByRole(AriaRole.Link, new() { Name = "Back to the draft" }).ClickAsync();
+        await SimulateAsync(page, playerId, publishedVersion: true);
+        await Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Version 2", Exact = true })).ToBeVisibleAsync();
+        await ExpectSimulatedValueAsync(page, "\"discount\": 0.5");
+
+        await ReturnToDraftAsync(page);
+        await page.GetByRole(AriaRole.Link, new() { Name = "History" }).ClickAsync();
+        await page.GetByRole(AriaRole.Link, new() { Name = "Version 1" }).ClickAsync();
+        await Expect(page.GetByRole(AriaRole.Row).Filter(new() { HasText = "shop-config" }).GetByTestId("flag-type")).ToHaveTextAsync("JSON");
+        await page.GetByLabel("Type dev to confirm").FillAsync("dev");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Roll back to version 1" }).ClickAsync();
+        await Expect(page.GetByRole(AriaRole.Status)).ToContainTextAsync("Version 3 is live in Development with the content of version 1.");
+        await ReturnToDraftAsync(page);
+        await SimulateAsync(page, playerId, publishedVersion: true);
+
+        await Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Version 3", Exact = true })).ToBeVisibleAsync();
+        await ExpectSimulatedValueAsync(page, "\"discount\": 0.2");
+        Assert.Equal(
+            "{\"discount\":0.2,\"featuredItems\":[\"sword\"]}",
+            (await owner.GetFlagAsync("space-race", "shop-config")).Json["onValue"]!.ToJsonString());
+        Assert.True(browserErrors.Count == 0, string.Join(" | ", browserErrors));
+    }
+
+    /// <summary>O stub não prova isto: o console reconhece o <c>type</c> exato do 409 que a API real devolve.</summary>
+    [Fact]
+    public async Task A_member_creating_a_json_flag_in_a_full_draft_is_told_the_draft_is_out_of_room()
+    {
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        Assert.Equal(HttpStatusCode.Created, (await owner.CreateProjectAsync("space-race")).Status);
+        await owner.FillJsonBudgetAsync("space-race", 131_071);
+        await using var context = await browser.NewContextAsync(Host.Address);
+        var page = await context.NewPageAsync();
+        var browserErrors = ConsolePages.CollectErrors(page);
+
+        await ConsolePages.OpenDraftAsync(page, owner);
+        await AddJsonFlagAsync(page, "shop-config", "1", "0");
+
+        await Expect(page.GetByRole(AriaRole.Alert)).ToContainTextAsync("This draft is out of room for JSON values.");
+        await Expect(page.Locator("#flag-key")).ToHaveValueAsync("shop-config");
+        var keys = (await owner.GetDraftAsync("space-race")).Json["flags"]!.AsArray().Select(flag => flag!["key"]!.GetValue<string>());
+        Assert.DoesNotContain("shop-config", keys);
+        Assert.True(browserErrors.Count == 0, string.Join(" | ", browserErrors));
+    }
+
+    /// <summary>O console aceita a sintaxe e deixa a API decidir a profundidade; o erro dela volta ao campo, com o foco.</summary>
+    [Fact]
+    public async Task A_json_value_nested_past_eight_levels_is_refused_under_its_field()
+    {
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        Assert.Equal(HttpStatusCode.Created, (await owner.CreateProjectAsync("space-race")).Status);
+        await using var context = await browser.NewContextAsync(Host.Address);
+        var page = await context.NewPageAsync();
+        var browserErrors = ConsolePages.CollectErrors(page);
+
+        await ConsolePages.OpenDraftAsync(page, owner);
+        await AddJsonFlagAsync(page, "shop-config", "1", "[[[[[[[[[1]]]]]]]]]");
+
+        await Expect(page.Locator("#off-value-error")).ToContainTextAsync("The value nests deeper than 8 levels.");
+        await Expect(page.Locator("#off-value")).ToBeFocusedAsync();
+        await Expect(page.Locator("#off-value")).ToHaveAttributeAsync("aria-invalid", "true");
+        Assert.Empty((await owner.GetDraftAsync("space-race")).Json["flags"]!.AsArray());
+        Assert.True(browserErrors.Count == 0, string.Join(" | ", browserErrors));
+    }
+
+    /// <summary>
+    /// Uma chave publicada guarda o tipo no ambiente (ADR 0011): apagada do rascunho, ela não volta com o outro tipo,
+    /// e o console diz isso na chave, que é o que o membro tem de trocar.
+    /// </summary>
+    [Fact]
+    public async Task A_key_published_as_boolean_cannot_come_back_as_json()
+    {
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        await owner.PublishedProjectAsync("space-race");
+        var read = await owner.GetFlagAsync("space-race", "new-shop");
+        Assert.Equal(HttpStatusCode.NoContent, (await owner.DeleteFlagAsync("space-race", "new-shop", read.Header("ETag"))).Status);
+        await using var context = await browser.NewContextAsync(Host.Address);
+        var page = await context.NewPageAsync();
+        var browserErrors = ConsolePages.CollectErrors(page);
+
+        await ConsolePages.OpenDraftAsync(page, owner);
+        await AddJsonFlagAsync(page, "new-shop", "1", "0");
+
+        await Expect(page.Locator("#flag-key-error")).ToContainTextAsync(
+            "This key was published as a Boolean flag in this environment, and a published key keeps its type. Use a new key for a JSON flag.");
+        await Expect(page.Locator("#flag-key")).ToBeFocusedAsync();
+        await Expect(page.Locator("#flag-key")).ToHaveAttributeAsync("aria-invalid", "true");
+        Assert.Empty((await owner.GetDraftAsync("space-race")).Json["flags"]!.AsArray());
+        Assert.True(browserErrors.Count == 0, string.Join(" | ", browserErrors));
+    }
+
+    /// <summary>
+    /// Durante o envio o formulário fica desabilitado e o navegador manda o foco para o <c>body</c>; o bUnit não vê essa
+    /// perda. Depois do sucesso, o foco volta à chave vazia, pronta para a próxima flag (WCAG 2.4.3).
+    /// </summary>
+    [Fact]
+    public async Task After_adding_a_flag_with_enter_the_focus_is_back_on_the_empty_key()
+    {
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        Assert.Equal(HttpStatusCode.Created, (await owner.CreateProjectAsync("space-race")).Status);
+        await using var context = await browser.NewContextAsync(Host.Address);
+        var page = await context.NewPageAsync();
+
+        await ConsolePages.OpenDraftAsync(page, owner);
+        await page.Locator("#flag-key").FillAsync("new-shop");
+        await page.Locator("#flag-key").PressAsync("Enter");
+
+        await Expect(page.GetByRole(AriaRole.Row).Filter(new() { HasText = "new-shop" })).ToBeVisibleAsync();
+        await Expect(page.Locator("#flag-key")).ToBeFocusedAsync();
+        await Expect(page.Locator("#flag-key")).ToHaveValueAsync(string.Empty);
+    }
+
+    /// <summary>Uma recusa sem campo (a chave já está no rascunho) devolve o foco ao botão, onde o membro estava.</summary>
+    [Fact]
+    public async Task After_a_refusal_without_a_field_the_focus_is_back_on_the_add_button()
+    {
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        Assert.Equal(HttpStatusCode.Created, (await owner.CreateProjectAsync("space-race")).Status);
+        Assert.Equal(HttpStatusCode.Created, (await owner.CreateFlagAsync("space-race", "new-shop")).Status);
+        await using var context = await browser.NewContextAsync(Host.Address);
+        var page = await context.NewPageAsync();
+
+        await ConsolePages.OpenDraftAsync(page, owner);
+        await page.Locator("#flag-key").FillAsync("new-shop");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Add to draft" }).ClickAsync();
+
+        await Expect(page.GetByRole(AriaRole.Alert)).ToContainTextAsync("The draft already has a flag with this key.");
+        await Expect(page.GetByRole(AriaRole.Button, new() { Name = "Add to draft" })).ToBeFocusedAsync();
+    }
+
+    /// <summary>Uma recusa da API que aponta um campo (a chave fora do padrão) leva o foco a esse campo.</summary>
+    [Fact]
+    public async Task After_the_api_refuses_the_key_the_focus_is_on_the_key()
+    {
+        using var owner = await ConsoleClient.SignUpAsync(api);
+        Assert.Equal(HttpStatusCode.Created, (await owner.CreateProjectAsync("space-race")).Status);
+        await using var context = await browser.NewContextAsync(Host.Address);
+        var page = await context.NewPageAsync();
+
+        await ConsolePages.OpenDraftAsync(page, owner);
+        await page.Locator("#flag-key").FillAsync("Shop Config");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Add to draft" }).ClickAsync();
+
+        await Expect(page.Locator("#flag-key-error")).ToContainTextAsync(
+            "Keys have 1 to 64 characters from [a-z0-9._-] and start with a letter or digit.");
+        await Expect(page.Locator("#flag-key")).ToBeFocusedAsync();
     }
 
     [Fact]
@@ -278,13 +464,13 @@ public sealed class ConsoleJourneyTests(ApiFactory api, Browser browser) : IClas
         await page.GetByLabel("Player ID").FillAsync(playerId);
         await page.GetByRole(AriaRole.Button, new() { Name = "Simulate" }).ClickAsync();
         await Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Draft", Exact = true })).ToBeVisibleAsync();
-        await Expect(ResultCells(page)).ToHaveTextAsync(["new-shop", "true", "The rollout includes everyone."]);
+        await Expect(ResultCells(page)).ToHaveTextAsync(["new-shop boolean", "true", "The rollout includes everyone."]);
         await page.GetByLabel("Published version").CheckAsync();
         await page.GetByRole(AriaRole.Button, new() { Name = "Simulate" }).ClickAsync();
 
         await Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Version 1", Exact = true })).ToBeVisibleAsync();
         await Expect(ResultCells(page)).ToHaveTextAsync(
-            included ? ["new-shop", "true", $"Bucket {bucket} is inside the rollout."] : ["new-shop", "false", $"Bucket {bucket} is outside the rollout."]);
+            included ? ["new-shop boolean", "true", $"Bucket {bucket} is inside the rollout."] : ["new-shop boolean", "false", $"Bucket {bucket} is outside the rollout."]);
         Assert.DoesNotContain("CANARY", page.Url, StringComparison.Ordinal);
         Assert.DoesNotContain(browserMessages, message => message.Contains("CANARY", StringComparison.Ordinal));
         Assert.DoesNotContain("CANARY", await page.EvaluateAsync<string>("JSON.stringify({ ...localStorage, ...sessionStorage })"), StringComparison.Ordinal);
@@ -320,6 +506,25 @@ public sealed class ConsoleJourneyTests(ApiFactory api, Browser browser) : IClas
         await page.GetByLabel("Summary (optional)").FillAsync(summary);
         await page.GetByLabel("Type dev to confirm").FillAsync("dev");
         await page.GetByRole(AriaRole.Button, new() { Name = "Publish 1 change to dev" }).ClickAsync();
+    }
+
+    /// <summary>Preenche o formulário "New flag" como JSON, com o rollout padrão, e envia.</summary>
+    private static async Task AddJsonFlagAsync(IPage page, string key, string onValue, string offValue)
+    {
+        await page.Locator("#flag-key").FillAsync(key);
+        await page.GetByRole(AriaRole.Radio, new() { Name = "JSON" }).CheckAsync();
+        await page.Locator("#on-value").FillAsync(onValue);
+        await page.Locator("#off-value").FillAsync(offValue);
+        await page.GetByRole(AriaRole.Button, new() { Name = "Add to draft" }).ClickAsync();
+    }
+
+    /// <summary>O valor JSON do simulador começa recolhido; aberto, mostra o texto indentado.</summary>
+    private static async Task ExpectSimulatedValueAsync(IPage page, string expected)
+    {
+        var row = page.GetByRole(AriaRole.Row).Filter(new() { HasText = "shop-config" });
+        await Expect(row.Locator("pre")).ToBeHiddenAsync();
+        await row.Locator("summary").ClickAsync();
+        await Expect(row.Locator("pre")).ToContainTextAsync(expected);
     }
 
     private static async Task ReturnToDraftAsync(IPage page)

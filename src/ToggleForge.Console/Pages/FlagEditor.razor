@@ -14,12 +14,17 @@
     <span aria-current="page" class="font-mono text-slate-700">@FlagKey</span>
 </nav>
 
-<h1 class="mt-2 font-mono text-2xl font-semibold tracking-tight">@FlagKey</h1>
-
+<div class="mt-2 flex items-center gap-3">
+    <h1 class="font-mono text-2xl font-semibold tracking-tight">@FlagKey</h1>
+    @if (_flag is { } shown)
+    {
+        <FlagTypeBadge Type="@shown.Value.Type" />
+    }
+</div>
 @if (_gone is not null)
 {
-    <p class="mt-6 text-sm text-slate-600">@_gone</p>
-    <a href="@DraftPath" class="mt-4 inline-block text-sm font-medium text-indigo-700 hover:underline">Back to the draft</a>
+    <p role="status" class="mt-6 text-sm text-slate-600">@_gone</p>
+    <a href="@DraftPath" @ref="_backToDraft" class="mt-4 inline-block text-sm font-medium text-indigo-700 hover:underline">Back to the draft</a>
 }
 else if (_loadProblem is not null)
 {
@@ -29,60 +34,102 @@ else if (_flag is null || _edit is null)
 {
     <p class="mt-6 text-sm text-slate-500">Loading the flag…</p>
 }
-else if (Session.MembershipIn(OrganizationId) is not { CanEditDrafts: true })
+else if (!CanEdit(_flag.Value))
 {
-    <dl class="mt-6 grid max-w-lg grid-cols-2 gap-y-3 text-sm">
+    @if (!IsKnown(_flag.Value))
+    {
+        <p data-testid="unknown-type" class="mt-6 text-sm text-slate-600">This console cannot edit flags of type "@_flag.Value.Type" yet.</p>
+    }
+    @if (ShowsAsJson(_flag.Value))
+    {
+        <p class="mt-6 flex max-w-4xl gap-2 rounded-md border-l-2 border-amber-400 bg-amber-50 px-3 py-2 text-sm text-amber-900" id="json-public">
+            <span aria-hidden="true">⚠</span>
+            <span>Every player who has the game can read these values. Never put API keys, passwords or personal data in them.</span>
+        </p>
+    }
+    <dl class="mt-6 grid max-w-4xl grid-cols-[auto_1fr] gap-x-6 gap-y-3 text-sm">
+        <dt class="text-slate-500">Type</dt>
+        <dd><FlagTypeBadge Type="@_flag.Value.Type" /></dd>
         <dt class="text-slate-500">State</dt>
         <dd>@(_flag.Value.Enabled ? "Enabled" : "Disabled")</dd>
         <dt class="text-slate-500">Rollout</dt>
         <dd>@RolloutShare.Format(_flag.Value.RolloutBasisPoints)</dd>
         <dt class="text-slate-500">Value for included players</dt>
-        <dd>@BooleanText(_flag.Value.OnValue)</dd>
+        <dd class="min-w-0">@ValueShown(_flag.Value, _flag.Value.OnValue)</dd>
         <dt class="text-slate-500">Value for everyone else</dt>
-        <dd>@BooleanText(_flag.Value.OffValue)</dd>
+        <dd class="min-w-0">@ValueShown(_flag.Value, _flag.Value.OffValue)</dd>
     </dl>
 }
 else
 {
-    <form class="mt-6 max-w-lg space-y-4" @onsubmit="SaveAsync" @onsubmit:preventDefault>
-        <label class="flex items-center gap-2">
-            <input type="checkbox" @bind="_edit.Enabled" class="h-4 w-4 rounded border-slate-300" />
-            <span class="text-sm text-slate-700">Enabled</span>
-        </label>
-        <label class="block">
-            <span class="text-sm font-medium text-slate-700">Rollout (%)</span>
-            <input type="number" required min="0" max="100" step="0.01" @bind="_edit.RolloutPercent"
-                   class="mt-1 block w-40 rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none" />
-        </label>
-        <label class="block">
-            <span class="text-sm font-medium text-slate-700">Value for included players</span>
-            <select value="@BooleanText(_edit.OnValue)" @onchange="choice => _edit.OnValue = IsTrue(choice)"
-                    class="mt-1 block w-40 rounded-md border border-slate-300 px-3 py-2 text-sm">
-                <option value="true">true</option>
-                <option value="false">false</option>
-            </select>
-        </label>
-        <label class="block">
-            <span class="text-sm font-medium text-slate-700">Value for everyone else</span>
-            <select value="@BooleanText(_edit.OffValue)" @onchange="choice => _edit.OffValue = IsTrue(choice)"
-                    class="mt-1 block w-40 rounded-md border border-slate-300 px-3 py-2 text-sm">
-                <option value="true">true</option>
-                <option value="false">false</option>
-            </select>
-        </label>
+    @if (_flag.Value.IsJson)
+    {
+        <p data-testid="type-fixed" class="mt-1 text-sm text-slate-600">The type is fixed: games already read this flag as JSON.</p>
+    }
+    <form class="@(_flag.Value.IsJson ? "max-w-4xl" : "max-w-lg") mt-6 space-y-4" @onsubmit="SaveAsync" @onsubmit:preventDefault>
+        @* Enquanto o pedido não volta, nada muda: o que se digitasse agora seria apagado pelos valores salvos. *@
+        <fieldset disabled="@_busy" class="min-w-0 space-y-4">
+            <label class="flex items-center gap-2">
+                <input type="checkbox" @bind="_edit.Enabled" class="h-4 w-4" />
+                <span class="text-sm text-slate-700">Enabled</span>
+            </label>
+            <div>
+                <label for="rollout" class="block text-sm font-medium text-slate-700">Rollout (%)</label>
+                <input id="rollout" @ref="_rollout" type="number" required min="0" max="100" step="0.01" @bind="_edit.RolloutPercent"
+                       aria-invalid="@(RolloutError is null ? null : "true")" aria-describedby="@(RolloutError is null ? null : "rollout-error")"
+                       class="tf-field w-40" />
+                <FieldError Id="rollout-error" Message="@RolloutError" />
+            </div>
+            @if (_flag.Value.IsJson)
+            {
+                <div class="pt-4">
+                    <JsonValuesInput @ref="_values"
+                                     @bind-OnValueText="_edit.OnValueText" @bind-OnValueText:after="() => _form.Clear(FieldErrors.OnValue)"
+                                     @bind-OffValueText="_edit.OffValueText" @bind-OffValueText:after="() => _form.Clear(FieldErrors.OffValue)"
+                                     RolloutPercent="_edit.RolloutPercent" Enabled="_edit.Enabled" Errors="_form.Fields" TooLarge="_form.ValuesTooLarge" />
+                </div>
+            }
+            else
+            {
+                <div>
+                    <label class="block">
+                        <span class="text-sm font-medium text-slate-700">Value for included players</span>
+                        <select @ref="_includedChoice" @bind="_edit.OnValueText"
+                                aria-invalid="@(OnValueError is null ? null : "true")" aria-describedby="@(OnValueError is null ? null : "on-value-error")"
+                                class="tf-field w-40">
+                            <option value="true">true</option>
+                            <option value="false">false</option>
+                        </select>
+                    </label>
+                    <FieldError Id="on-value-error" Message="@OnValueError" />
+                </div>
+                <div>
+                    <label class="block">
+                        <span class="text-sm font-medium text-slate-700">Value for everyone else</span>
+                        <select @ref="_othersChoice" @bind="_edit.OffValueText"
+                                aria-invalid="@(OffValueError is null ? null : "true")" aria-describedby="@(OffValueError is null ? null : "off-value-error")"
+                                class="tf-field w-40">
+                            <option value="true">true</option>
+                            <option value="false">false</option>
+                        </select>
+                    </label>
+                    <FieldError Id="off-value-error" Message="@OffValueError" />
+                </div>
+            }
+        </fieldset>
 
-        <ProblemMessage Problem="_problem" />
+        <ProblemMessage Problem="_form.Problem" Heading="@_form.Heading" />
         @if (_saved)
         {
             <p role="status" class="text-sm text-emerald-700">Saved to the draft. Games get it with the next publication.</p>
         }
 
         <div class="flex items-center gap-3">
-            <button type="submit" disabled="@_busy"
+            <button type="submit" @ref="_save" disabled="@_busy"
                     class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60">
                 Save
             </button>
-            <button type="button" disabled="@_busy" @onclick="() => _confirmingRemoval = true"
+            <button type="button" @ref="_remove" disabled="@_busy" @onclick="() => _confirmingRemoval = true"
                     class="rounded-md px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60">
                 Remove from draft
             </button>
@@ -109,8 +156,11 @@ else
 }
 
 @code {
-    private static readonly Problem _invalidRollout = new(
-        "/problems/invalid-rollout", "Invalid rollout", 400, "Enter a rollout between 0 and 100, with at most two decimals.");
+    // Alvos de foco que não são campo: os botões Save e Remove from draft, onde o membro estava quando salvou ou pediu a
+    // remoção, e a volta ao rascunho, a próxima ação quando a flag saiu dele e o formulário sumiu.
+    private const string SaveButton = "save";
+    private const string RemoveButton = "remove";
+    private const string BackToDraft = "back-to-draft";
 
     private static readonly Problem _nothingToSave = new(
         "/problems/nothing-to-save", "Nothing to save", 400, "Nothing to save: these are already the values in the draft.");
@@ -122,11 +172,21 @@ else
     private Versioned<Flag>? _flag;
     private FlagEdit? _edit;
     private Problem? _loadProblem;
-    private Problem? _problem;
+    private FlagFormState _form = new();
     private string? _gone;
     private bool _saved;
     private bool _busy;
     private bool _confirmingRemoval;
+    private ElementReference _rollout;
+    private JsonValuesInput? _values;
+    private ElementReference _includedChoice;
+    private ElementReference _othersChoice;
+    private ElementReference _save;
+    private ElementReference _remove;
+    private ElementReference _backToDraft;
+
+    // Um campo (pelo ponteiro de FieldErrors) ou um dos alvos acima; nulo quando o foco fica onde está.
+    private string? _focusAfterRender;
 
     [Parameter]
     public Guid OrganizationId { get; set; }
@@ -145,9 +205,15 @@ else
     private string DraftPath =>
         $"organizations/{OrganizationId}/projects/{Uri.EscapeDataString(ProjectKey)}/environments/{Uri.EscapeDataString(EnvironmentKey)}";
 
+    private string? RolloutError => _form.Fields.For(FieldErrors.Rollout);
+
+    private string? OnValueError => _form.Fields.For(FieldErrors.OnValue);
+
+    private string? OffValueError => _form.Fields.For(FieldErrors.OffValue);
+
     protected override async Task OnParametersSetAsync()
     {
-        (_flag, _edit, _loadProblem, _problem, _gone, _saved) = (null, null, null, null, null, false);
+        (_flag, _edit, _loadProblem, _gone, _saved, _form) = (null, null, null, null, false, new FlagFormState());
         var flag = await Api.GetFlagAsync(Address, Leaving);
         if (flag.Succeeded)
         {
@@ -165,21 +231,22 @@ else
 
     private async Task SaveAsync()
     {
-        (_problem, _saved) = (null, false);
+        _saved = false;
+        _form.Reset();
         if (_flag is not { } flag || _edit is not { } edit)
         {
             return;
         }
 
-        if (!edit.TryGetChanges(flag.Value, out var changes))
+        if (!edit.TryGetChanges(flag.Value, out var changes, out var errors))
         {
-            _problem = _invalidRollout;
+            MarkFields(errors);
             return;
         }
 
         if (changes.IsEmpty)
         {
-            _problem = _nothingToSave;
+            _form.Show(_nothingToSave);
             return;
         }
 
@@ -189,11 +256,35 @@ else
         if (saved.Succeeded)
         {
             Show(saved.Value);
-            _saved = true;
+            (_saved, _focusAfterRender) = (true, SaveButton);
             return;
         }
 
         await ExplainAsync(saved.Problem);
+        _focusAfterRender ??= SaveButton;
+    }
+
+    // Durante o envio, o formulário travado tira o foco de onde ele estava e o navegador o manda para o <body>. O foco
+    // volta depois do render que destrava o formulário e marca os erros, para o leitor de tela anunciar o campo já
+    // inválido: no campo a corrigir ou, sem campo, no Save; se a flag saiu do rascunho, na volta a ele (WCAG 2.4.3).
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusAfterRender is not { } target)
+        {
+            return;
+        }
+
+        _focusAfterRender = null;
+        await (target switch
+        {
+            SaveButton => _save.FocusAsync(),
+            RemoveButton => _remove.FocusAsync(),
+            BackToDraft => _backToDraft.FocusAsync(),
+            FieldErrors.Rollout => _rollout.FocusAsync(),
+            FieldErrors.OnValue when _values is null => _includedChoice.FocusAsync(),
+            FieldErrors.OffValue when _values is null => _othersChoice.FocusAsync(),
+            _ => _values?.FocusAsync(target) ?? ValueTask.CompletedTask,
+        });
     }
 
     private async Task RemoveAsync()
@@ -203,7 +294,7 @@ else
             return;
         }
 
-        _problem = null;
+        _form.ClearSummary();
         _busy = true;
         var problem = await Api.DeleteFlagAsync(Address, flag.ETag, Leaving);
         _busy = false;
@@ -214,12 +305,16 @@ else
             return;
         }
 
+        // O botão do diálogo, desabilitado durante o pedido, levou o foco para o <body>, e a recusa tirou o diálogo.
         await ExplainAsync(problem);
+        _focusAfterRender ??= RemoveButton;
     }
 
     /// <summary>
     /// 412: alguém mudou a flag depois da leitura, e nada foi gravado. Os valores atuais substituem o formulário,
     /// para o membro decidir de novo sobre eles, em vez de sobrescrever a mudança do outro às cegas.
+    /// 404: a flag saiu do rascunho; o formulário dá lugar à mensagem, e o foco vai para a volta ao rascunho.
+    /// 400, 409 e 413: nada foi gravado, e o texto digitado fica no formulário para o membro corrigir.
     /// </summary>
     private async Task ExplainAsync(Problem problem)
     {
@@ -230,21 +325,38 @@ else
                 if (current.Succeeded)
                 {
                     Show(current.Value);
-                    _problem = _changedMeanwhile;
+                    _form.Show(_changedMeanwhile);
                 }
                 else
                 {
-                    _problem = current.Problem;
+                    _form.Show(current.Problem);
                 }
 
                 break;
             case System.Net.HttpStatusCode.NotFound:
-                _gone = "This flag left the draft after you opened it.";
+                (_gone, _focusAfterRender) = ("This flag left the draft after you opened it.", BackToDraft);
+                break;
+            case System.Net.HttpStatusCode.BadRequest:
+                var (fields, general) = FieldErrors.Split(problem);
+                MarkFields(fields, general);
+                break;
+            case System.Net.HttpStatusCode.Conflict when problem.Type == FormProblems.JsonBudgetReachedType:
+                _form.Show(FormProblems.OutOfJsonRoom);
+                break;
+            case System.Net.HttpStatusCode.RequestEntityTooLarge when _flag?.Value.IsJson == true:
+                _form.MarkValuesTooLarge();
                 break;
             default:
-                _problem = problem;
+                _form.Show(problem);
                 break;
         }
+    }
+
+    // O foco vai para o primeiro campo a corrigir, depois do render que o marca (design spec, 3).
+    private void MarkFields(FieldErrors fields, Problem? general = null)
+    {
+        _form.Mark(fields, general);
+        _focusAfterRender = _form.FirstMarkedField;
     }
 
     private void Show(Versioned<Flag> flag)
@@ -253,8 +365,15 @@ else
         _edit = FlagEdit.Of(flag.Value);
     }
 
-    // O @bind formata bool como "True"/"False", que não casa com as opções: o texto segue o JSON do contrato.
-    private static string BooleanText(bool value) => value ? "true" : "false";
+    private bool CanEdit(Flag flag) => IsKnown(flag) && Session.MembershipIn(OrganizationId) is { CanEditDrafts: true };
 
-    private static bool IsTrue(ChangeEventArgs choice) => choice.Value as string == "true";
+    // Um tipo novo da API pode ter regras que este console não conhece: ele mostra, mas não grava (design spec, 2.2).
+    private static bool IsKnown(Flag flag) => flag.IsJson || flag.Type == FlagTypes.Boolean;
+
+    // Na leitura, todo tipo que não é booleano aparece como bloco JSON e com o aviso de valor público: o valor de um tipo
+    // que o console não conhece pode ser qualquer JSON, e o bloco mostra qualquer um (design spec, 2.2).
+    private static bool ShowsAsJson(Flag flag) => flag.Type != FlagTypes.Boolean;
+
+    private static RenderFragment ValueShown(Flag flag, FlagValue value) =>
+        ShowsAsJson(flag) ? @<JsonValueBlock Value="value" Open="true" /> : @<span class="font-mono">@value.Text</span>;
 }

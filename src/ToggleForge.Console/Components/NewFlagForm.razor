@@ -1,0 +1,202 @@
+@*
+    O formulário "New flag" do rascunho: chave, tipo, rollout e, numa flag JSON, os dois valores. Monta o pedido, manda
+    para a API e avisa quem o usa quando a flag nasce (design spec, 2.1).
+*@
+@inherits ConsolePage
+@inject ConsoleApi Api
+
+<section class="mt-10" aria-labelledby="new-flag">
+    <h2 id="new-flag" class="text-lg font-semibold">New flag</h2>
+    <form class="mt-4" @onsubmit="CreateFlagAsync" @onsubmit:preventDefault>
+        @* Enquanto o pedido não volta, nada muda: o que se digitasse agora seria apagado no sucesso. *@
+        <fieldset disabled="@_submitting" class="min-w-0 space-y-4">
+            <div class="max-w-lg space-y-4">
+                <div>
+                    <label for="flag-key" class="block text-sm font-medium text-slate-700">Key</label>
+                    <input id="flag-key" @ref="_key" required maxlength="64" @bind="_newFlag.Key" @bind:after="() => _form.Clear(FieldErrors.Key)"
+                           aria-invalid="@(KeyError is null ? null : "true")" aria-describedby="@(KeyError is null ? null : "flag-key-error")"
+                           class="tf-field w-full font-mono" />
+                    <FieldError Id="flag-key-error" Message="@KeyError" />
+                </div>
+                <fieldset aria-describedby="type-hint">
+                    <legend class="text-sm font-medium text-slate-700">Type</legend>
+                    <p id="type-hint" class="text-xs text-slate-500">Chosen now and fixed for good: games read the flag with this type.</p>
+                    <div class="mt-2 grid grid-cols-2 gap-3">
+                        <label class="@CardStyle(FlagTypes.Boolean) flex cursor-pointer gap-3 rounded-md border px-4 py-3 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-indigo-600">
+                            <input type="radio" name="flag-type" id="flag-type-boolean" value="@FlagTypes.Boolean"
+                                   checked="@(!_newFlag.IsJson)" @onchange="() => ChooseType(FlagTypes.Boolean)"
+                                   class="mt-1 h-4 w-4 focus-visible:outline-none" />
+                            <span>
+                                <span class="block text-sm font-medium text-slate-800">Boolean</span>
+                                <span class="block text-xs text-slate-600">On or off: <code>true</code> or <code>false</code>.</span>
+                            </span>
+                        </label>
+                        <label class="@CardStyle(FlagTypes.Json) flex cursor-pointer gap-3 rounded-md border px-4 py-3 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-indigo-600">
+                            <input type="radio" name="flag-type" id="flag-type-json" value="@FlagTypes.Json"
+                                   checked="@_newFlag.IsJson" @onchange="() => ChooseType(FlagTypes.Json)"
+                                   class="mt-1 h-4 w-4 focus-visible:outline-none" />
+                            <span>
+                                <span class="block text-sm font-medium text-slate-800">JSON</span>
+                                <span class="block text-xs text-slate-600">A number, text, list or object the game parses.</span>
+                            </span>
+                        </label>
+                    </div>
+                </fieldset>
+                <div>
+                    <label for="rollout" class="block text-sm font-medium text-slate-700">Rollout (%)</label>
+                    <input id="rollout" @ref="_rollout" type="number" required min="0" max="100" step="0.01" @bind="_newFlag.RolloutPercent"
+                           aria-invalid="@(RolloutError is null ? null : "true")" aria-describedby="@(RolloutError is null ? null : "rollout-error")"
+                           class="tf-field w-40" />
+                    <FieldError Id="rollout-error" Message="@RolloutError" />
+                </div>
+                <label class="flex items-center gap-2">
+                    <input type="checkbox" @bind="_newFlag.Enabled" class="h-4 w-4" />
+                    <span class="text-sm text-slate-700">Enabled</span>
+                </label>
+            </div>
+            @if (_newFlag.IsJson)
+            {
+                <div class="max-w-4xl pt-4">
+                    <JsonValuesInput @ref="_values"
+                                     @bind-OnValueText="_newFlag.OnValueText" @bind-OnValueText:after="() => _form.Clear(FieldErrors.OnValue)"
+                                     @bind-OffValueText="_newFlag.OffValueText" @bind-OffValueText:after="() => _form.Clear(FieldErrors.OffValue)"
+                                     RolloutPercent="_newFlag.RolloutPercent" Enabled="_newFlag.Enabled" Errors="_form.Fields" TooLarge="_form.ValuesTooLarge" />
+                </div>
+            }
+            <div class="max-w-lg">
+                <ProblemMessage Problem="_form.Problem" Heading="@_form.Heading" />
+            </div>
+            <button type="submit" @ref="_addButton" disabled="@_submitting"
+                    class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60">
+                Add to draft
+            </button>
+        </fieldset>
+    </form>
+</section>
+
+@code {
+    // Alvo de foco que não é campo: o botão de envio, para onde o membro estava quando clicou.
+    private const string AddButton = "add-to-draft";
+
+    private NewFlag _newFlag = new();
+    private readonly FlagFormState _form = new();
+    private bool _submitting;
+    private ElementReference _key;
+    private ElementReference _rollout;
+    private JsonValuesInput? _values;
+    private ElementReference _addButton;
+
+    // Um campo (pelo ponteiro de FieldErrors) ou o AddButton; nulo quando o foco fica onde está.
+    private string? _focusAfterRender;
+
+    /// <summary>O ambiente cujo rascunho recebe a flag.</summary>
+    [Parameter, EditorRequired]
+    public EnvironmentAddress Address { get; set; } = new(Guid.Empty, string.Empty, string.Empty);
+
+    /// <summary>A flag entrou no rascunho; quem mostra o rascunho o relê.</summary>
+    [Parameter]
+    public EventCallback Created { get; set; }
+
+    private string? KeyError => _form.Fields.For(FieldErrors.Key);
+
+    private string? RolloutError => _form.Fields.For(FieldErrors.Rollout);
+
+    private async Task CreateFlagAsync()
+    {
+        _form.Reset();
+        if (!_newFlag.TryGetCreation(out var creation, out var errors))
+        {
+            MarkFields(errors);
+            return;
+        }
+
+        _submitting = true;
+        var flag = await Api.CreateFlagAsync(Address.OrganizationId, Address.ProjectKey, Address.EnvironmentKey, creation, Leaving);
+        _submitting = false;
+        if (flag.Succeeded)
+        {
+            (_newFlag, _focusAfterRender) = (new NewFlag(), FieldErrors.Key);
+            await Created.InvokeAsync();
+            return;
+        }
+
+        Explain(flag.Problem, creation.Type);
+        _focusAfterRender ??= AddButton;
+    }
+
+    // Durante o envio, o fieldset desabilitado tira o foco do campo onde ele estava e o navegador o manda para o
+    // <body>. O foco volta depois do render que reabilita o formulário: no campo a corrigir, na chave quando a flag
+    // nasce (pronta para a próxima) ou no botão quando a recusa não aponta campo (WCAG 2.4.3).
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusAfterRender is not { } target)
+        {
+            return;
+        }
+
+        _focusAfterRender = null;
+        await (target switch
+        {
+            AddButton => _addButton.FocusAsync(),
+            FieldErrors.Key => _key.FocusAsync(),
+            FieldErrors.Rollout => _rollout.FocusAsync(),
+            _ => _values?.FocusAsync(target) ?? ValueTask.CompletedTask,
+        });
+    }
+
+    /// <summary>
+    /// Nada foi gravado, e o formulário fica como o membro o deixou, para ele corrigir. Erro de campo vai para o
+    /// campo; corpo grande demais, para os valores, que são o que cresce; o teto JSON do rascunho e a chave já
+    /// publicada com outro tipo (esta, na chave) ganham o texto do console; o resto (chave já usada no rascunho,
+    /// <c>key-taken</c>, e o teto de 200 flags) vai para a mensagem geral com o texto da API.
+    /// </summary>
+    /// <param name="sentType">O tipo do pedido recusado: o 413 de uma flag JSON fala dos valores que foram enviados, e a
+    /// chave publicada com outro tipo é marcada na chave.</param>
+    /// <remarks>
+    /// O mesmo switch do <c>FlagEditor.ExplainAsync</c>, sem o 412 e o 404, e com o <c>flag-type-locked</c> na chave; fica
+    /// repetido até uma terceira tela.
+    /// </remarks>
+    private void Explain(Problem problem, string sentType)
+    {
+        switch (problem.StatusCode)
+        {
+            case System.Net.HttpStatusCode.BadRequest:
+                var (fields, general) = FieldErrors.Split(problem);
+                MarkFields(fields, general);
+                break;
+            case System.Net.HttpStatusCode.Conflict when problem.Type == FormProblems.JsonBudgetReachedType:
+                _form.Show(FormProblems.OutOfJsonRoom);
+                break;
+            case System.Net.HttpStatusCode.Conflict when problem.Type == FormProblems.FlagTypeLockedType:
+                var keyError = new FieldErrors();
+                keyError.Add(FieldErrors.Key, FormProblems.KeyPublishedWithAnotherType(sentType));
+                MarkFields(keyError);
+                break;
+            case System.Net.HttpStatusCode.RequestEntityTooLarge when FlagTypes.IsJson(sentType):
+                _form.MarkValuesTooLarge();
+                break;
+            default:
+                _form.Show(problem);
+                break;
+        }
+    }
+
+    // O foco vai para o primeiro campo a corrigir, depois do render que o marca (design spec, 3).
+    private void MarkFields(FieldErrors fields, Problem? general = null)
+    {
+        _form.Mark(fields, general);
+        _focusAfterRender = _form.FirstMarkedField;
+    }
+
+    // Os textos JSON ficam guardados na troca: voltar para JSON antes de enviar devolve o que o membro digitou. Os erros
+    // deles, não: sem as áreas na tela, o resumo falaria de campos que ninguém vê.
+    private void ChooseType(string type)
+    {
+        _newFlag.Type = type;
+        _form.ClearValues();
+    }
+
+    // O rádio marcado é o sinal principal; a cor do cartão é reforço (design spec, 2.1).
+    private string CardStyle(string type) =>
+        _newFlag.Type == type ? "border-indigo-500 bg-indigo-50/60 ring-1 ring-indigo-500" : "border-slate-500 bg-white";
+}

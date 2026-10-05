@@ -1,0 +1,222 @@
+@*
+    Uma área de valor JSON: título, para quem vai, o texto, o medidor de bytes e o erro de sintaxe ao digitar. O texto
+    é sempre valor do textarea ou conteúdo de <pre>, codificado pelo Blazor (canvas, T6); o Tab continua movendo o
+    foco, sem armadilha de teclado.
+*@
+@{
+    var analysis = JsonText.Analyze(Text);
+    var showsSyntax = analysis is JsonAnalysis.Invalid or JsonAnalysis.TooDeep or JsonAnalysis.NotEncodable;
+    var error = showsSyntax ? null : Error;
+    var invalid = showsSyntax || error is not null || analysis is JsonAnalysis.Valid { Level: MeterLevel.OverLimit };
+}
+<div>
+    <div class="flex items-baseline justify-between gap-3">
+        <label for="@Id" class="text-sm font-medium text-slate-700">@Label</label>
+        <div class="flex gap-3">
+            @Actions
+            <button type="button" data-testid="@($"{Id}-format")" disabled="@(analysis is not JsonAnalysis.Valid)" @onclick="FormatAsync"
+                    class="rounded text-xs font-medium text-indigo-700 hover:underline disabled:cursor-not-allowed disabled:text-slate-400 disabled:no-underline">
+                Format
+            </button>
+        </div>
+    </div>
+    <p id="@($"{Id}-audience")" class="text-xs text-slate-500">@Audience</p>
+    <textarea @ref="_area" id="@Id" rows="8" wrap="off" spellcheck="false" autocomplete="off" autocapitalize="off"
+              placeholder="@Placeholder" value="@Text" @oninput="ChangeAsync"
+              aria-invalid="@(invalid ? "true" : null)" aria-describedby="@DescribedBy(analysis, showsSyntax, error is not null)"
+              class="tf-field mt-2 w-full resize-y font-mono text-[13px] leading-5 text-slate-800"></textarea>
+
+    @switch (analysis)
+    {
+        case JsonAnalysis.Valid valid:
+            <div id="@($"{Id}-size")" class="mt-2">
+                <div aria-hidden="true" class="h-1 rounded-full bg-slate-200">
+                    <div class="@MeterStyle(valid.Level).Bar @MeterWidth(valid.ByteCount) h-1 rounded-full"></div>
+                </div>
+                <p class="@MeterStyle(valid.Level).Text mt-1 flex justify-between gap-3 text-xs tabular-nums">
+                    @switch (valid.Level)
+                    {
+                        case MeterLevel.NearLimit:
+                            <span><span aria-hidden="true">⚠</span> Near the limit</span>
+                            break;
+                        case MeterLevel.OverLimit:
+                            <span><span aria-hidden="true">⚠</span> Over the limit by @Bytes(valid.BytesOverLimit)</span>
+                            break;
+                    }
+                    <span class="ml-auto">@Thousands(valid.ByteCount) of @Thousands(JsonText.MaxValueBytes) bytes</span>
+                </p>
+            </div>
+            break;
+        case JsonAnalysis.Empty:
+            <p id="@($"{Id}-size")" class="mt-2 text-xs text-slate-500">
+                Any JSON value: <code>3</code>, <code>"gold"</code>, <code>[1, 2]</code> or an object.
+            </p>
+            break;
+        default:
+            <p id="@($"{Id}-size")" class="mt-2 text-xs text-slate-500">Size appears once the JSON is valid.</p>
+            break;
+    }
+
+    @*
+        Só o nível do medidor, não a contagem nem a sintaxe: o leitor de tela fala na troca de estado, e a validação ao
+        digitar não interrompe (design spec, 3); o resumo e a dica do erro de sintaxe são lidos pelo aria-describedby.
+    *@
+    <p id="@($"{Id}-live")" aria-live="polite" class="sr-only">@LiveText(analysis)</p>
+
+    @if (showsSyntax)
+    {
+        <div id="@($"{Id}-syntax")" class="mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+            @switch (analysis)
+            {
+                case JsonAnalysis.Invalid { Position: { } position }:
+                    @* A linha longa rola, e o tabindex deixa o teclado chegar nela (WCAG 2.1.1), como no JsonValueBlock. *@
+                    <p id="@($"{Id}-syntax-summary")" data-testid="syntax-summary"><strong class="font-semibold">Not valid JSON</strong> at line @position.Line, column @position.Column.</p>
+                    <pre role="group" tabindex="0" aria-label="Line with the error" class="mt-1 overflow-x-auto font-mono text-xs leading-5 text-red-900"><span class="text-red-700">@Gutter(position.Line.ToString(System.Globalization.CultureInfo.InvariantCulture))</span>@position.LineText@("\n")<span class="text-red-700">@Gutter(string.Empty.PadLeft(position.Line.ToString(System.Globalization.CultureInfo.InvariantCulture).Length))</span>@position.Caret</pre>
+                    <p id="@($"{Id}-syntax-hint")" class="mt-1 text-xs">Check for a missing comma or quote just before this point.</p>
+                    break;
+                case JsonAnalysis.NotEncodable:
+                    <p id="@($"{Id}-syntax-summary")" data-testid="syntax-summary"><strong class="font-semibold">Not valid JSON:</strong> a character in it cannot be encoded.</p>
+                    break;
+                case JsonAnalysis.Invalid:
+                    <p id="@($"{Id}-syntax-summary")" data-testid="syntax-summary"><strong class="font-semibold">Not valid JSON:</strong> a \u escape in it stands for half a character and needs its pair.</p>
+                    break;
+                default:
+                    <p id="@($"{Id}-syntax-summary")" data-testid="syntax-summary">@FlagFields.TooDeep</p>
+                    break;
+            }
+        </div>
+    }
+
+    <FieldError Id="@($"{Id}-error")" Message="@error" />
+</div>
+
+@code {
+    private ElementReference _area;
+
+    /// <summary>O id do textarea; os textos ligados a ele usam o mesmo prefixo (<c>{Id}-size</c>, <c>{Id}-error</c>...).</summary>
+    [Parameter, EditorRequired]
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary><see cref="FieldErrors.OnValue"/> ou <see cref="FieldErrors.OffValue"/>: dá o nome do valor no aviso falado.</summary>
+    [Parameter, EditorRequired]
+    public string Field { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired]
+    public string Label { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired]
+    public string Audience { get; set; } = string.Empty;
+
+    [Parameter]
+    public string? Placeholder { get; set; }
+
+    [Parameter, EditorRequired]
+    public string Text { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback<string> TextChanged { get; set; }
+
+    /// <summary>O erro de quem salvou (o console ou a API); quando o texto nem é JSON, o erro de sintaxe vale por ele.</summary>
+    [Parameter]
+    public string? Error { get; set; }
+
+    /// <summary>O id de um aviso do formulário que também fala deste valor, como o do 413; nulo quando não há.</summary>
+    [Parameter]
+    public string? NoticeId { get; set; }
+
+    /// <summary>Ações a mais no cabeçalho, antes do Format.</summary>
+    [Parameter]
+    public RenderFragment? Actions { get; set; }
+
+    public ValueTask FocusAsync() => _area.FocusAsync();
+
+    private Task ChangeAsync(ChangeEventArgs change) => TextChanged.InvokeAsync(change.Value as string ?? string.Empty);
+
+    private Task FormatAsync() =>
+        JsonText.Analyze(Text) is JsonAnalysis.Valid valid ? TextChanged.InvokeAsync(valid.Value.Indented()) : Task.CompletedTask;
+
+    // O resumo e a dica, não o quadro inteiro: na descrição, o aria-label do trecho com a linha tomaria o lugar dela
+    // (accname 1.2, passo 2D). O trecho continua nomeado para quem chega nele pelo Tab.
+    private string DescribedBy(JsonAnalysis analysis, bool showsSyntax, bool hasError)
+    {
+        var ids = new List<string> { $"{Id}-audience", $"{Id}-size" };
+        if (showsSyntax)
+        {
+            ids.Add($"{Id}-syntax-summary");
+        }
+
+        if (analysis is JsonAnalysis.Invalid { Position: not null })
+        {
+            ids.Add($"{Id}-syntax-hint");
+        }
+
+        if (hasError)
+        {
+            ids.Add($"{Id}-error");
+        }
+
+        if (NoticeId is not null)
+        {
+            ids.Add(NoticeId);
+        }
+
+        return string.Join(' ', ids);
+    }
+
+    private string LiveText(JsonAnalysis analysis) => analysis switch
+    {
+        JsonAnalysis.Valid { Level: MeterLevel.NearLimit } => FlagFields.NearLimit(Field),
+        JsonAnalysis.Valid { Level: MeterLevel.OverLimit } => FlagFields.OverLimit(Field),
+        _ => string.Empty,
+    };
+
+    // A linha com o número e um ^ sob a coluna, como um compilador mostraria. A margem é mais clara que a linha, como no
+    // design, mas continua texto: red-700 sobre red-50 dá 5,9:1 (WCAG 1.4.3 pede 4,5:1).
+    private static string Gutter(string number) => $"{number} │ ";
+
+    private static (string Bar, string Text) MeterStyle(MeterLevel level) => level switch
+    {
+        MeterLevel.OverLimit => ("bg-red-600", "text-red-700"),
+        MeterLevel.NearLimit => ("bg-amber-500", "text-amber-800"),
+        _ => ("bg-slate-400", "text-slate-500"),
+    };
+
+    // A CSP do console é style-src 'self', e o Blazor põe atributos com setAttribute: um style="width" seria bloqueado.
+    // A largura vai em degraus de 5%, cada classe escrita por extenso para o Tailwind achá-la no código.
+    private static string MeterWidth(int bytes)
+    {
+        const int Step = 5;
+        const int Full = 100;
+        var percent = (int)Math.Round(bytes * (double)Full / JsonText.MaxValueBytes / Step, MidpointRounding.AwayFromZero) * Step;
+
+        // Acima do teto a barra fica cheia: o default cobre tudo de 100% para cima.
+        return percent switch
+        {
+            0 => "w-[0%]",
+            5 => "w-[5%]",
+            10 => "w-[10%]",
+            15 => "w-[15%]",
+            20 => "w-[20%]",
+            25 => "w-[25%]",
+            30 => "w-[30%]",
+            35 => "w-[35%]",
+            40 => "w-[40%]",
+            45 => "w-[45%]",
+            50 => "w-[50%]",
+            55 => "w-[55%]",
+            60 => "w-[60%]",
+            65 => "w-[65%]",
+            70 => "w-[70%]",
+            75 => "w-[75%]",
+            80 => "w-[80%]",
+            85 => "w-[85%]",
+            90 => "w-[90%]",
+            95 => "w-[95%]",
+            _ => "w-[100%]",
+        };
+    }
+
+    private static string Bytes(int count) => count == 1 ? "1 byte" : $"{Thousands(count)} bytes";
+
+    private static string Thousands(int count) => count.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
+}

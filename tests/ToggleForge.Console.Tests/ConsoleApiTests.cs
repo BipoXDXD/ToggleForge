@@ -142,6 +142,67 @@ public sealed class ConsoleApiTests
     }
 
     [Fact]
+    public async Task A_json_flag_is_read_with_its_type_and_values()
+    {
+        var api = new StubApi().Answer(HttpMethod.Get, ShopConfig, HttpStatusCode.OK,
+            """{"key":"shop-config","type":"json","enabled":true,"onValue":{ "discount" : 0.2 },"offValue":null,"rolloutBasisPoints":10000}""",
+            eTag: "\"4\"");
+
+        var flag = await api.CreateClient().GetFlagAsync(_shopConfig, TestContext.Current.CancellationToken);
+
+        Assert.True(flag.Succeeded);
+        Assert.Equal("json", flag.Value.Value.Type);
+        Assert.True(flag.Value.Value.IsJson);
+        Assert.Equal("""{"discount":0.2}""", flag.Value.Value.OnValue.Text);
+        Assert.Equal(FlagValue.Null, flag.Value.Value.OffValue);
+    }
+
+    [Fact]
+    public async Task A_json_flag_is_created_with_its_type_and_its_values_as_json()
+    {
+        var api = new StubApi().Answer(HttpMethod.Post, Draft + "/flags", HttpStatusCode.Created,
+            """{"key":"shop-config","type":"json","enabled":true,"onValue":{"discount":0.2},"offValue":null,"rolloutBasisPoints":10000}""");
+
+        await api.CreateClient().CreateFlagAsync(
+            _organizationId, "space-race", "dev",
+            new FlagCreation("shop-config", FlagTypes.Json, Enabled: true, Values.Json("""{ "discount": 0.2 }"""), FlagValue.Null, 10_000),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            """{"key":"shop-config","type":"json","enabled":true,"onValue":{"discount":0.2},"offValue":null,"rolloutBasisPoints":10000}""",
+            api.BodyOf(Assert.Single(api.RequestsTo(HttpMethod.Post, Draft + "/flags"))));
+    }
+
+    [Fact]
+    public async Task A_json_value_change_goes_as_json_in_the_merge_patch()
+    {
+        var api = new StubApi().Answer(HttpMethod.Patch, ShopConfig, HttpStatusCode.OK,
+            """{"key":"shop-config","type":"json","enabled":true,"onValue":[1,2],"offValue":null,"rolloutBasisPoints":10000}""",
+            eTag: "\"5\"");
+
+        await api.CreateClient().UpdateFlagAsync(
+            _shopConfig, "\"4\"", new FlagModification(OnValue: Values.Json("[1, 2]")), TestContext.Current.CancellationToken);
+
+        Assert.Equal("""{"onValue":[1,2]}""", api.BodyOf(Assert.Single(api.RequestsTo(HttpMethod.Patch, ShopConfig))));
+    }
+
+    [Fact]
+    public async Task A_refused_value_keeps_the_field_the_api_pointed_to()
+    {
+        var api = new StubApi().Answer(HttpMethod.Patch, ShopConfig, HttpStatusCode.BadRequest, """
+            {"type":"/problems/invalid-input","title":"Invalid input","status":400,
+             "errors":[{"type":"INVALID_VALUE","detail":"The value nests deeper than 8 levels.","source":{"location":"body","pointer":"/offValue"}}]}
+            """, "application/problem+json");
+
+        var saved = await api.CreateClient().UpdateFlagAsync(
+            _shopConfig, "\"4\"", new FlagModification(OffValue: Values.Json("[[[[[[[[[1]]]]]]]]]")), TestContext.Current.CancellationToken);
+
+        Assert.False(saved.Succeeded);
+        Assert.NotNull(saved.Problem.Errors);
+        Assert.Equal("/offValue", Assert.Single(saved.Problem.Errors).Source?.Pointer);
+    }
+
+    [Fact]
     public async Task Removing_a_flag_sends_the_etag_read()
     {
         var api = new StubApi().Answer(HttpMethod.Delete, NewShop, HttpStatusCode.NoContent, string.Empty);
@@ -205,8 +266,12 @@ public sealed class ConsoleApiTests
         Assert.Equal(["key-of-sixteen-chars"], request.Headers.GetValues("Idempotency-Key"));
     }
 
+    private const string Draft = Projects + "/space-race/environments/dev/draft";
+    private const string ShopConfig = Draft + "/flags/shop-config";
+    private static readonly FlagAddress _shopConfig = new(_organizationId, "space-race", "dev", "shop-config");
+
     private const string NewShop = Projects + "/space-race/environments/dev/draft/flags/new-shop";
-    private const string NewShopJson = """{"key":"new-shop","enabled":true,"onValue":true,"offValue":false,"rolloutBasisPoints":5000}""";
+    private const string NewShopJson = """{"key":"new-shop","type":"boolean","enabled":true,"onValue":true,"offValue":false,"rolloutBasisPoints":5000}""";
     private static readonly FlagAddress _newShop = new(_organizationId, "space-race", "dev", "new-shop");
 
     private const string Session = """
