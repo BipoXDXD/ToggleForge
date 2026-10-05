@@ -14,10 +14,10 @@ namespace ToggleForge.Api.Tests;
 public sealed class AccessibilityTests(ApiFactory api, Browser browser) : IClassFixture<Browser>, IAsyncLifetime
 {
     /// <summary>
-    /// As regras que o console já cumpre, fixadas com zero violação. Ainda não é a varredura WCAG 2.1 AA inteira:
-    /// o contraste (o botão âmbar "Check the result", as bordas dos campos) e os erros ligados aos campos chegam
-    /// com a fatia de configurações JSON do console e com um PR de acessibilidade seguinte, e só então as tags
-    /// <c>wcag2a</c>/<c>wcag2aa</c>/<c>wcag21aa</c> entram aqui no lugar da lista.
+    /// As regras que o console já cumpre, fixadas com zero violação. Ainda não é a varredura WCAG 2.1 AA inteira: as
+    /// tags <c>wcag2a</c>/<c>wcag2aa</c>/<c>wcag21aa</c> entram no lugar da lista com o PR de acessibilidade seguinte.
+    /// O contraste é provado pelo <see cref="ConsoleContrastTests"/>, que mede no navegador o texto e a borda de
+    /// controle (WCAG 1.4.11), que o axe não mede.
     /// </summary>
     private static readonly IReadOnlyList<string> _pinnedRules =
     [
@@ -34,7 +34,11 @@ public sealed class AccessibilityTests(ApiFactory api, Browser browser) : IClass
     private const int PhoneWidth = 320;
     private const int PhoneHeight = 800;
     private const string LongJsonLine = "{\"featuredItems\": [\"sword\", \"shield\", \"bow\", \"arrows\", \"potion\", \"map\"]}";
-    private const string ShopConfig = """{"discount":0.2,"featuredItems":["sword","shield","bow","arrows","potion","map"]}""";
+    // Indentado, passa da altura máxima do bloco (max-h-80) e rola por dentro: o axe confere que o teclado chega nele.
+    private const string ShopConfig = """
+        {"discount":0.2,"featuredItems":["sword","shield","bow","arrows","potion","map","rope","torch","compass",
+        "lantern","key","scroll","gem","ring","amulet","boots","cloak","helmet"]}
+        """;
 
     private BrowserHost? _host;
 
@@ -43,9 +47,11 @@ public sealed class AccessibilityTests(ApiFactory api, Browser browser) : IClass
     /// <summary>
     /// As páginas da jornada. O <c>draft-json</c> é o rascunho com JSON escolhido no formulário de flag nova e uma linha
     /// longa no valor: as áreas de texto não quebram linha (<c>wrap="off"</c>) e precisam rolar por dentro, sem empurrar a
-    /// página.
+    /// página. O <c>flag-editor-json</c> é o editor de uma flag JSON salva; na versão e no simulador, o axe varre com o
+    /// bloco do valor dela aberto.
     /// </summary>
-    public static TheoryData<string> JourneyPages => ["sign-in", "projects", "draft", "draft-json", "flag-editor", "publish", "history", "version", "simulator"];
+    public static TheoryData<string> JourneyPages =>
+        ["sign-in", "projects", "draft", "draft-json", "flag-editor", "flag-editor-json", "publish", "history", "version", "simulator"];
 
     public static TheoryData<string> PagesReachedByClicking => ["draft", "publish", "history", "version", "simulator"];
 
@@ -66,6 +72,11 @@ public sealed class AccessibilityTests(ApiFactory api, Browser browser) : IClass
 
         await PrepareJourneyDataAsync(owner);
         await OpenAsync(page, owner, journeyPage);
+        if (journeyPage is "version" or "simulator")
+        {
+            await OpenTheValueOfShopConfigAsync(page);
+        }
+
         var result = await page.RunAxe(PinnedRules());
 
         Assert.True(result.Violations.Length == 0, Describe(result.Violations));
@@ -192,7 +203,7 @@ public sealed class AccessibilityTests(ApiFactory api, Browser browser) : IClass
         var (path, heading) = journeyPage switch
         {
             "projects" => ($"/organizations/{owner.OrganizationId}/projects", "Projects"),
-            "draft" or "draft-json" or "flag-editor" => (draft, "Draft flags"),
+            "draft" or "draft-json" or "flag-editor" or "flag-editor-json" => (draft, "Draft flags"),
             "publish" => ($"{draft}/publish", "Changes since version 2"),
             "history" => ($"{draft}/history", "History of Development (dev)"),
             "version" => ($"{draft}/history/1", "Roll back Development to version 1"),
@@ -222,6 +233,20 @@ public sealed class AccessibilityTests(ApiFactory api, Browser browser) : IClass
             // O h1 aparece antes de a flag carregar: esperar o formulário evita varrer a tela de carregamento.
             await Expect(page.GetByLabel("Rollout (%)")).ToBeVisibleAsync();
         }
+
+        if (journeyPage == "flag-editor-json")
+        {
+            await page.GetByRole(AriaRole.Link, new() { Name = "shop-config" }).ClickAsync();
+            await Expect(page.Locator("#on-value")).ToBeVisibleAsync();
+        }
+    }
+
+    /// <summary>Abre o bloco do primeiro valor da flag JSON, que começa recolhido: o axe só vê o que está na tela.</summary>
+    private static async Task OpenTheValueOfShopConfigAsync(IPage page)
+    {
+        var row = page.GetByRole(AriaRole.Row).Filter(new() { HasText = "shop-config" });
+        await row.Locator("summary").First.ClickAsync();
+        await Expect(row.GetByRole(AriaRole.Group, new() { Name = "Value, indented" }).First).ToBeVisibleAsync();
     }
 
     /// <summary>Chega à página pelos links do console, como quem navega, e não pelo endereço.</summary>
