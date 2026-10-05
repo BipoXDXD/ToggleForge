@@ -20,6 +20,9 @@ public sealed class NewFlagFormTests
     private const string CreatedJson =
         """{"key":"shop-config","type":"json","enabled":true,"onValue":1,"offValue":0,"rolloutBasisPoints":0}""";
 
+    private const string TooLargeBody =
+        """{"type":"/problems/payload-too-large","title":"Payload too large","status":413,"detail":"The body is over the limit of 32768 bytes."}""";
+
     [Fact]
     public void The_type_is_one_group_of_two_native_radios_described_by_the_hint()
     {
@@ -681,6 +684,49 @@ public sealed class NewFlagFormTests
 
         Assert.Empty(form.FindAll("[data-testid=values-too-large]"));
     }
+
+    [Fact]
+    public void Both_values_point_to_the_notice_that_they_were_too_large()
+    {
+        using var console = ConsoleRendering.Create(Editor(new StubApi().Answer(HttpMethod.Post, Flags, HttpStatusCode.RequestEntityTooLarge,
+            TooLargeBody, "application/problem+json")));
+        var form = RenderForm(console);
+
+        SendJsonValues(form);
+
+        form.WaitForElement("#values-too-large");
+        Assert.All(DescribedByOfTheValues(form), ids => Assert.Contains("values-too-large", ids));
+    }
+
+    [Fact]
+    public void Editing_a_value_drops_the_notice_that_the_values_were_too_large()
+    {
+        using var console = ConsoleRendering.Create(Editor(new StubApi().Answer(HttpMethod.Post, Flags, HttpStatusCode.RequestEntityTooLarge,
+            TooLargeBody, "application/problem+json")));
+        var form = RenderForm(console);
+        SendJsonValues(form);
+        form.WaitForElement("#values-too-large");
+
+        form.Find("#off-value").Input("2");
+
+        Assert.Empty(form.FindAll("#values-too-large"));
+        Assert.All(DescribedByOfTheValues(form), ids => Assert.DoesNotContain("values-too-large", ids));
+    }
+
+    private static void SendJsonValues(IRenderedComponent<NewFlagForm> form)
+    {
+        form.Find("#flag-key").Change("shop-config");
+        form.Find("#flag-type-json").Change(true);
+        form.Find("#on-value").Input("1");
+        form.Find("#off-value").Input("0");
+        form.Find("form").Submit();
+    }
+
+    private static string[][] DescribedByOfTheValues(IRenderedComponent<NewFlagForm> form) =>
+        [DescribedBy(form, "#on-value"), DescribedBy(form, "#off-value")];
+
+    private static string[] DescribedBy(IRenderedComponent<NewFlagForm> form, string selector) =>
+        (form.Find(selector).GetAttribute("aria-describedby") ?? string.Empty).Split(' ');
 
     private static AngleSharp.Dom.IElement CardOf(IRenderedComponent<NewFlagForm> form, string radio) =>
         form.Find(radio).ParentElement ?? throw new InvalidOperationException($"{radio} has no card.");

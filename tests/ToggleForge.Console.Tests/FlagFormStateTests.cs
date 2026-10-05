@@ -148,6 +148,32 @@ public sealed class FlagFormStateTests
         Assert.Null(form.Problem);
     }
 
+    [Theory]
+    [InlineData(FieldErrors.OnValue)]
+    [InlineData(FieldErrors.OffValue)]
+    public void Editing_a_value_drops_the_notice_that_the_values_were_too_large(string field)
+    {
+        var form = new FlagFormState();
+        form.MarkValuesTooLarge();
+
+        form.Clear(field);
+
+        Assert.False(form.ValuesTooLarge);
+    }
+
+    [Theory]
+    [InlineData(FieldErrors.Key)]
+    [InlineData(FieldErrors.Rollout)]
+    public void Editing_the_key_or_the_rollout_keeps_the_notice_that_the_values_were_too_large(string field)
+    {
+        var form = new FlagFormState();
+        form.MarkValuesTooLarge();
+
+        form.Clear(field);
+
+        Assert.True(form.ValuesTooLarge);
+    }
+
     private static FieldErrors Errors(params string[] fields)
     {
         var errors = new FieldErrors();

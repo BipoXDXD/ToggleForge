@@ -55,12 +55,18 @@ internal sealed class FlagFormState
     }
 
     /// <summary>
-    /// O membro mexeu no campo: a mensagem antiga já não diz respeito a ele. O resumo fala dos campos marcados; quando o
-    /// último deixa de estar, ele já não diz respeito ao formulário.
+    /// O membro mexeu no campo: a mensagem antiga já não diz respeito a ele. O aviso do 413 fala dos valores, e some
+    /// quando um deles muda. O resumo fala dos campos marcados; quando o último deixa de estar, ele já não diz respeito
+    /// ao formulário.
     /// </summary>
     public void Clear(string field)
     {
         Fields.Clear(field);
+        if (field is FieldErrors.OnValue or FieldErrors.OffValue)
+        {
+            ValuesTooLarge = false;
+        }
+
         if (Fields.IsEmpty && Problem == FormProblems.FixMarkedFields)
         {
             Problem = null;

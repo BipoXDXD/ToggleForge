@@ -12,10 +12,12 @@
     <div class="grid gap-6 md:grid-cols-2">
         <JsonValueField @ref="_included" Id="on-value" Field="@FieldErrors.OnValue" Label="Value for included players"
                         Audience="@AudienceText.Included(RolloutPercent, Enabled)" Placeholder="@IncludedExample"
-                        Text="@OnValueText" TextChanged="OnValueTextChanged" Error="@Errors.For(FieldErrors.OnValue)" />
+                        Text="@OnValueText" TextChanged="OnValueTextChanged" Error="@Errors.For(FieldErrors.OnValue)"
+                        NoticeId="@(TooLarge ? TooLargeId : null)" />
         <JsonValueField @ref="_others" Id="off-value" Field="@FieldErrors.OffValue" Label="Value for everyone else"
                         Audience="@AudienceText.Others(RolloutPercent)" Placeholder="@OthersExample"
-                        Text="@OffValueText" TextChanged="OffValueTextChanged" Error="@Errors.For(FieldErrors.OffValue)">
+                        Text="@OffValueText" TextChanged="OffValueTextChanged" Error="@Errors.For(FieldErrors.OffValue)"
+                        NoticeId="@(TooLarge ? TooLargeId : null)">
             <Actions>
                 <button type="button" @onclick="CopyOnValueAsync" class="rounded text-xs font-medium text-indigo-700 hover:underline">Copy from included</button>
             </Actions>
@@ -25,7 +27,7 @@
     <p class="sr-only" role="status">@_copyAnnouncement</p>
     @if (TooLarge)
     {
-        <p role="alert" data-testid="values-too-large" class="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">@TooLargeToSend</p>
+        <p id="@TooLargeId" role="alert" data-testid="values-too-large" class="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">@TooLargeToSend</p>
     }
 </fieldset>
 
@@ -35,6 +37,8 @@
     public const string TooLargeToSend =
         "This change is too big to send (over 32 KiB), so nothing was saved. Each value can have at most 4 KiB once compacted.";
 
+    // O role="alert" é lido uma vez; quem volta a uma das áreas ouve o motivo pela descrição dela (WCAG 3.3.1).
+    private const string TooLargeId = "values-too-large";
     private const string CopiedOnce = "Value copied.";
     private const string CopiedAgain = "Value copied.\u00A0";
     private const string IncludedExample = """{ "discount": 0.2 }""";

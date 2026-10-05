@@ -120,6 +120,10 @@
     [Parameter]
     public string? Error { get; set; }
 
+    /// <summary>O id de um aviso do formulário que também fala deste valor, como o do 413; nulo quando não há.</summary>
+    [Parameter]
+    public string? NoticeId { get; set; }
+
     /// <summary>Ações a mais no cabeçalho, antes do Format.</summary>
     [Parameter]
     public RenderFragment? Actions { get; set; }
@@ -149,6 +153,11 @@
         if (hasError)
         {
             ids.Add($"{Id}-error");
+        }
+
+        if (NoticeId is not null)
+        {
+            ids.Add(NoticeId);
         }
 
         return string.Join(' ', ids);
