@@ -14,6 +14,7 @@ python3 tools/rollout-vectors/generate.py              # regenera os vetores do 
 python3 tools/rollout-vectors/generate.py --check      # confere o JSON commitado (roda no CI)
 dotnet run --project samples/ToggleForge.RolloutDemo
 dotnet run --project samples/ToggleForge.SdkDemo              # roteiro do SDK; --live usa TOGGLEFORGE_API_URL/CREDENTIAL
+dotnet run --project samples/ToggleForge.SdkDemo -- --live --json shop-config player-42   # lê uma flag JSON e imprime o valor inteiro
 npm ci --prefix tools/api-lint && npm run lint --prefix tools/api-lint   # Spectral + OWASP na spec
 dotnet run --project src/ToggleForge.Api -- --migrate  # aplica as migrations; precisa de ConnectionStrings:ToggleForge
 dotnet run --project src/ToggleForge.Api -- --purge-idempotency-records  # job agendado: esquece chaves com mais de 24 h
@@ -26,29 +27,37 @@ Os testes da API sobem um Postgres com Testcontainers: o Docker precisa estar ro
 roda `npm ci` e o Tailwind, então o Node também precisa estar instalado. A connection string local vai em
 User Secrets (`dotnet user-secrets set ConnectionStrings:ToggleForge "..." --project src/ToggleForge.Api`),
 nunca no repositório.
+Um banco de desenvolvimento criado antes do Marco 4 precisa ser recriado (`dropdb` e `--migrate`, que cria o banco
+que falta): a migration `Initial` do Authoring foi regenerada quando as colunas de valor viraram `json` e quando
+nasceu `published_flag_types`, e o `--migrate` sozinho falha com `42P07` num banco antigo (ADR 0011).
 
 ## Layout
 
 - `src/ToggleForge.Evaluation`: núcleo de avaliação. netstandard2.1 com C# 9 (compatível com Unity),
   sem `PackageReference` nem `ProjectReference` (ADR 0001).
 - `src/ToggleForge.Sdk`: o SDK do jogo (Marco 4), netstandard2.1 com C# 9. Só referencia o `Evaluation` e o
-  Newtonsoft.Json, lido à mão, sem reflection, e nenhum tipo do Newtonsoft na API pública (ADR 0010).
+  Newtonsoft.Json, lido à mão, sem reflection, e nenhum tipo do Newtonsoft na API pública (ADR 0010). Flag JSON
+  chega ao jogo como texto compacto, e o parser é do jogo (`EvaluateJson<T>`, ADR 0011).
 - `src/ToggleForge.Console`: o console do Marco 3, Blazor WebAssembly servido pela API na mesma origem
   (ADR 0009). Não referencia nenhum projeto de `src/`: fala com a API só por HTTP, com records próprios.
   O CSS sai do Tailwind via npm no build (ADR 0003); `wwwroot/css/` é gerado.
 - `src/ToggleForge.Domain`, `Application`, `Infrastructure` e `Api`: a API do Marco 2, em camadas, com os
   módulos Access, Authoring e Delivery como namespaces; cada módulo tem o próprio `DbContext` e schema
-  (ADR 0005). Migrations em `Infrastructure/<Módulo>/Migrations`, geradas e nunca editadas à mão.
+  (ADR 0005). Migrations em `Infrastructure/<Módulo>/Migrations`, geradas e nunca editadas à mão. Até a primeira
+  implantação (Marco 6), uma mudança que o EF não converte sozinho pode regenerar o `Initial` do módulo (ADR 0011);
+  depois dela, só expand/contract.
 - `tests/`: asserts do próprio xUnit.
   - `Evaluation.Tests` e `Domain.Tests`: regras de negócio, sem banco nem mock.
   - `Api.Tests`: integração ponta a ponta com Postgres real, cobrindo `Application`, `Infrastructure` e
     `Api`. Toda resposta é conferida contra `docs/api/openapi.yaml`, e os testes de arquitetura guardam as
     fronteiras entre módulos. Cada teste cria as próprias contas e organizações, sem dados compartilhados.
     As jornadas do console (`ConsoleJourneyTests`) rodam num Chromium headless pelo Playwright, contra a
-    API num Kestrel em HTTPS (`BrowserHost`); o Chromium é baixado na primeira execução.
+    API num Kestrel em HTTPS (`BrowserHost`); o Chromium é baixado na primeira execução. Os testes do teto de
+    corpo (413) e do header `Server` (`BodyLimitTests`, `KestrelHardeningTests`) também rodam num Kestrel, porque
+    o TestServer não aplica nenhum dos dois.
   - `Console.Tests`: componentes e cliente da API do console com bUnit, contra uma API em stub.
-  - `Sdk.Tests`: leitura do snapshot, ordem das versões e transporte do SDK, com transporte em stub; a
-    integração do SDK com a API real fica em `Api.Tests` (`SdkClientTests`).
+  - `Sdk.Tests`: leitura do snapshot (inclusive flags JSON e tipos desconhecidos), ordem das versões e transporte
+    do SDK, com transporte em stub; a integração do SDK com a API real fica em `Api.Tests` (`SdkClientTests`).
 - `samples/`: demonstrações executáveis.
 - `tools/rollout-vectors`: oráculo Python do algoritmo de rollout (ADR 0002).
 - `docs/api`: canvas de capacidades, ameaças e o contrato `openapi.yaml` (ADR 0004).
@@ -179,3 +188,9 @@ Padrões iniciais: Strategy, Adapter e Decorator, aplicados onde houver variaç�
   vetores novos; nunca edite `rollout-v1.json` à mão.
 - A avaliação nunca lança exceção por causa de dado ruim: devolve o `defaultValue` com um `Reason`.
 - Frontend (Marco 3): Blazor + Tailwind (ADR 0003).
+- Uma chave publicada mantém o tipo no ambiente (`published_flag_types`, 409 `flag-type-locked`), e um valor JSON
+  nunca vai para log nem para mensagem de erro (só o tipo e o tamanho): é dado do estúdio (ADR 0011).
+- Todo ambiente fora de Development, inclusive teste que sobe em Production, declara
+  `ForwardedHeaders:KnownNetworks`; sem isso a API não sobe (ADR 0012).
+- Toda operação nova com corpo declara `413` no contrato (`Every_operation_that_takes_a_body_declares_413`).
+  Corpo acima de 32 KiB exige subir o teto global ou um override por endpoint, e rever a ADR 0012.

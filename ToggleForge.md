@@ -18,7 +18,7 @@ O projeto deve produzir uma API utilizável, um console bem desenvolvido e um SD
 | --- | --- |
 | Primeiro fluxo | Flag booleana, rollout percentual, simulador, publicação, histórico e rollback |
 | MVP utilizável | Projetos e ambientes, autenticação, permissões, credenciais do SDK, cache e fallback |
-| Próxima evolução | Configurações JSON, segmentação por atributos, comparação de versões e integração Unity |
+| Próxima evolução | Segmentação por atributos, comparação de versões e integração Unity (as configurações JSON entraram no Marco 4) |
 | Depois do piloto | Eventos agendados, webhooks, aprovação de publicações e telemetria agregada |
 | Exploração avançada | Serviço de distribuição independente, provider OpenFeature e experimentos A/B |
 
@@ -131,6 +131,33 @@ Prever estados de carregamento, vazio, erro e conflito de edição. Uma publica�
 
 As etapas podem ser reordenadas ou combinadas. Desenvolver console e API juntos é uma alternativa. Os critérios são referências para verificar o comportamento desejado; devem acompanhar mudanças no produto. Não há prazo fixo nem um backlog com cada classe a criar.
 
+**Marco 4 concluído (outubro de 2026).** O SDK (`ToggleForgeClient`, netstandard2.1) sincroniza em segundo plano
+com variação, backoff e `Retry-After`, guarda o snapshot em disco por credencial, descarta versões antigas fora de
+ordem e expira o cache depois de 7 dias sem confirmação (ADR 0010). As configurações JSON são um tipo de flag com
+rollout, publicação e rollback iguais aos da booleana, limites de 4 KiB e 8 níveis por valor e 128 KiB por
+ambiente, e chegam ao jogo por `EvaluateJson<T>` com o parser do próprio jogo. Uma chave publicada mantém o tipo
+no ambiente, garantido pelo banco (`published_flag_types`, 409 `flag-type-locked`), para um build no ar nunca
+receber a chave com outro tipo (ADR 0011). A API também passou por um endurecimento HTTP: headers de segurança,
+HSTS configurável, teto de corpo de 32 KiB e proxies confiáveis declarados (ADR 0012). A API, o contrato, o
+console (editor JSON) e o app demonstrativo (`samples/ToggleForge.SdkDemo`, com o roteiro de rede caindo, reinício,
+cache vencido e configuração JSON, e o modo `--live` contra a API) cobrem a história inteira; o roteiro roda no CI
+como smoke test. Um teste contra a API real prova que o SDK lê a flag JSON como a API a compactou e escolhe o
+mesmo valor que a simulação para jogadores dos dois lados do rollout.
+
+Ficou para os próximos marcos:
+
+- **Marco 5 (Unity):** validar o SDK no IL2CPP e no Mono do build real, incluindo a grafia do `double` que o
+  Newtonsoft grava no Mono (ADR 0010) e o parse de uma configuração com o `JsonUtility`; um jogo simples que
+  muda sem recompilar; a segmentação por atributos como segunda `ITargetingRule`.
+- **Depois, com medição:** cache do valor JSON já convertido, um sinal de mudança (evento ou versão em uso) para o
+  jogo que guarda o valor, um gancho de diagnóstico para a exceção do parser e um tipo de flag novo (por exemplo,
+  número), que builds antigos já ignoram sem quebrar. O snapshot ainda relê a publicação inteira mesmo para
+  responder 304; otimizar só depois de medir. O diff de valores JSON na revisão da publicação também fica para
+  depois.
+- **Marco 6 (cloud):** o checklist de implantação com as pendências de segurança já registradas (headers, HSTS,
+  rede do ingress, `AllowedHosts`, Data Protection, migrations num job do Container Apps e a limpeza da
+  idempotência num job agendado). Depois da primeira implantação, mudanças de esquema seguem expand/contract.
+
 ## 10. Conceitos avançados na prática
 
 | Conceito | Aplicação no Toggle Forge |
@@ -182,7 +209,7 @@ O candidato inicial à extração é Delivery. Authoring publica snapshots por u
 
 Essa etapa pode ser escolhida para aprender sistemas distribuídos, mesmo antes de existir escala comercial. Definir a propagação esperada e testar atraso, indisponibilidade e recuperação. RabbitMQ ou Azure Service Bus são alternativas; escolher uma implementação para o experimento.
 
-Na implantação, separar ambientes, proteger segredos, automatizar migrations com cuidado, acompanhar erros e definir como reverter releases do software. Monitorar idade da configuração distribuída e atraso dos eventos, além da saúde dos processos. Aprender Kubernetes pode ser uma etapa própria depois da operação inicial em containers.
+Na implantação, separar ambientes, proteger segredos, automatizar migrations com cuidado, acompanhar erros e definir como reverter releases do software. Monitorar idade da configuração distribuída e atraso dos eventos, além da saúde dos processos. Aprender Kubernetes pode ser uma etapa própria depois da operação inicial em containers. O checklist da primeira implantação está em `docs/deploy-checklist.md`.
 
 ## 14. Validação comercial e próxima decisão
 
