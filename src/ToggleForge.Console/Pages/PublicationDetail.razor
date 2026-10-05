@@ -37,7 +37,11 @@ else
         <p class="mt-2 text-sm text-slate-800">@summary</p>
     }
 
-    <div class="mt-6 overflow-x-auto rounded-lg border border-slate-200 bg-white"
+    @*
+        O relative prende aqui o texto sr-only (absoluto) das células: sem ele, o texto escapa da rolagem e alarga a
+        página no celular (WCAG 1.4.10).
+    *@
+    <div class="relative mt-6 overflow-x-auto rounded-lg border border-slate-200 bg-white"
          role="region" aria-label="Flags in version @Version" tabindex="0">
         <table class="w-full text-left text-sm" aria-label="Flags in version @Version">
             <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">

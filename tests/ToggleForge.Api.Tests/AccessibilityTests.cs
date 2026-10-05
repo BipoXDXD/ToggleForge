@@ -34,6 +34,7 @@ public sealed class AccessibilityTests(ApiFactory api, Browser browser) : IClass
     private const int PhoneWidth = 320;
     private const int PhoneHeight = 800;
     private const string LongJsonLine = "{\"featuredItems\": [\"sword\", \"shield\", \"bow\", \"arrows\", \"potion\", \"map\"]}";
+    private const string ShopConfig = """{"discount":0.2,"featuredItems":["sword","shield","bow","arrows","potion","map"]}""";
 
     private BrowserHost? _host;
 
@@ -160,12 +161,17 @@ public sealed class AccessibilityTests(ApiFactory api, Browser browser) : IClass
             violations.SelectMany(violation => violation.Nodes.Select(node => $"{violation.Id}: {node.Target} {node.Html}")));
 
     /// <summary>
-    /// Duas publicações em <c>dev</c> (a versão 1 deixa de estar no ar e ganha o formulário de rollback) e uma flag
-    /// nova no rascunho, para a página de publicar ter o que revisar.
+    /// Duas publicações em <c>dev</c> (a versão 1 deixa de estar no ar e ganha o formulário de rollback), as duas com
+    /// uma flag booleana e uma JSON cujo valor não cabe na prévia, e uma flag nova no rascunho, para a página de
+    /// publicar ter o que revisar.
     /// </summary>
     private static async Task PrepareJourneyDataAsync(ConsoleClient owner)
     {
-        await owner.PublishedProjectAsync("space-race");
+        Assert.Equal(HttpStatusCode.Created, (await owner.CreateProjectAsync("space-race")).Status);
+        Assert.Equal(HttpStatusCode.Created, (await owner.CreateFlagAsync("space-race", "new-shop")).Status);
+        var json = await owner.CreateJsonFlagAsync("space-race", "shop-config", ShopConfig, """{"discount":0}""");
+        Assert.Equal(HttpStatusCode.Created, json.Status);
+        Assert.Equal(HttpStatusCode.Created, (await owner.PublishAsync("space-race", ConsoleClient.Revision(json), ConsoleClient.NewIdempotencyKey())).Status);
         var read = await owner.GetFlagAsync("space-race", "new-shop");
         var widened = await owner.UpdateFlagAsync("space-race", "new-shop", read.Header("ETag"), """{"rolloutBasisPoints":5000}""");
         Assert.Equal(HttpStatusCode.Created, (await owner.PublishAsync("space-race", ConsoleClient.Revision(widened), ConsoleClient.NewIdempotencyKey())).Status);
