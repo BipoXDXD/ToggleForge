@@ -114,11 +114,11 @@ public sealed class JsonCompactionParityTests
 
     [Theory]
     [MemberData(nameof(ProductLimits))]
-    public void Only_the_api_applies_the_product_limits(string json, JsonValueProblem expected)
+    public void The_console_parser_leaves_the_product_limits_to_the_checks_that_follow(string json, JsonValueProblem expected)
     {
         Assert.False(JsonFlagValue.TryParse(json, out _, out var problem));
         Assert.Equal(expected, problem);
-        Assert.True(ConsoleFlagValue.TryParse(json, out _), "O console deve deixar a recusa para a API, que diz o campo.");
+        Assert.True(ConsoleFlagValue.TryParse(json, out _), "O FlagValue confere só a sintaxe; os limites ficam com a API e, ao salvar, com o FlagFields.");
     }
 
     [Fact]
