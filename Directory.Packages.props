@@ -20,6 +20,10 @@
   </ItemGroup>
 
   <ItemGroup Label="Testes">
+    <!-- O restore dos testes de integração recusa os transitivos criptográficos 10.0.12 vulneráveis.
+         O pinning fica habilitado só no Api.Tests, sem mudar o grafo distribuído pelo SDK. -->
+    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
+    <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.13" />
     <PackageVersion Include="bunit" Version="2.11.3" />
     <!-- MIT; o Deque.AxeCore.Commons transitivo embute o axe-core (MPL-2.0), aceitável porque fica só no
          projeto de teste e nunca é distribuído. Roda o axe-core no Playwright com resultado tipado. -->
