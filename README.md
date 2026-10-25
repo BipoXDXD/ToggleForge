@@ -257,7 +257,7 @@ var shop = client.EvaluateJson("shop-config", EvaluationContext.ForPlayer(Player
 
 ## Desenvolvimento
 
-Requisitos: .NET SDK 10.0.400, Docker (os testes da API sobem um Postgres com Testcontainers), Node 24
+Requisitos: .NET SDK 10.0.402, Docker (os testes da API sobem um Postgres com Testcontainers), Node 24
 (o build do console gera o CSS com o Tailwind) e Python 3.9+ (só para o oráculo de vetores). As jornadas do
 console baixam um Chromium do Playwright na primeira execução.
 
