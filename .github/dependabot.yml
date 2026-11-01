@@ -4,6 +4,14 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    groups:
+      # DataProtection exige Xml, que exige Pkcs; atualizar separados pode causar NU1109.
+      dataprotection-crypto:
+        applies-to: version-updates
+        patterns:
+          - Microsoft.AspNetCore.DataProtection.EntityFrameworkCore
+          - System.Security.Cryptography.Xml
+          - System.Security.Cryptography.Pkcs
 
   - package-ecosystem: npm
     directory: /src/ToggleForge.Console

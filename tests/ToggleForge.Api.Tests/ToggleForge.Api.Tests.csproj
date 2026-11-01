@@ -13,6 +13,9 @@
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="Microsoft.Playwright" />
+    <!-- Referências explícitas permitem ao Dependabot agrupar os pins centrais com DataProtection. -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" />
+    <PackageReference Include="System.Security.Cryptography.Xml" />
     <PackageReference Include="Testcontainers.PostgreSql" />
     <PackageReference Include="TngTech.ArchUnitNET" />
     <PackageReference Include="Yaml2JsonNode" />
