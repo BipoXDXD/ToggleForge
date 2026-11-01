@@ -12,6 +12,12 @@ updates:
           - Microsoft.AspNetCore.DataProtection.EntityFrameworkCore
           - System.Security.Cryptography.Xml
           - System.Security.Cryptography.Pkcs
+      # Resilience exige uma versão mínima de Http; atualizar separados pode causar NU1109.
+      http-resilience:
+        applies-to: version-updates
+        patterns:
+          - Microsoft.Extensions.Http
+          - Microsoft.Extensions.Http.Resilience
 
   - package-ecosystem: npm
     directory: /src/ToggleForge.Console
