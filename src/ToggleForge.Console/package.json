@@ -6,7 +6,7 @@
     "build:css": "tailwindcss --input Styles/app.css --output wwwroot/css/app.css --minify"
   },
   "devDependencies": {
-    "@tailwindcss/cli": "4.3.3",
+    "@tailwindcss/cli": "4.3.4",
     "tailwindcss": "4.3.3"
   },
   "allowScripts": {
